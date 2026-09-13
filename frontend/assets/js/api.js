@@ -1,10 +1,10 @@
 /**
  * XPLOITX // CYBER BATTLEFIELD
- * Central API Client (assets/js/api.js)
- * Implements Section 8 of the Architectural Blueprint
+ * Centralized API Client (frontend/assets/js/api.js)
+ * Implements Section 8: Single Canonical API Contract (/api/v1)
  */
 
-const API_BASE = window.XPLOITX_API_BASE || '/api';
+const API_BASE = window.XPLOITX_API_BASE || '/api/v1';
 
 async function apiRequest(endpoint, options = {}) {
   const defaultHeaders = {
@@ -35,65 +35,111 @@ async function apiRequest(endpoint, options = {}) {
     }
 
     if (!response.ok) {
-      const errorMsg = data.message || (typeof data.error === 'string' ? data.error : null) || 
+      const errObj = data.error && typeof data.error === 'object' ? data.error : null;
+      const errorMsg = (errObj && errObj.message) || data.message || (typeof data.error === 'string' ? data.error : null) || 
         (response.status === 401 ? 'Invalid callsign or passphrase.' :
          response.status === 404 ? `Endpoint not found (${endpoint}). Check server routing.` :
          response.status === 429 ? 'Rate limit exceeded. Stand by.' :
          response.status >= 500 ? `Server error (${response.status}). Check server logs.` :
          `Request failed with status ${response.status}`);
-      throw new Error(errorMsg);
+      
+      const err = new Error(errorMsg);
+      err.status = response.status;
+      err.code = (errObj && errObj.code) || 'API_ERROR';
+      err.requestId = data.requestId;
+      throw err;
     }
 
     return data;
   } catch (err) {
     console.error(`[TACTICAL API ERROR ${endpoint}]:`, err);
     if (err.name === 'TypeError' && err.message && err.message.toLowerCase().includes('fetch')) {
-      throw new Error('Unable to reach CTF mission server. Check your network or API status.');
+      throw new Error('Unable to reach CTF mission server. Check network connection or API status.');
     }
     throw err;
   }
 }
 
+// Canonical Namespaced API Client
 const api = {
-  // Authentication
-  login: (credentials) => apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
-  register: (userData) => apiRequest('/auth/register', { method: 'POST', body: JSON.stringify(userData) }),
-  getMe: () => apiRequest('/auth/me'),
-  logout: () => apiRequest('/auth/logout', { method: 'POST' }),
+  // 1. Authentication
+  auth: {
+    login: (credentials) => apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
+    register: (userData) => apiRequest('/auth/register', { method: 'POST', body: JSON.stringify(userData) }),
+    me: () => apiRequest('/auth/me'),
+    getMe: () => apiRequest('/auth/me'),
+    logout: () => apiRequest('/auth/logout', { method: 'POST' }),
+    refresh: () => apiRequest('/auth/refresh', { method: 'POST' }),
+    forgotPassword: (email) => apiRequest('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+    resetPassword: (payload) => apiRequest('/auth/reset-password', { method: 'POST', body: JSON.stringify(payload) })
+  },
 
-  // Challenges
-  getChallenges: () => apiRequest('/challenges'),
-  getChallenge: (id) => apiRequest(`/challenges/${id}`),
-  submitFlag: (challengeId, flag) => apiRequest(`/challenges/${challengeId}/submit`, {
-    method: 'POST',
-    body: JSON.stringify({ flag })
-  }),
-  unlockHint: (challengeId, hintId) => apiRequest(`/challenges/${challengeId}/hints/${hintId}/reveal`, {
-    method: 'POST'
-  }),
-  deployInstance: (challengeId) => apiRequest(`/challenges/${challengeId}/instance`, {
-    method: 'POST'
-  }),
-  terminateInstance: (challengeId) => apiRequest(`/challenges/${challengeId}/instance`, {
-    method: 'DELETE'
-  }),
+  // 2. Challenges
+  challenges: {
+    list: () => apiRequest('/challenges'),
+    get: (id) => apiRequest(`/challenges/${id}`),
+    submitFlag: (challengeId, flag) => apiRequest(`/challenges/${challengeId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ flag })
+    }),
+    unlockHint: (challengeId, hintId) => apiRequest(`/challenges/${challengeId}/hints/${hintId}/reveal`, {
+      method: 'POST'
+    }),
+    deployInstance: (challengeId) => apiRequest(`/challenges/${challengeId}/instance`, {
+      method: 'POST'
+    }),
+    terminateInstance: (challengeId) => apiRequest(`/challenges/${challengeId}/instance`, {
+      method: 'DELETE'
+    })
+  },
 
-  // Squads & Teams
-  getTeam: (id) => apiRequest(`/teams/${id}`),
-  createTeam: (name) => apiRequest('/teams', { method: 'POST', body: JSON.stringify({ name }) }),
-  joinTeam: (accessCode) => apiRequest('/teams/join', { method: 'POST', body: JSON.stringify({ accessCode }) }),
+  // 3. Submissions
+  submissions: {
+    submit: (challengeId, flag) => apiRequest(`/challenges/${challengeId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ flag })
+    }),
+    list: () => apiRequest('/submissions')
+  },
 
-  // Scoreboard
-  getScoreboard: () => apiRequest('/scoreboard'),
-  getScoreboardHistory: () => apiRequest('/scoreboard/history'),
+  // 4. Squads & Teams
+  teams: {
+    list: () => apiRequest('/teams'),
+    get: (id) => apiRequest(`/teams/${id}`),
+    create: (name) => apiRequest('/teams', { method: 'POST', body: JSON.stringify({ name }) }),
+    join: (accessCode) => apiRequest('/teams/join', { method: 'POST', body: JSON.stringify({ accessCode }) }),
+    leave: () => apiRequest('/teams/leave', { method: 'POST' })
+  },
 
-  // Announcements, Activity, Competitions
-  getAnnouncements: () => apiRequest('/announcements'),
-  getSubmissions: () => apiRequest('/submissions'),
-  getCompetition: () => apiRequest('/competitions/current'),
-  getStatus: () => apiRequest('/status'),
+  // 5. Scoreboard & Telemetry
+  scoreboard: {
+    get: () => apiRequest('/scoreboard'),
+    getHistory: () => apiRequest('/scoreboard/history')
+  },
 
-  // Administration C2 APIs
+  // 6. Announcements & Notifications
+  announcements: {
+    list: () => apiRequest('/announcements')
+  },
+  notifications: {
+    list: () => apiRequest('/notifications')
+  },
+
+  // 7. Dynamic Instances
+  instances: {
+    create: (challengeId) => apiRequest(`/challenges/${challengeId}/instance`, { method: 'POST' }),
+    stop: (challengeId) => apiRequest(`/challenges/${challengeId}/instance`, { method: 'DELETE' }),
+    status: (instanceId) => apiRequest(`/instances/${instanceId}`)
+  },
+
+  // 8. Health & System
+  health: {
+    get: () => apiRequest('/health'),
+    ready: () => apiRequest('/health/ready'),
+    live: () => apiRequest('/health/live')
+  },
+
+  // 9. Administration C2 APIs
   admin: {
     getOverview: () => apiRequest('/admin/overview'),
     getChallenges: () => apiRequest('/admin/challenges'),
@@ -114,6 +160,27 @@ const api = {
     dispatchAnnouncement: (ann) => apiRequest('/admin/announcements', { method: 'POST', body: JSON.stringify(ann) })
   }
 };
+
+// Flat aliases for 100% backward compatibility with existing UI page scripts
+api.login = api.auth.login;
+api.register = api.auth.register;
+api.getMe = api.auth.getMe;
+api.logout = api.auth.logout;
+api.getChallenges = api.challenges.list;
+api.getChallenge = api.challenges.get;
+api.submitFlag = api.challenges.submitFlag;
+api.unlockHint = api.challenges.unlockHint;
+api.deployInstance = api.challenges.deployInstance;
+api.terminateInstance = api.challenges.terminateInstance;
+api.getTeam = api.teams.get;
+api.createTeam = api.teams.create;
+api.joinTeam = api.teams.join;
+api.getScoreboard = api.scoreboard.get;
+api.getScoreboardHistory = api.scoreboard.getHistory;
+api.getAnnouncements = api.announcements.list;
+api.getSubmissions = api.submissions.list;
+api.getCompetition = () => apiRequest('/competitions/current');
+api.getStatus = () => apiRequest('/status');
 
 window.apiRequest = apiRequest;
 window.api = api;

@@ -43,6 +43,9 @@ const fileRoutes = require('./routes/files');
 const instanceRoutes = require('./routes/instances');
 const syncRoutes = require('./routes/sync');
 const adminRoutes = require('./routes/admin');
+const healthRoutes = require('./routes/health.routes');
+const analyticsRoutes = require('./routes/analytics.routes');
+const notificationsRoutes = require('./routes/notifications.routes');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -103,6 +106,13 @@ app.use((req, res, next) => {
   next();
 });
 
+// Request ID generation
+app.use((req, res, next) => {
+  req.id = req.headers['x-request-id'] || crypto.randomUUID();
+  res.setHeader('X-Request-ID', req.id);
+  next();
+});
+
 // Ensure database initialization (especially in serverless environments)
 let dbInitPromise = null;
 app.use(async (req, res, next) => {
@@ -138,7 +148,7 @@ submissionService.setBroadcaster(broadcastEvent);
 adminController.setBroadcaster(broadcastEvent);
 
 // --------------------------------------------------------------------------
-// API Route Router & Mounting
+// Canonical API Route Router & Mounting (Section 9 & 10)
 // --------------------------------------------------------------------------
 const apiRouter = express.Router();
 
@@ -154,10 +164,12 @@ apiRouter.get('/status', (req, res) => {
   });
 });
 
+apiRouter.use('/health', healthRoutes);
 apiRouter.use('/auth', authRoutes);
 apiRouter.use('/users', userRoutes);
 apiRouter.use('/teams', teamRoutes);
 apiRouter.use('/competitions', competitionRoutes);
+apiRouter.get('/categories', (req, res) => res.json({ categories: db.getCategories() }));
 apiRouter.use('/challenges', challengeRoutes);
 apiRouter.use('/submissions', submissionRoutes);
 apiRouter.use('/scoreboard', scoreboardRoutes);
@@ -165,19 +177,30 @@ apiRouter.use('/hints', hintRoutes);
 apiRouter.use('/announcements', announcementRoutes);
 apiRouter.use('/files', fileRoutes);
 apiRouter.use('/instances', instanceRoutes);
+apiRouter.use('/notifications', notificationsRoutes);
+apiRouter.use('/analytics', analyticsRoutes);
 apiRouter.use('/sync', syncRoutes);
 apiRouter.use('/admin', adminRoutes);
 
-// Mount on /api (standard)
+// 1. Canonical API Contract: /api/v1/*
+app.use('/api/v1', apiRouter);
+
+// 2. Compatibility mount: /api/*
 app.use('/api', apiRouter);
 
-// Fallback mount for Serverless Functions where Vercel strips the /api prefix
-app.use((req, res, next) => {
-  const apiPaths = ['/auth', '/users', '/teams', '/competitions', '/challenges', '/submissions', '/scoreboard', '/hints', '/announcements', '/files', '/instances', '/sync', '/admin', '/status'];
-  if (apiPaths.some(p => req.path === p || req.path.startsWith(p + '/'))) {
-    return apiRouter(req, res, next);
-  }
-  next();
+// 3. Fallback mount for direct serverless paths (e.g. /auth/login)
+app.use(apiRouter);
+
+// Structured 404 handler for unmatched API routes
+app.use(['/api/v1/*', '/api/*'], (req, res) => {
+  res.status(404).json({
+    success: false,
+    error: {
+      code: 'ROUTE_NOT_FOUND',
+      message: `The requested endpoint '${req.originalUrl}' does not exist.`
+    },
+    requestId: req.id
+  });
 });
 
 // --------------------------------------------------------------------------
@@ -197,8 +220,19 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
-// Central Error Handler
-app.use(errorHandler);
+// Central Structured Error Handler (Section 40)
+app.use((err, req, res, next) => {
+  const status = err.status || err.statusCode || 500;
+  const code = err.code || (status === 401 ? 'AUTHENTICATION_REQUIRED' : status === 403 ? 'FORBIDDEN' : status === 404 ? 'NOT_FOUND' : status === 400 ? 'VALIDATION_ERROR' : 'INTERNAL_SERVER_ERROR');
+  res.status(status).json({
+    success: false,
+    error: {
+      code,
+      message: err.message || 'An unexpected server error occurred.'
+    },
+    requestId: req.id || 'req-unknown'
+  });
+});
 
 // Start listening with Database, Redis EventBus & Cleanup Worker initialization
 if (require.main === module) {

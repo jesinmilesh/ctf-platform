@@ -23,6 +23,15 @@ try {
   // mongodb optional if running purely in-memory
 }
 
+let mongoose = null;
+let models = {};
+try {
+  mongoose = require('mongoose');
+  models = require('../models');
+} catch (e) {
+  // mongoose optional
+}
+
 const COLLECTION_MAP = {
   competitions: 'competitions',
   categories: 'categories',
@@ -56,9 +65,11 @@ class DatabaseEngine {
     this.isPostgres = this.dbType === 'postgres' || rawUrl.startsWith('postgres://') || rawUrl.startsWith('postgresql://');
     
     this.mongoUrl = isMongoUri ? rawUrl : (process.env.MONGODB_URI || process.env.DATABASE_URL);
-    this.mongoDbName = process.env.MONGODB_DB_NAME || 'xploitx_ctf';
+    this.mongoDbName = process.env.MONGODB_DB_NAME || 'xploitx_production';
     this.mongoClient = null;
     this.mongoDb = null;
+    this.mongoose = mongoose;
+    this.models = models;
     this.pool = null;
     this.connected = false;
     this.initPromise = null;
@@ -250,6 +261,16 @@ class DatabaseEngine {
         this.mongoDb = this.mongoClient.db(this.mongoDbName);
         this.connected = true;
         console.log(`[DATABASE] Connected to MongoDB Atlas cluster (Database: ${this.mongoDbName})`);
+
+        // Connect Mongoose
+        if (mongoose && mongoose.connection.readyState === 0) {
+          await mongoose.connect(this.mongoUrl, {
+            dbName: this.mongoDbName,
+            serverSelectionTimeoutMS: 8000
+          }).catch(err => {
+            console.warn('[DATABASE] Mongoose connect notice:', err.message);
+          });
+        }
 
         // Configure indexes for rapid queries
         await this._ensureIndexes();
@@ -450,9 +471,30 @@ class DatabaseEngine {
   // Direct MongoDB Handle accessors
   getMongoClient() { return this.mongoClient; }
   getMongoDb() { return this.mongoDb; }
+  getModels() { return this.models; }
+  getModel(name) { return this.models ? this.models[name] : null; }
   collection(name) {
     if (!this.mongoDb) throw new Error('MongoDB Atlas not connected');
     return this.mongoDb.collection(name);
+  }
+
+  /**
+   * Health Check: Actual Atlas Ping
+   */
+  async checkHealth() {
+    const start = Date.now();
+    if (this.dbType === 'memory' || !this.isMongo) {
+      return { status: 'ok', type: 'in-memory', latencyMs: 0 };
+    }
+    if (!this.connected || !this.mongoDb) {
+      throw new Error('Database disconnected');
+    }
+    const ping = await this.mongoDb.command({ ping: 1 });
+    const latencyMs = Date.now() - start;
+    if (ping && ping.ok === 1) {
+      return { status: 'ok', type: 'mongodb-atlas', database: this.mongoDbName, latencyMs };
+    }
+    throw new Error('Atlas ping failed');
   }
 
   // Repository In-Memory Accessors (High-Speed Synchronous)

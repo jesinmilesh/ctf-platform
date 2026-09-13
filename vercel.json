@@ -3,6 +3,14 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/api/:match*",
+      "destination": "/api/[...all]"
+    },
+    {
+      "source": "/auth/:match*",
+      "destination": "/api/[...all]"
+    },
+    {
       "source": "/assets/:match*",
       "destination": "/frontend/assets/:match*"
     },
@@ -23,7 +31,7 @@
       "destination": "/frontend/public/index.html"
     },
     {
-      "source": "/((?!api).*)",
+      "source": "/((?!api|auth).*)",
       "destination": "/frontend/public/$1"
     }
   ]
