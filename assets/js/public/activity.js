@@ -1,0 +1,63 @@
+/**
+ * XPLOITX // CYBER BATTLEFIELD
+ * Live Activity Feed (assets/js/public/activity.js)
+ */
+
+document.addEventListener('DOMContentLoaded', async () => {
+  Navbar.render('navbar-container', 'activity');
+
+  const streamSlot = document.getElementById('activityStreamSlot');
+
+  async function loadActivity() {
+    try {
+      const res = await window.api.getSubmissions();
+      const subs = res.submissions || [];
+
+      if (subs.length === 0) {
+        streamSlot.innerHTML = `
+          <div style="text-align:center; padding:40px; color:var(--text-secondary); font-family:var(--font-mono);">
+            NO LIVE COMBAT SIGNALS DETECTED.
+          </div>
+        `;
+        return;
+      }
+
+      streamSlot.innerHTML = subs.map(s => {
+        const isCorrect = s.status === 'CORRECT';
+        let statusBadge = `<span style="color:var(--danger);">✕ REJECTED</span>`;
+        if (isCorrect) {
+          statusBadge = `<span style="color:var(--accent); font-weight:700;">✓ SECURED (+${s.points} XP)</span>`;
+        }
+
+        return `
+          <div style="background:var(--bg-card); border:1px solid var(--border); border-left:3px solid ${isCorrect ? 'var(--accent)' : 'var(--border)'}; padding:14px 18px; border-radius:var(--radius-sm); margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <div>
+              <span style="font-family:var(--font-mono); font-size:13px; font-weight:700; color:#fff;">${window.Utils.escapeHTML(s.operative)}</span>
+              <span style="font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-left:6px;">[${window.Utils.escapeHTML(s.teamName)}]</span>
+              <span style="font-size:12px; color:var(--text-muted); margin:0 8px;">attacked</span>
+              <span style="font-family:var(--font-heading); font-size:14px; font-weight:600; color:var(--cyan);">${window.Utils.escapeHTML(s.challengeTitle)}</span>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:16px; font-family:var(--font-mono); font-size:12px;">
+              ${statusBadge}
+              <span style="color:var(--text-muted); font-size:11px;">${window.Utils.timeAgo(s.timestamp)}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+    } catch (err) {
+      console.error('Failed to load activity stream', err);
+    }
+  }
+
+  loadActivity();
+
+  if (window.tacticalSocket) {
+    window.tacticalSocket.on('SCORE_UPDATED', () => {
+      loadActivity();
+    });
+  }
+
+  setInterval(loadActivity, 15000);
+});

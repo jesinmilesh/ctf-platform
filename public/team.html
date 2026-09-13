@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SQUAD MANAGEMENT // XPLOITX CYBER BATTLEFIELD</title>
+  <meta name="description" content="Operative squad roster, invitation access codes, and collective score metrics.">
+
+  <link rel="stylesheet" href="/assets/css/variables.css">
+  <link rel="stylesheet" href="/assets/css/reset.css">
+  <link rel="stylesheet" href="/assets/css/global.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <link rel="stylesheet" href="/assets/css/animations.css">
+  <link rel="stylesheet" href="/assets/css/responsive.css">
+  <link rel="stylesheet" href="/assets/css/public.css">
+</head>
+<body>
+  <div id="navbar-container"></div>
+
+  <main class="container" style="padding: 40px 20px;">
+    <!-- View 1: When user has no squad yet -->
+    <div id="noSquadView" style="display:none; max-width:860px; margin:0 auto;">
+      <header style="margin-bottom:32px; text-align:center;">
+        <span style="font-family:var(--font-mono); font-size:12px; color:var(--accent); font-weight:700; letter-spacing:0.12em;">
+          SQUAD DEPLOYMENT PROTOCOL
+        </span>
+        <h1 style="font-family:var(--font-heading); font-size:32px; font-weight:800; color:#fff; margin:6px 0 8px 0;">
+          Deploy as an Operative Squad
+        </h1>
+        <p style="color:var(--text-secondary); font-size:14px; margin:0;">
+          Form a new strike team or enter an existing squad using a verified access code.
+        </p>
+      </header>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:24px;">
+        <!-- Create Squad -->
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:28px;">
+          <h2 style="font-family:var(--font-heading); font-size:20px; font-weight:700; color:var(--accent); margin:0 0 10px 0;">
+            CREATE NEW SQUAD
+          </h2>
+          <p style="color:var(--text-secondary); font-size:13px; line-height:1.6; margin-bottom:20px;">
+            Commission a new tactical squad. You will become squad captain and receive a secret access code to invite teammates.
+          </p>
+
+          <form id="createSquadForm" style="display:flex; flex-direction:column; gap:16px;">
+            <div>
+              <label for="newSquadName" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">
+                SQUAD DESIGNATION
+              </label>
+              <input
+                type="text"
+                id="newSquadName"
+                required
+                placeholder="e.g. CYBER_SHADOWS"
+                style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;"
+              >
+            </div>
+            <button type="submit" class="btn btn-primary" style="padding:12px;">
+              COMMISSION SQUAD
+            </button>
+          </form>
+        </div>
+
+        <!-- Join Squad -->
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:28px;">
+          <h2 style="font-family:var(--font-heading); font-size:20px; font-weight:700; color:var(--cyan); margin:0 0 10px 0;">
+            JOIN EXISTING SQUAD
+          </h2>
+          <p style="color:var(--text-secondary); font-size:13px; line-height:1.6; margin-bottom:20px;">
+            Have an access code from your squad captain? Input it below to synchronize your clearance.
+          </p>
+
+          <form id="joinSquadForm" style="display:flex; flex-direction:column; gap:16px;">
+            <div>
+              <label for="joinAccessCode" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">
+                SECURITY ACCESS CODE
+              </label>
+              <input
+                type="text"
+                id="joinAccessCode"
+                required
+                placeholder="e.g. NEXUS-8921-CLASSIFIED"
+                style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;"
+              >
+            </div>
+            <button type="submit" class="btn btn-outline" style="padding:12px;">
+              LINK WITH SQUAD
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- View 2: When user has squad -->
+    <div id="hasSquadView" style="display:none; max-width:960px; margin:0 auto;">
+      <!-- Squad Header -->
+      <header style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:28px; margin-bottom:28px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:20px;">
+        <div>
+          <span style="font-family:var(--font-mono); font-size:11px; color:var(--accent); font-weight:700;">
+            TACTICAL SQUAD COMMAND
+          </span>
+          <h1 id="squadName" style="font-family:var(--font-heading); font-size:32px; font-weight:800; color:#fff; margin:4px 0 8px 0;">
+            SQUAD LOADING...
+          </h1>
+          <div style="font-family:var(--font-mono); font-size:12px; color:var(--text-secondary);">
+            STATUS: ACTIVE ON LIVE BATTLEFIELD GRID
+          </div>
+        </div>
+
+        <div style="background:var(--bg-secondary); border:1px solid var(--border); padding:14px 20px; border-radius:var(--radius-sm); text-align:right;">
+          <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:4px;">INVITE ACCESS CODE</div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <code id="squadAccessCode" style="font-family:var(--font-mono); font-size:14px; font-weight:700; color:var(--cyan);">CODE</code>
+            <button id="copyAccessCodeBtn" class="btn btn-sm btn-outline" style="padding:4px 8px;">COPY</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Stats Grid -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:32px;">
+        <div class="telemetry-card" style="border-left: 3px solid var(--accent);">
+          <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-secondary);">SQUAD SCORE</div>
+          <div class="telemetry-val" id="squadScore" style="color:var(--accent);">-- XP</div>
+        </div>
+        <div class="telemetry-card" style="border-left: 3px solid var(--cyan);">
+          <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-secondary);">MISSIONS CAPTURED</div>
+          <div class="telemetry-val" id="squadSolves">--</div>
+        </div>
+        <div class="telemetry-card" style="border-left: 3px solid var(--danger);">
+          <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-secondary);">FIRST BLOODS</div>
+          <div class="telemetry-val" id="squadFirstBloods" style="color:var(--danger);">--</div>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1.2fr; gap:24px;">
+        <!-- Operative Roster -->
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+          <h2 style="font-family:var(--font-heading); font-size:18px; font-weight:700; color:#fff; margin:0 0 16px 0;">
+            Operative Roster
+          </h2>
+          <div id="squadRosterSlot"></div>
+        </div>
+
+        <!-- Solves Feed -->
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+          <h2 style="font-family:var(--font-heading); font-size:18px; font-weight:700; color:#fff; margin:0 0 16px 0;">
+            Captured Operations History
+          </h2>
+          <div id="squadSolvesSlot"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/storage.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/websocket.js"></script>
+  <script src="/assets/js/components/toast.js"></script>
+  <script src="/assets/js/components/navbar.js"></script>
+  <script src="/assets/js/public/team.js"></script>
+</body>
+</html>

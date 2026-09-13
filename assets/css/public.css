@@ -1,0 +1,151 @@
+/* ==========================================================================
+   PUBLIC.CSS - Participant Battlefield Styling
+   ========================================================================== */
+
+/* Hero Landing */
+.hero-section {
+  padding: 60px 0 80px 0;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.hero-h1 {
+  font-family: var(--font-display);
+  font-size: clamp(36px, 6vw, 68px);
+  font-weight: 900;
+  line-height: 1.06;
+  color: #fff;
+  margin: 16px 0 20px 0;
+}
+
+.hero-h1 span {
+  color: var(--accent);
+  text-shadow: 0 0 30px var(--accent-glow);
+}
+
+.hero-tagline {
+  font-family: var(--font-heading);
+  font-size: clamp(16px, 2.5vw, 22px);
+  color: var(--text-secondary);
+  letter-spacing: 0.15em;
+  margin-bottom: 36px;
+}
+
+.hero-telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 16px;
+  width: 100%;
+  margin-top: 40px;
+}
+
+.telemetry-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 18px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+}
+
+.telemetry-val {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 800;
+  color: #fff;
+}
+
+/* Command Center HUD */
+.command-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr 340px;
+  gap: 20px;
+}
+
+.hud-stat-box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+}
+
+.hud-progress-track {
+  height: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin: 10px 0;
+}
+
+.hud-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan), var(--accent));
+  box-shadow: 0 0 10px var(--accent-glow);
+  transition: width 0.5s ease;
+}
+
+/* Challenges Grid */
+.challenge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.mission-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 14px 18px;
+  border-radius: var(--radius-md);
+  margin-bottom: 24px;
+}
+
+/* Challenge Page (Single Dossier) */
+.dossier-layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .dossier-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.briefing-box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  padding: 20px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+
+/* Scoreboard Top 3 */
+.scoreboard-top-podium {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr 1fr;
+  gap: 16px;
+  align-items: flex-end;
+  margin-bottom: 30px;
+}
+
+.podium-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 22px;
+  text-align: center;
+  border-radius: var(--radius-md);
+}
+
+.podium-card.rank-1 {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, rgba(255, 190, 11, 0.08), var(--bg-card));
+  transform: translateY(-8px);
+}

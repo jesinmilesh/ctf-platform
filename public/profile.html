@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OPERATIVE PROFILE // XPLOITX CYBER BATTLEFIELD</title>
+  <meta name="description" content="Operative clearance file, profile telemetry, and mission statistics.">
+
+  <link rel="stylesheet" href="/assets/css/variables.css">
+  <link rel="stylesheet" href="/assets/css/reset.css">
+  <link rel="stylesheet" href="/assets/css/global.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <link rel="stylesheet" href="/assets/css/animations.css">
+  <link rel="stylesheet" href="/assets/css/responsive.css">
+  <link rel="stylesheet" href="/assets/css/public.css">
+</head>
+<body>
+  <div id="navbar-container"></div>
+
+  <main class="container" style="padding: 40px 20px; max-width: 800px;">
+    <header style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:32px; margin-bottom:28px; display:flex; align-items:center; gap:24px;">
+      <div style="width:80px; height:80px; border-radius:50%; background:var(--bg-secondary); border:2px solid var(--accent); display:flex; align-items:center; justify-content:center; font-size:32px; box-shadow:0 0 16px var(--accent-glow);">
+        ⚡
+      </div>
+      <div>
+        <div style="font-family:var(--font-mono); font-size:11px; color:var(--accent); font-weight:700; letter-spacing:0.1em; margin-bottom:4px;">
+          OPERATIVE DOSSIER // CLASSIFIED
+        </div>
+        <h1 id="profCallsign" style="font-family:var(--font-heading); font-size:28px; font-weight:800; color:#fff; margin:0 0 4px 0;">
+          CALLSIGN
+        </h1>
+        <div id="profUsername" style="font-family:var(--font-mono); font-size:13px; color:var(--text-secondary);">
+          @username
+        </div>
+      </div>
+    </header>
+
+    <!-- Details Card -->
+    <section style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:28px; margin-bottom:28px;">
+      <h2 style="font-family:var(--font-heading); font-size:18px; font-weight:700; color:#fff; margin:0 0 20px 0; border-bottom:1px solid var(--border); padding-bottom:12px;">
+        SECURITY CLEARANCE ATTRIBUTES
+      </h2>
+
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:20px; font-family:var(--font-mono); font-size:13px;">
+        <div>
+          <span style="color:var(--text-secondary); display:block; margin-bottom:4px; font-size:11px;">REGISTERED FREQUENCY</span>
+          <span id="profEmail" style="color:#fff;">--</span>
+        </div>
+        <div>
+          <span style="color:var(--text-secondary); display:block; margin-bottom:4px; font-size:11px;">SYSTEM CLEARANCE ROLE</span>
+          <span id="profRole" style="color:var(--cyan); font-weight:700;">--</span>
+        </div>
+        <div>
+          <span style="color:var(--text-secondary); display:block; margin-bottom:4px; font-size:11px;">AFFILIATION</span>
+          <span id="profAffiliation" style="color:#fff;">--</span>
+        </div>
+        <div>
+          <span style="color:var(--text-secondary); display:block; margin-bottom:4px; font-size:11px;">ASSIGNED SQUAD</span>
+          <span id="profSquad">--</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Metrics -->
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+      <div class="telemetry-card" style="border-left: 3px solid var(--accent);">
+        <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-secondary);">INDIVIDUAL SCORE</div>
+        <div class="telemetry-val" id="profPoints" style="color:var(--accent);">-- XP</div>
+      </div>
+      <div class="telemetry-card" style="border-left: 3px solid var(--cyan);">
+        <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-secondary);">MISSIONS CAPTURED</div>
+        <div class="telemetry-val" id="profSolvesCount">--</div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/storage.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/websocket.js"></script>
+  <script src="/assets/js/components/navbar.js"></script>
+  <script src="/assets/js/public/profile.js"></script>
+</body>
+</html>

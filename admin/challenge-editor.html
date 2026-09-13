@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MISSION STUDIO // XPLOITX C2</title>
+  <meta name="description" content="Multi-tab Mission Studio for authoring, configuring, and publishing CTF challenges.">
+
+  <link rel="stylesheet" href="/assets/css/variables.css">
+  <link rel="stylesheet" href="/assets/css/reset.css">
+  <link rel="stylesheet" href="/assets/css/global.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <link rel="stylesheet" href="/assets/css/animations.css">
+  <link rel="stylesheet" href="/assets/css/responsive.css">
+  <link rel="stylesheet" href="/assets/css/admin.css">
+</head>
+<body>
+
+  <header class="tactical-navbar admin-header">
+    <div class="container navbar-inner">
+      <div style="display:flex; align-items:center; gap:16px;">
+        <span style="font-family:var(--font-display); font-size:16px; font-weight:900; color:#fff; letter-spacing:0.1em;">
+          XPLOITX // <span style="color:var(--danger);">C2 COMMAND ROOM</span>
+        </span>
+      </div>
+      <a href="/admin/challenges.html" class="btn btn-sm btn-outline" style="text-decoration:none;">← ALL MISSIONS</a>
+    </div>
+  </header>
+
+  <div class="container" style="padding: 24px 20px;">
+    <div class="admin-layout-body">
+      <div id="admin-sidebar-container"></div>
+
+      <main>
+        <div style="margin-bottom:20px;">
+          <span style="font-family:var(--font-mono); font-size:11px; color:var(--accent); font-weight:700; letter-spacing:0.1em;">
+            STUDIO WORKBENCH // C2 AUTHORING
+          </span>
+          <h1 id="editorTitleHeader" style="font-family:var(--font-heading); font-size:26px; font-weight:800; color:#fff; margin:2px 0 0 0;">
+            Create New Mission
+          </h1>
+        </div>
+
+        <!-- Studio Multi-Tabs (Section 14) -->
+        <div class="studio-tabs">
+          <button type="button" class="studio-tab-btn active" data-target="pane-mission">1. MISSION</button>
+          <button type="button" class="studio-tab-btn" data-target="pane-content">2. CONTENT</button>
+          <button type="button" class="studio-tab-btn" data-target="pane-files">3. FILES</button>
+          <button type="button" class="studio-tab-btn" data-target="pane-flag">4. FLAG</button>
+          <button type="button" class="studio-tab-btn" data-target="pane-hints">5. HINTS</button>
+          <button type="button" class="studio-tab-btn" data-target="pane-scoring">6. SCORING</button>
+          <button type="button" class="studio-tab-btn" data-target="pane-schedule">7. SCHEDULE & SANDBOX</button>
+          <button type="button" class="studio-tab-btn" data-target="pane-preview">8. PREVIEW</button>
+        </div>
+
+        <form id="challengeStudioForm">
+          <!-- Pane 1: MISSION -->
+          <div class="studio-pane active" id="pane-mission" style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+            <div style="display:flex; flex-direction:column; gap:16px;">
+              <div>
+                <label for="editTitle" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">MISSION TITLE *</label>
+                <input type="text" id="editTitle" required placeholder="e.g. The Last Digit" style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;">
+              </div>
+
+              <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px;">
+                <div>
+                  <label for="editMissionId" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">MISSION CODE</label>
+                  <input type="text" id="editMissionId" placeholder="e.g. OP-CRYPT-07" style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;">
+                </div>
+                <div>
+                  <label for="editCategory" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">CATEGORY *</label>
+                  <select id="editCategory" style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-heading); font-size:13px;">
+                    <option value="CRYPTO">CRYPTO</option>
+                    <option value="WEB">WEB</option>
+                    <option value="PWN">PWN</option>
+                    <option value="FORENSICS">FORENSICS</option>
+                    <option value="REVERSING">REVERSING</option>
+                    <option value="OSINT">OSINT</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="editDifficulty" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">DIFFICULTY *</label>
+                  <select id="editDifficulty" style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-heading); font-size:13px;">
+                    <option value="EASY">EASY</option>
+                    <option value="MEDIUM" selected>MEDIUM</option>
+                    <option value="HARD">HARD</option>
+                    <option value="INSANE">INSANE</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pane 2: CONTENT -->
+          <div class="studio-pane" id="pane-content" style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+            <div>
+              <label for="editDescription" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">TACTICAL BRIEFING (MARKDOWN SUPPORTED) *</label>
+              <textarea id="editDescription" rows="10" placeholder="Target parameter descriptions, background story, and reconnaissance notes..." style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px; line-height:1.6;"></textarea>
+            </div>
+          </div>
+
+          <!-- Pane 3: FILES -->
+          <div class="studio-pane" id="pane-files" style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+            <div style="margin-bottom:16px;">
+              <span style="font-family:var(--font-mono); font-size:11px; color:var(--accent);">SECURE ASSET ATTACHMENTS (RULE 29 ENFORCED)</span>
+              <p style="color:var(--text-secondary); font-size:13px; margin:4px 0 16px 0;">Files uploaded here are stored in isolated storage outside the public web root.</p>
+              <input type="file" id="challengeFiles" multiple style="background:var(--bg-secondary); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm); color:#fff; width:100%;">
+            </div>
+          </div>
+
+          <!-- Pane 4: FLAG -->
+          <div class="studio-pane" id="pane-flag" style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+            <div style="display:flex; flex-direction:column; gap:16px;">
+              <div>
+                <label for="editFlag" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">TARGET FLAG STRING *</label>
+                <input type="text" id="editFlag" placeholder="XploitXβ{cryptographic_answer_here}" style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:var(--accent); font-weight:700; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;">
+              </div>
+              <div>
+                <button type="button" id="testFlagBtn" class="btn btn-sm btn-outline">
+                  VALIDATE FLAG SYNTAX & INTEGRITY
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pane 5: HINTS -->
+          <div class="studio-pane" id="pane-hints" style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+            <div style="display:grid; grid-template-columns: 1fr 140px; gap:16px;">
+              <div>
+                <label for="editHint" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">HINT INTEL CONTENT</label>
+                <input type="text" id="editHint" placeholder="Clue for operatives encountering roadblocks..." style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;">
+              </div>
+              <div>
+                <label for="editHintCost" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">XP COST</label>
+                <input type="number" id="editHintCost" value="50" min="0" style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;">
+              </div>
+            </div>
+          </div>
+
+          <!-- Pane 6: SCORING -->
+          <div class="studio-pane" id="pane-scoring" style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px;">
+              <div>
+                <label for="editPoints" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">BASE POINTS</label>
+                <input type="number" id="editPoints" value="500" min="10" style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;">
+              </div>
+              <div>
+                <label for="editMinPoints" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">FLOOR POINTS</label>
+                <input type="number" id="editMinPoints" value="100" min="10" style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;">
+              </div>
+              <div>
+                <label for="editDecay" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">DECAY SOLVES THRESHOLD</label>
+                <input type="number" id="editDecay" value="30" min="1" style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;">
+              </div>
+            </div>
+          </div>
+
+          <!-- Pane 7: SCHEDULE & SANDBOX -->
+          <div class="studio-pane" id="pane-schedule" style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+              <input type="checkbox" id="editHasInstance" style="width:18px; height:18px;">
+              <label for="editHasInstance" style="font-family:var(--font-heading); font-size:14px; font-weight:700; color:#fff; cursor:pointer;">
+                REQUIRE DYNAMIC DOCKER CONTAINER SANDBOX
+              </label>
+            </div>
+            <p style="color:var(--text-secondary); font-size:12px; line-height:1.6;">
+              When checked, operatives will be able to launch on-demand sandbox daemon instances with individual ports and auto-destruction TTL timers.
+            </p>
+          </div>
+
+          <!-- Pane 8: PREVIEW -->
+          <div class="studio-pane" id="pane-preview" style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+            <div style="display:grid; grid-template-columns: 340px 1fr; gap:24px;">
+              <div>
+                <h3 style="font-family:var(--font-mono); font-size:12px; color:var(--text-secondary); margin-bottom:12px;">CARD PREVIEW</h3>
+                <div id="previewCardSlot"></div>
+              </div>
+              <div>
+                <h3 style="font-family:var(--font-mono); font-size:12px; color:var(--text-secondary); margin-bottom:12px;">BRIEFING DOSSIER PREVIEW</h3>
+                <div id="previewBriefingSlot" style="background:var(--bg-secondary); border:1px solid var(--border); padding:20px; border-radius:var(--radius-sm); font-size:13px; line-height:1.7; white-space:pre-wrap;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Submit Buttons -->
+          <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
+            <a href="/admin/challenges.html" class="btn btn-outline">DISCARD</a>
+            <button type="submit" class="btn btn-primary" style="padding:12px 28px;">
+              PUBLISH MISSION
+            </button>
+          </div>
+        </form>
+      </main>
+    </div>
+  </div>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/storage.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/components/toast.js"></script>
+  <script src="/assets/js/components/challengeCard.js"></script>
+  <script src="/assets/js/components/sidebar.js"></script>
+  <script src="/assets/js/admin/challenge-editor.js"></script>
+</body>
+</html>

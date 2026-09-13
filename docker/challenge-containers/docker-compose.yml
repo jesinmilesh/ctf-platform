@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  # Web Challenge Daemon
+  vault-breach:
+    build: ./web-target
+    ports:
+      - "31337:80"
+    restart: unless-stopped
+    environment:
+      - FLAG=XploitXβ{sqli_cl4ssified_v4ult_unl0ck3d}
+
+  # Binary Exploitation (PWN) Target Daemon
+  buffer-strike:
+    build: ./pwn-target
+    ports:
+      - "39001:9999"
+    restart: unless-stopped
+    environment:
+      - FLAG=XploitXβ{r0p_g4dg3t_m4st3r_sh3ll_sp4wn}

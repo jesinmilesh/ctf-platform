@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SETTINGS // XPLOITX C2</title>
+  <meta name="description" content="Platform configuration, scoring dynamics, and security rules.">
+
+  <link rel="stylesheet" href="/assets/css/variables.css">
+  <link rel="stylesheet" href="/assets/css/reset.css">
+  <link rel="stylesheet" href="/assets/css/global.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <link rel="stylesheet" href="/assets/css/animations.css">
+  <link rel="stylesheet" href="/assets/css/responsive.css">
+  <link rel="stylesheet" href="/assets/css/admin.css">
+</head>
+<body>
+
+  <header class="tactical-navbar admin-header">
+    <div class="container navbar-inner">
+      <span style="font-family:var(--font-display); font-size:16px; font-weight:900; color:#fff;">
+        XPLOITX // <span style="color:var(--danger);">C2 COMMAND ROOM</span>
+      </span>
+      <a href="/dashboard.html" class="btn btn-sm btn-outline" style="text-decoration:none;">PUBLIC PORTAL</a>
+    </div>
+  </header>
+
+  <div class="container" style="padding: 24px 20px;">
+    <div class="admin-layout-body">
+      <div id="admin-sidebar-container"></div>
+
+      <main>
+        <div style="margin-bottom:24px;">
+          <span style="font-family:var(--font-mono); font-size:11px; color:var(--accent); font-weight:700; letter-spacing:0.1em;">
+            C2 ENGINE // CONFIGURATION
+          </span>
+          <h1 style="font-family:var(--font-heading); font-size:26px; font-weight:800; color:#fff; margin:2px 0 0 0;">
+            Platform & Scoring Settings
+          </h1>
+        </div>
+
+        <form id="adminSettingsForm" style="display:flex; flex-direction:column; gap:24px; max-width:800px;">
+          <!-- Section 1: Competition Config -->
+          <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+            <h2 style="font-family:var(--font-heading); font-size:18px; font-weight:700; color:#fff; margin:0 0 16px 0;">
+              COMPETITION IDENTITY
+            </h2>
+
+            <div style="display:flex; flex-direction:column; gap:16px;">
+              <div>
+                <label for="setCompName" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">COMPETITION NAME</label>
+                <input type="text" id="setCompName" style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:10px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;">
+              </div>
+
+              <div>
+                <label for="setTagline" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">TAGLINE</label>
+                <input type="text" id="setTagline" style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:10px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;">
+              </div>
+
+              <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px;">
+                <div>
+                  <label for="setFlagPrefix" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">FLAG PREFIX (SECTION 24)</label>
+                  <input type="text" id="setFlagPrefix" style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:var(--accent); font-weight:700; padding:10px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;">
+                </div>
+                <div>
+                  <label for="setFlagSuffix" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">FLAG SUFFIX</label>
+                  <input type="text" id="setFlagSuffix" style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:var(--accent); font-weight:700; padding:10px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;">
+                </div>
+                <div>
+                  <label for="setMaxTeamSize" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">MAX TEAM SIZE</label>
+                  <input type="number" id="setMaxTeamSize" min="1" max="10" style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:10px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2: Scoring Engine -->
+          <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+            <h2 style="font-family:var(--font-heading); font-size:18px; font-weight:700; color:var(--accent); margin:0 0 16px 0;">
+              DYNAMIC SCORING DYNAMICS
+            </h2>
+
+            <div style="display:flex; flex-direction:column; gap:16px;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <input type="checkbox" id="setDynamicScoring" style="width:18px; height:18px;">
+                <label for="setDynamicScoring" style="font-family:var(--font-heading); font-size:14px; color:#fff; font-weight:700; cursor:pointer;">
+                  ENABLE QUADRATIC DYNAMIC SCORING DECAY
+                </label>
+              </div>
+
+              <div>
+                <label for="setDecayThreshold" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">SOLVES DECAY THRESHOLD (DEFAULT 30)</label>
+                <input type="number" id="setDecayThreshold" min="5" max="100" style="width:100%; max-width:260px; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:10px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;">
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 3: Security & Rate Limits -->
+          <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+            <h2 style="font-family:var(--font-heading); font-size:18px; font-weight:700; color:var(--warning); margin:0 0 16px 0;">
+              SECURITY & RATE CONTROL
+            </h2>
+
+            <div>
+              <label for="setRateLimit" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">SUBMISSION ATTEMPTS PER MINUTE</label>
+              <input type="number" id="setRateLimit" min="1" max="60" style="width:100%; max-width:260px; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:10px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;">
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="padding:14px; font-size:14px;">
+            SAVE CONFIGURATION
+          </button>
+        </form>
+      </main>
+    </div>
+  </div>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/storage.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/components/toast.js"></script>
+  <script src="/assets/js/components/sidebar.js"></script>
+  <script src="/assets/js/admin/settings.js"></script>
+</body>
+</html>

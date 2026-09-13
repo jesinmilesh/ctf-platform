@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BATTLEFIELD ACTIVITY // XPLOITX CYBER BATTLEFIELD</title>
+  <meta name="description" content="Live solve telemetry stream, first blood alerts, and challenge attack feed.">
+
+  <link rel="stylesheet" href="/assets/css/variables.css">
+  <link rel="stylesheet" href="/assets/css/reset.css">
+  <link rel="stylesheet" href="/assets/css/global.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <link rel="stylesheet" href="/assets/css/animations.css">
+  <link rel="stylesheet" href="/assets/css/responsive.css">
+  <link rel="stylesheet" href="/assets/css/public.css">
+</head>
+<body>
+  <div id="navbar-container"></div>
+
+  <main class="container" style="padding: 40px 20px; max-width: 920px;">
+    <header style="margin-bottom: 32px; border-bottom:1px solid var(--border); padding-bottom:20px; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px;">
+      <div>
+        <span style="font-family:var(--font-mono); font-size:12px; color:var(--accent); font-weight:700; letter-spacing:0.12em;">
+          TELEMETRY // LIVE COMBAT STREAM
+        </span>
+        <h1 style="font-family:var(--font-heading); font-size:32px; font-weight:800; color:#fff; margin:6px 0 8px 0;">
+          Battlefield Activity Feed
+        </h1>
+        <p style="color:var(--text-secondary); font-size:14px; margin:0;">
+          Real-time intercept log of flag captures and exploit attempts across all active sectors.
+        </p>
+      </div>
+
+      <div style="font-family:var(--font-mono); font-size:12px; color:var(--text-secondary); display:flex; align-items:center; gap:8px;">
+        <span class="telemetry-status-dot" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent);"></span>
+        <span>STREAM ACTIVE</span>
+      </div>
+    </header>
+
+    <div id="activityStreamSlot">
+      <div style="text-align:center; padding:40px; color:var(--text-secondary); font-family:var(--font-mono);">
+        INTERCEPTING TELEMETRY PACKETS...
+      </div>
+    </div>
+  </main>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/storage.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/websocket.js"></script>
+  <script src="/assets/js/components/toast.js"></script>
+  <script src="/assets/js/components/navbar.js"></script>
+  <script src="/assets/js/public/activity.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>C2 // XPLOITX ADMIN REDIRECT</title>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      await window.authManager.init();
+      if (window.authManager.isAdmin()) {
+        window.location.href = '/admin/dashboard.html';
+      } else {
+        window.location.href = '/admin/login.html';
+      }
+    });
+  </script>
+</head>
+<body style="background:#05070a; color:#fff; font-family:monospace; display:flex; align-items:center; justify-content:center; height:100vh; margin:0;">
+  <div>VERIFYING C2 CLEARANCE...</div>
+</body>
+</html>

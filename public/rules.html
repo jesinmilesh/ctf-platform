@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RULES OF ENGAGEMENT // XPLOITX CYBER BATTLEFIELD</title>
+  <meta name="description" content="Rules of engagement, ethical guidelines, and scoring mechanisms for XploitX CTF.">
+
+  <link rel="stylesheet" href="/assets/css/variables.css">
+  <link rel="stylesheet" href="/assets/css/reset.css">
+  <link rel="stylesheet" href="/assets/css/global.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <link rel="stylesheet" href="/assets/css/animations.css">
+  <link rel="stylesheet" href="/assets/css/responsive.css">
+  <link rel="stylesheet" href="/assets/css/public.css">
+</head>
+<body>
+  <div id="navbar-container"></div>
+
+  <main class="container" style="padding: 40px 20px; max-width: 860px;">
+    <header style="margin-bottom: 36px; border-bottom:1px solid var(--border); padding-bottom:20px;">
+      <span style="font-family:var(--font-mono); font-size:12px; color:var(--accent); font-weight:700; letter-spacing:0.1em;">
+        BATTLEFIELD CODE // DIRECTIVE 01
+      </span>
+      <h1 style="font-family:var(--font-heading); font-size:32px; font-weight:800; color:#fff; margin:6px 0 8px 0;">
+        Rules of Engagement
+      </h1>
+      <p style="color:var(--text-secondary); font-size:14px; margin:0;">
+        Operatives are required to strictly adhere to the engagement protocols. Violations result in automatic disqualification.
+      </p>
+    </header>
+
+    <div style="display:flex; flex-direction:column; gap:24px;">
+      <!-- Rule 1 -->
+      <div style="background:var(--bg-card); border:1px solid var(--border); border-left:4px solid var(--accent); padding:24px; border-radius:var(--radius-sm);">
+        <h2 style="font-family:var(--font-heading); font-size:18px; font-weight:700; color:#fff; margin:0 0 10px 0;">
+          01 // TARGET ISOLATION & INFRASTRUCTURE PROTECTION
+        </h2>
+        <p style="color:var(--text-secondary); font-size:13px; line-height:1.7; margin:0;">
+          Attacking the CTF scoring infrastructure, game servers, or other participants’ systems is strictly prohibited. You may only target designated mission hostnames and allocated challenge container sandboxes.
+        </p>
+      </div>
+
+      <!-- Rule 2 -->
+      <div style="background:var(--bg-card); border:1px solid var(--border); border-left:4px solid var(--cyan); padding:24px; border-radius:var(--radius-sm);">
+        <h2 style="font-family:var(--font-heading); font-size:18px; font-weight:700; color:#fff; margin:0 0 10px 0;">
+          02 // NO COLLUSION & FLAG SHARING
+        </h2>
+        <p style="color:var(--text-secondary); font-size:13px; line-height:1.7; margin:0;">
+          Squads must independently capture flags. Distributing flags, solutions, or clues to rival squads or public channels before the battlefield closure is forbidden.
+        </p>
+      </div>
+
+      <!-- Rule 3 -->
+      <div style="background:var(--bg-card); border:1px solid var(--border); border-left:4px solid var(--warning); padding:24px; border-radius:var(--radius-sm);">
+        <h2 style="font-family:var(--font-heading); font-size:18px; font-weight:700; color:#fff; margin:0 0 10px 0;">
+          03 // BRUTE FORCE & RATE LIMITING
+        </h2>
+        <p style="color:var(--text-secondary); font-size:13px; line-height:1.7; margin:0;">
+          Do not conduct automated brute-force attacks against flag submission endpoints or administrative endpoints. A rate limiter is active. Malicious traffic bursts will result in IP blacklisting.
+        </p>
+      </div>
+
+      <!-- Rule 4 -->
+      <div style="background:var(--bg-card); border:1px solid var(--border); border-left:4px solid var(--danger); padding:24px; border-radius:var(--radius-sm);">
+        <h2 style="font-family:var(--font-heading); font-size:18px; font-weight:700; color:#fff; margin:0 0 10px 0;">
+          04 // FLAG FORMAT STANDARD
+        </h2>
+        <p style="color:var(--text-secondary); font-size:13px; line-height:1.7; margin-bottom:12px;">
+          All valid flags conform to the competition standard pattern:
+        </p>
+        <code style="display:inline-block; background:var(--bg-secondary); border:1px solid var(--border); padding:8px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px; color:var(--accent);">
+          XploitXβ{your_captured_flag_string}
+        </code>
+      </div>
+
+      <!-- Rule 5 -->
+      <div style="background:var(--bg-card); border:1px solid var(--border); border-left:4px solid var(--gold); padding:24px; border-radius:var(--radius-sm);">
+        <h2 style="font-family:var(--font-heading); font-size:18px; font-weight:700; color:#fff; margin:0 0 10px 0;">
+          05 // DYNAMIC SCORING DECAY & TIE BREAKING
+        </h2>
+        <p style="color:var(--text-secondary); font-size:13px; line-height:1.7; margin:0;">
+          Challenges start with their base value (e.g. 500 XP). Each subsequent solve decays the point value smoothly towards the floor value. Ties on the leaderboard are resolved chronologically by whoever achieved the score first.
+        </p>
+      </div>
+    </div>
+  </main>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/storage.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/websocket.js"></script>
+  <script src="/assets/js/components/navbar.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => Navbar.render('navbar-container', 'rules'));
+  </script>
+</body>
+</html>

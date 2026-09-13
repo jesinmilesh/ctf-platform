@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MISSION DOSSIER // XPLOITX CYBER BATTLEFIELD</title>
+  <meta name="description" content="Mission briefing dossier, sandbox container targets, and cryptographic flag capture terminal.">
+
+  <link rel="stylesheet" href="/assets/css/variables.css">
+  <link rel="stylesheet" href="/assets/css/reset.css">
+  <link rel="stylesheet" href="/assets/css/global.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <link rel="stylesheet" href="/assets/css/animations.css">
+  <link rel="stylesheet" href="/assets/css/responsive.css">
+  <link rel="stylesheet" href="/assets/css/public.css">
+</head>
+<body>
+  <div id="navbar-container"></div>
+
+  <main class="container" style="padding: 40px 20px;">
+    <!-- Solved Status Alert Banner -->
+    <div id="missionSolvedBanner" style="display:none; background:var(--accent-muted); border:1px solid var(--accent); padding:14px 20px; border-radius:var(--radius-sm); margin-bottom:24px; text-align:center; font-family:var(--font-mono); font-size:13px; color:var(--accent); font-weight:700;">
+      ✓ MISSION SECURED // FLAG SUCCESSFULLY RECOVERED BY YOUR SQUAD
+    </div>
+
+    <div class="dossier-layout" id="missionContentArea">
+      <!-- Left Column: Briefing, Sandboxes, Files, Hints -->
+      <div style="display:flex; flex-direction:column; gap:24px;">
+
+        <!-- Header -->
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:28px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span id="missionIdBadge" style="font-family:var(--font-mono); font-size:12px; color:var(--text-secondary); background:var(--bg-secondary); padding:3px 8px; border-radius:var(--radius-sm); border:1px solid var(--border);">
+                OP-INIT
+              </span>
+              <span id="missionCategoryBadge" style="font-family:var(--font-mono); font-size:12px; font-weight:700;">
+                [ CATEGORY ]
+              </span>
+              <span id="missionDifficultyBadge"></span>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; font-family:var(--font-mono);">
+              <span id="missionPoints" style="font-size:16px; font-weight:800; color:var(--accent);">-- XP</span>
+              <span style="color:var(--text-secondary);">•</span>
+              <span id="missionSolves" style="font-size:12px; color:var(--text-secondary);">-- Solves</span>
+            </div>
+          </div>
+
+          <h1 id="missionTitle" style="font-family:var(--font-heading); font-size:30px; font-weight:800; color:#fff; margin:0 0 16px 0;">
+            Retrieving Classified Dossier...
+          </h1>
+
+          <div style="font-size:12px; font-family:var(--font-mono); color:var(--text-muted);">
+            BRIEFING TELEMETRY // CLEARED FOR ALLIED OPERATIVES
+          </div>
+        </div>
+
+        <!-- Description Box -->
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+          <h2 style="font-family:var(--font-heading); font-size:16px; font-weight:700; color:var(--cyan); margin:0 0 14px 0; letter-spacing:0.06em;">
+            OPERATIONAL BRIEFING
+          </h2>
+          <div id="missionDescription" class="briefing-box" style="white-space:pre-wrap; font-size:14px; line-height:1.7;">
+            Decrypting transmission...
+          </div>
+        </div>
+
+        <!-- Dynamic Container Sandbox Section -->
+        <div id="missionInstanceSection" style="display:none; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+          <h2 style="font-family:var(--font-heading); font-size:16px; font-weight:700; color:var(--accent); margin:0 0 14px 0; letter-spacing:0.06em;">
+            TARGET SANDBOX ENVIRONMENT (DOCKER)
+          </h2>
+          <div id="instanceStatusSlot"></div>
+        </div>
+
+        <!-- Attached Files Section -->
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+          <h2 style="font-family:var(--font-heading); font-size:16px; font-weight:700; color:#fff; margin:0 0 14px 0; letter-spacing:0.06em;">
+            MISSION ASSETS & PAYLOAD ARTIFACTS
+          </h2>
+          <div id="missionFilesContainer"></div>
+        </div>
+
+        <!-- Hints Section -->
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+          <h2 style="font-family:var(--font-heading); font-size:16px; font-weight:700; color:#fff; margin:0 0 14px 0; letter-spacing:0.06em;">
+            TACTICAL HINTS & SIGNALS INTEL
+          </h2>
+          <div id="missionHintsContainer"></div>
+        </div>
+      </div>
+
+      <!-- Right Column: Flag Capture Terminal Form -->
+      <div>
+        <div style="position:sticky; top:84px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px; box-shadow:0 12px 32px rgba(0,0,0,0.5);">
+          <div style="display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:11px; color:var(--accent); font-weight:700; margin-bottom:8px;">
+            <span style="display:inline-block; width:8px; height:8px; background:var(--accent); border-radius:50%; box-shadow:0 0 8px var(--accent);"></span>
+            TRANSMISSION TERMINAL
+          </div>
+
+          <h2 style="font-family:var(--font-heading); font-size:20px; font-weight:800; color:#fff; margin:0 0 16px 0;">
+            Capture Flag
+          </h2>
+
+          <form id="flagForm" style="display:flex; flex-direction:column; gap:16px;">
+            <div>
+              <label for="flagInput" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:8px; letter-spacing:0.08em;">
+                FLAG PAYLOAD
+              </label>
+              <div style="display:flex; align-items:center; background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden;">
+                <span id="flagPrefixLabel" style="padding:12px 10px; font-family:var(--font-mono); font-size:13px; color:var(--accent); background:rgba(0,255,156,0.06); border-right:1px solid var(--border); user-select:none;">
+                  XploitXβ{
+                </span>
+                <input
+                  type="text"
+                  id="flagInput"
+                  autocomplete="off"
+                  placeholder="enter captured flag"
+                  required
+                  style="flex:1; background:transparent; border:none; outline:none; color:#fff; padding:12px 10px; font-family:var(--font-mono); font-size:13px;"
+                >
+                <span id="flagSuffixLabel" style="padding:12px 10px; font-family:var(--font-mono); font-size:13px; color:var(--accent); background:rgba(0,255,156,0.06); border-left:1px solid var(--border); user-select:none;">
+                  }
+                </span>
+              </div>
+            </div>
+
+            <button type="submit" id="flagSubmitBtn" class="btn btn-primary" style="padding:14px; font-size:13px;">
+              CAPTURE FLAG
+            </button>
+          </form>
+
+          <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border); font-family:var(--font-mono); font-size:11px; color:var(--text-muted); line-height:1.6;">
+            <div>• Submission attempts are rate-limited.</div>
+            <div>• Do not share flags across squads.</div>
+            <div>• First blood secures max glory on C2 feed.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/storage.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/websocket.js"></script>
+  <script src="/assets/js/components/toast.js"></script>
+  <script src="/assets/js/components/modal.js"></script>
+  <script src="/assets/js/components/navbar.js"></script>
+  <script src="/assets/js/public/challenge.js"></script>
+</body>
+</html>

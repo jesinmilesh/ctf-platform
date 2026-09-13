@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LOGIN // XPLOITX CYBER BATTLEFIELD</title>
+  <meta name="description" content="Operative authentication portal for the XPLOITX Cyber Battlefield.">
+
+  <link rel="stylesheet" href="/assets/css/variables.css">
+  <link rel="stylesheet" href="/assets/css/reset.css">
+  <link rel="stylesheet" href="/assets/css/global.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <link rel="stylesheet" href="/assets/css/animations.css">
+  <link rel="stylesheet" href="/assets/css/responsive.css">
+  <link rel="stylesheet" href="/assets/css/public.css">
+</head>
+<body>
+  <div id="navbar-container"></div>
+
+  <main class="container" style="display:flex; justify-content:center; align-items:center; min-height: calc(100vh - 160px); padding:40px 20px;">
+    <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); max-width:440px; width:100%; padding:36px; box-shadow:0 12px 32px rgba(0,0,0,0.6);">
+
+      <div style="text-align:center; margin-bottom:28px;">
+        <span style="font-family:var(--font-mono); font-size:12px; color:var(--accent); font-weight:700; letter-spacing:0.12em;">
+          CLEARANCE REQUIRED
+        </span>
+        <h1 style="font-family:var(--font-heading); font-size:26px; font-weight:800; color:#fff; margin:6px 0 8px 0;">
+          Operative Authentication
+        </h1>
+        <p style="font-size:13px; color:var(--text-secondary); margin:0;">
+          Transmit your callsign and biometric credentials.
+        </p>
+      </div>
+
+      <div id="loginError" style="display:none; background:var(--danger-muted); border:1px solid var(--danger); color:var(--danger); padding:12px; border-radius:var(--radius-sm); font-size:12px; font-family:var(--font-mono); margin-bottom:20px;">
+      </div>
+
+      <form id="loginForm" style="display:flex; flex-direction:column; gap:18px;">
+        <div>
+          <label for="loginUsername" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px; letter-spacing:0.06em;">
+            CALLSIGN / USERNAME
+          </label>
+          <input
+            type="text"
+            id="loginUsername"
+            required
+            placeholder="e.g. jesin or admin"
+            style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;"
+          >
+        </div>
+
+        <div>
+          <label for="loginPassword" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px; letter-spacing:0.06em;">
+            CRYPTOGRAPHIC PASSPHRASE
+          </label>
+          <input
+            type="password"
+            id="loginPassword"
+            required
+            placeholder="••••••••••••"
+            style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;"
+          >
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="padding:14px; font-size:13px; margin-top:8px;">
+          INFILTRATE SYSTEM
+        </button>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; font-size:12px; color:var(--text-secondary);">
+          <span>New operative? <a href="/register.html" style="color:var(--accent); text-decoration:none; font-weight:600;">Enlist here</a></span>
+          <a href="/admin/login.html" style="color:var(--text-muted); text-decoration:none;">C2 Access</a>
+        </div>
+      </form>
+
+      <!-- Demo Credentials hint -->
+      <div style="margin-top:28px; padding-top:20px; border-top:1px solid var(--border); font-family:var(--font-mono); font-size:11px; color:var(--text-muted); line-height:1.6;">
+        <div><strong>SAMPLE RECRUIT LOGINS:</strong></div>
+        <div>Player: <code style="color:var(--accent);">jesin</code> / Pass: <code style="color:var(--accent);">player123</code></div>
+        <div>Admin: <code style="color:var(--danger);">admin</code> / Pass: <code style="color:var(--danger);">admin123</code></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/storage.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/websocket.js"></script>
+  <script src="/assets/js/components/toast.js"></script>
+  <script src="/assets/js/components/navbar.js"></script>
+  <script src="/assets/js/public/login.js"></script>
+</body>
+</html>

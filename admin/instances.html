@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SANDBOX DAEMONS // XPLOITX C2</title>
+  <meta name="description" content="Containerized challenge target lifecycle and port allocation manager.">
+
+  <link rel="stylesheet" href="/assets/css/variables.css">
+  <link rel="stylesheet" href="/assets/css/reset.css">
+  <link rel="stylesheet" href="/assets/css/global.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <link rel="stylesheet" href="/assets/css/animations.css">
+  <link rel="stylesheet" href="/assets/css/responsive.css">
+  <link rel="stylesheet" href="/assets/css/admin.css">
+</head>
+<body>
+
+  <header class="tactical-navbar admin-header">
+    <div class="container navbar-inner">
+      <span style="font-family:var(--font-display); font-size:16px; font-weight:900; color:#fff;">
+        XPLOITX // <span style="color:var(--danger);">C2 COMMAND ROOM</span>
+      </span>
+      <a href="/dashboard.html" class="btn btn-sm btn-outline" style="text-decoration:none;">PUBLIC PORTAL</a>
+    </div>
+  </header>
+
+  <div class="container" style="padding: 24px 20px;">
+    <div class="admin-layout-body">
+      <div id="admin-sidebar-container"></div>
+
+      <main>
+        <div style="margin-bottom:24px;">
+          <span style="font-family:var(--font-mono); font-size:11px; color:var(--cyan); font-weight:700; letter-spacing:0.1em;">
+            CONTAINER ORCHESTRATION // DOCKER DAEMONS
+          </span>
+          <h1 style="font-family:var(--font-heading); font-size:26px; font-weight:800; color:#fff; margin:2px 0 0 0;">
+            Active Sandboxes & Targets
+          </h1>
+        </div>
+
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden;">
+          <table style="width:100%; border-collapse:collapse; text-align:left;">
+            <thead>
+              <tr style="background:var(--bg-secondary); border-bottom:1px solid var(--border); font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); text-transform:uppercase;">
+                <th style="padding:12px 16px;">Container ID</th>
+                <th style="padding:12px 16px;">Mission</th>
+                <th style="padding:12px 16px;">Assigned Squad</th>
+                <th style="padding:12px 16px;">Exposed Endpoint</th>
+                <th style="padding:12px 16px;">Status</th>
+                <th style="padding:12px 16px;">Uptime</th>
+              </tr>
+            </thead>
+            <tbody id="adminInstancesTableBody">
+              <tr>
+                <td colspan="6" style="text-align:center; padding:30px; color:var(--text-secondary); font-family:var(--font-mono);">
+                  POLLING CONTAINER RUNTIME...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/storage.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/components/toast.js"></script>
+  <script src="/assets/js/components/sidebar.js"></script>
+  <script src="/assets/js/admin/instances.js"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>C2 OVERWATCH // XPLOITX ADMIN LOGIN</title>
+  <meta name="description" content="Administrative command and control terminal for XploitX CTF platform.">
+
+  <link rel="stylesheet" href="/assets/css/variables.css">
+  <link rel="stylesheet" href="/assets/css/reset.css">
+  <link rel="stylesheet" href="/assets/css/global.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <link rel="stylesheet" href="/assets/css/animations.css">
+  <link rel="stylesheet" href="/assets/css/responsive.css">
+  <link rel="stylesheet" href="/assets/css/admin.css">
+</head>
+<body style="background:var(--bg-primary); display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px;">
+
+  <div style="background:var(--bg-card); border:1px solid var(--border); border-top:4px solid var(--danger); border-radius:var(--radius-md); max-width:440px; width:100%; padding:36px; box-shadow:0 16px 40px rgba(0,0,0,0.8);">
+    <div style="text-align:center; margin-bottom:28px;">
+      <div style="display:inline-block; font-size:24px; margin-bottom:8px;">🛡️</div>
+      <div style="font-family:var(--font-mono); font-size:12px; color:var(--danger); font-weight:800; letter-spacing:0.15em;">
+        RESTRICTED COMMAND SECTOR
+      </div>
+      <h1 style="font-family:var(--font-heading); font-size:24px; font-weight:800; color:#fff; margin:6px 0 8px 0;">
+        C2 Control Room Login
+      </h1>
+      <p style="font-size:12px; color:var(--text-secondary); margin:0;">
+        Authorized staff and game administrator terminal.
+      </p>
+    </div>
+
+    <div id="adminLoginError" style="display:none; background:var(--danger-muted); border:1px solid var(--danger); color:var(--danger); padding:12px; border-radius:var(--radius-sm); font-size:12px; font-family:var(--font-mono); margin-bottom:20px;">
+    </div>
+
+    <form id="adminLoginForm" style="display:flex; flex-direction:column; gap:16px;">
+      <div>
+        <label for="adminUsername" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">
+          COMMANDER CALLSIGN
+        </label>
+        <input
+          type="text"
+          id="adminUsername"
+          required
+          placeholder="admin"
+          style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;"
+        >
+      </div>
+
+      <div>
+        <label for="adminPassword" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">
+          C2 PASSPHRASE
+        </label>
+        <input
+          type="password"
+          id="adminPassword"
+          required
+          placeholder="••••••••••••"
+          style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;"
+        >
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="background:var(--danger); border-color:var(--danger); box-shadow:0 0 12px var(--danger-glow); padding:14px; font-size:13px; margin-top:8px;">
+        ACCESS CONTROL ROOM
+      </button>
+
+      <div style="text-align:center; margin-top:10px;">
+        <a href="/" style="color:var(--text-secondary); font-size:12px; text-decoration:none;">← Return to Battlefield</a>
+      </div>
+    </form>
+  </div>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/storage.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/components/toast.js"></script>
+  <script src="/assets/js/admin/login.js"></script>
+</body>
+</html>

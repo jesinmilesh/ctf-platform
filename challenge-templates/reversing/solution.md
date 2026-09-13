@@ -1,0 +1,23 @@
+# Reversing Challenge Solution: License Subsystem
+
+## Analysis
+Opening `license_check` in Ghidra or IDA Pro reveals the `check_flag` function:
+1. Validates that `strlen(input) == 37`.
+2. Loops through input index `i` from `0` to `36`.
+3. Checks `input[i] ^ (0x50 + (i % 7)) == target[i]`.
+
+## Reversal Script (Python)
+```python
+target = bytes([
+    0x08, 0x21, 0x3e, 0x3c, 0x3d, 0x21, 0x0e, 0x9e, 0xe3, 0x29,
+    0x21, 0x67, 0x23, 0x65, 0x22, 0x22, 0x63, 0x3d, 0x33, 0x0a,
+    0x35, 0x0f, 0x33, 0x63, 0x3d, 0x60, 0x27, 0x2f, 0x0f, 0x62,
+    0x2a, 0x60, 0x37, 0x20, 0x61, 0x63, 0x2c
+])
+
+flag = bytes([b ^ (0x50 + (i % 7)) for i, b in enumerate(target)]).decode('utf-8')
+print("[+] Decrypted Flag:", flag)
+```
+
+## Output
+`XploitXβ{r3v3rs1ng_c_b1n4ry_3x3cu73}`

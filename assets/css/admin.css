@@ -1,0 +1,87 @@
+/* ==========================================================================
+   ADMIN.CSS - Control Room C2 Styling
+   ========================================================================== */
+
+.admin-header {
+  border-bottom: 2px solid var(--danger);
+}
+
+.admin-layout-body {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 24px;
+}
+
+.admin-sidebar {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: fit-content;
+}
+
+.admin-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  transition: var(--transition);
+}
+
+.admin-nav-item:hover {
+  background: var(--bg-hover);
+  color: #fff;
+}
+
+.admin-nav-item.active {
+  background: var(--danger-muted);
+  color: var(--danger);
+  border-left: 3px solid var(--danger);
+}
+
+/* Multi-tab Studio */
+.studio-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  overflow-x: auto;
+}
+
+.studio-tab-btn {
+  padding: 10px 18px;
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.studio-tab-btn:hover {
+  color: #fff;
+}
+
+.studio-tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--accent-muted);
+}
+
+.studio-pane {
+  display: none;
+}
+
+.studio-pane.active {
+  display: block;
+  animation: fadeInPage 0.2s ease-out;
+}
