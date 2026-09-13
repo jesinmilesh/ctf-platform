@@ -57,9 +57,10 @@ exports.createTeam = (req, res) => {
     return res.status(400).json({ error: 'EXISTS', message: 'A squad with this designation already exists' });
   }
 
-  const accessCode = `${cleanName.slice(0, 4).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const crypto = require('crypto');
+  const accessCode = `${cleanName.slice(0, 4).toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
   const team = {
-    id: `t-${Date.now()}`,
+    id: `t-${crypto.randomBytes(4).toString('hex')}`,
     competition_id: db.getCompetitions()[0]?.id,
     name: cleanName,
     slug,
@@ -80,6 +81,15 @@ exports.createTeam = (req, res) => {
   if (user) {
     user.team_id = team.id;
   }
+
+  // Record team member (Section 7)
+  db.getTeamMembers().push({
+    id: crypto.randomUUID(),
+    team_id: team.id,
+    user_id: req.user.id,
+    role: 'CAPTAIN',
+    joined_at: new Date().toISOString()
+  });
 
   res.status(201).json({
     success: true,
@@ -107,10 +117,31 @@ exports.joinTeam = (req, res) => {
     return res.status(404).json({ error: 'INVALID_CODE', message: 'Invalid squad security access code' });
   }
 
+  // Enforce server-side team size limits (Section 7)
+  const comp = db.getCompetitions()[0];
+  const maxTeamSize = comp?.max_team_size || 4;
+  const currentMembers = db.getUsers().filter(u => u.team_id === team.id);
+  if (currentMembers.length >= maxTeamSize) {
+    return res.status(400).json({
+      error: 'TEAM_FULL',
+      message: `Squad has reached the maximum permitted capacity of ${maxTeamSize} operatives.`
+    });
+  }
+
   const user = db.getUsers().find(u => u.id === req.user.id);
   if (user) {
     user.team_id = team.id;
   }
+
+  // Record team member (Section 7)
+  const crypto = require('crypto');
+  db.getTeamMembers().push({
+    id: crypto.randomUUID(),
+    team_id: team.id,
+    user_id: req.user.id,
+    role: 'MEMBER',
+    joined_at: new Date().toISOString()
+  });
 
   res.json({
     success: true,

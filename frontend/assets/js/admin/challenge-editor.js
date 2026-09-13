@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const points = document.getElementById('editPoints').value || 500;
     const desc = document.getElementById('editDescription').value || 'No briefing details entered yet.';
 
-    const mockChallenge = {
+    const previewChallenge = {
       id: 'preview',
       title,
       category,
@@ -84,7 +84,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       is_solved: false
     };
 
-    document.getElementById('previewCardSlot').innerHTML = ChallengeCard.render(mockChallenge);
+    document.getElementById('previewCardSlot').innerHTML = ChallengeCard.render(previewChallenge);
     document.getElementById('previewBriefingSlot').textContent = desc;
   }
 
@@ -108,12 +108,65 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Save Challenge Handler (Draft or Publish)
-  const form = document.getElementById('challengeStudioForm');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
+  function validatePayload(payload) {
+    const errors = [];
+    if (!payload.title) errors.push('Mission title is required.');
+    if (!payload.description) errors.push('Operational description/briefing is required.');
+    if (!payload.category) errors.push('Mission category must be selected.');
+    if (!payload.difficulty) errors.push('Difficulty rating must be designated.');
+    if (!payload.points || isNaN(payload.points) || payload.points <= 0) errors.push('Base reward XP must be a positive integer.');
+    if (payload.minimum_points && payload.minimum_points > payload.points) errors.push('Floor XP cannot exceed base XP.');
+    if (!payload.flag && !editingId) errors.push('Cryptographic flag configuration is required.');
+    return errors;
+  }
 
-    const payload = {
+  function displayValidationErrors(errors = []) {
+    const banner = document.getElementById('publishValidationErrors');
+    const list = document.getElementById('publishErrorsList');
+    if (!banner || !list) return;
+
+    if (errors.length === 0) {
+      banner.style.display = 'none';
+      list.innerHTML = '';
+      return true;
+    }
+
+    list.innerHTML = errors.map(err => `<li>${err}</li>`).join('');
+    banner.style.display = 'block';
+    banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return false;
+  }
+
+  // Validate Only Button
+  const validateOnlyBtn = document.getElementById('validateOnlyBtn');
+  if (validateOnlyBtn) {
+    validateOnlyBtn.addEventListener('click', async () => {
+      const payload = getFormPayload();
+      const localErrors = validatePayload(payload);
+      if (localErrors.length > 0) {
+        displayValidationErrors(localErrors);
+        window.showError('VALIDATION FAILED: Correct highlighted deficiencies.');
+        return;
+      }
+
+      if (editingId) {
+        try {
+          const res = await window.api.admin.getChallengeValidation(editingId);
+          if (res && !res.valid) {
+            displayValidationErrors(res.errors || ['Backend validation rejected mission.']);
+            window.showError('VALIDATION DEFICIENCIES DETECTED');
+            return;
+          }
+        } catch (e) {}
+      }
+
+      displayValidationErrors([]);
+      window.showSuccess('✓ ALL VALIDATION CHECKS PASSED // READY FOR PUBLICATION');
+    });
+  }
+
+  function getFormPayload() {
+    return {
       title: document.getElementById('editTitle').value.trim(),
       mission_id: document.getElementById('editMissionId').value.trim(),
       category: document.getElementById('editCategory').value,
@@ -128,6 +181,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       has_instance: document.getElementById('editHasInstance').checked,
       status: 'PUBLISHED'
     };
+  }
+
+  // Save Challenge Handler (Draft or Publish)
+  const form = document.getElementById('challengeStudioForm');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const payload = getFormPayload();
+    const localErrors = validatePayload(payload);
+    if (!displayValidationErrors(localErrors)) {
+      window.showError('CANNOT PUBLISH: Resolve validation deficiencies first.');
+      return;
+    }
 
     const submitBtn = form.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
@@ -146,6 +212,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }, 700);
     } catch (err) {
       window.showError(err.message);
+      displayValidationErrors([err.message]);
       submitBtn.disabled = false;
       submitBtn.textContent = 'PUBLISH MISSION';
     }

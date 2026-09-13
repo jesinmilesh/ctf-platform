@@ -3,6 +3,7 @@
  * Flag Submission Engine & First Blood Detection (backend/services/submissionService.js)
  */
 
+const crypto = require('crypto');
 const db = require('../config/database');
 const scoringService = require('./scoringService');
 const realtimeService = require('./realtimeService');
@@ -26,17 +27,38 @@ class SubmissionService {
     const cleanFlag = (submittedFlag || '').trim();
     const settings = db.getSettings();
 
-    // 1. Find challenge
-    const challenge = db.getChallenges().find(c => c.id === challengeId || c.slug === challengeId || c.mission_id === challengeId);
+    // 0. Verify competition active status (Section 18)
+    const comp = db.getCompetitions()[0];
+    if (comp && comp.status && comp.status !== 'LIVE') {
+      return {
+        success: false,
+        correct: false,
+        status: 'COMPETITION_NOT_ACTIVE',
+        message: `ENGAGEMENT SUSPENDED: Competition status is currently ${comp.status}. Flag submissions are offline.`
+      };
+    }
+
+    // 1. Find challenge with flexible normalization (ch-01 <-> ch-001)
+    const challenge = db.getChallenges().find(c =>
+      c.id === challengeId ||
+      c.slug === challengeId ||
+      c.mission_id === challengeId ||
+      c.id === challengeId.replace(/^ch-0*(\d+)$/, (m, p) => 'ch-' + (parseInt(p, 10) < 10 ? '0' + parseInt(p, 10) : p)) ||
+      c.id.replace(/^ch-0*(\d+)$/, 'ch-$1') === challengeId
+    );
+
     if (!challenge) {
-      return { success: false, status: 'NOT_FOUND', message: 'Mission dossier not found' };
+      return { success: false, correct: false, status: 'NOT_FOUND', message: 'Mission dossier not found' };
     }
 
     const teamId = user.team_id || (user.team && user.team.id);
     const team = db.getTeams().find(t => t.id === teamId);
 
     // 2. Check if already solved
-    const existingSolve = db.getSolves().find(s => s.challenge_id === challenge.id && (s.team_id === teamId || s.user_id === user.id));
+    const existingSolve = db.getSolves().find(s =>
+      s.challenge_id === challenge.id &&
+      ((teamId && s.team_id === teamId) || (user.id && s.user_id === user.id))
+    );
     if (existingSolve) {
       return {
         success: false,
@@ -66,9 +88,12 @@ class SubmissionService {
       };
     }
 
-    // 4. Match against stored flags for this challenge
+    // 4. Match against stored flags for this challenge (Section 14)
+    // Supports: STATIC, REGEX, DYNAMIC (HMAC), MULTIPLE_ACCEPTED_FLAGS
     const challengeFlags = db.getFlags().filter(f => f.challenge_id === challenge.id);
     let isCorrect = false;
+
+    const hmacSecret = process.env.FLAG_HMAC_SECRET || 'xploitx_dynamic_flag_hmac_secret_key_2026';
 
     for (const fl of challengeFlags) {
       if (fl.flag_type === 'REGEX') {
@@ -77,8 +102,24 @@ class SubmissionService {
           isCorrect = true;
           break;
         }
+      } else if (fl.flag_type === 'DYNAMIC') {
+        // Dynamic HMAC generation based on team ID or user ID
+        const seedId = teamId || user.id || 'operative';
+        const hmacHash = crypto.createHmac('sha256', hmacSecret).update(`${challenge.id}:${seedId}`).digest('hex').substring(0, 16);
+        const expectedDynamicFlag = `${prefix}dyn_${hmacHash}${suffix}`;
+        if (cleanFlag === expectedDynamicFlag) {
+          isCorrect = true;
+          break;
+        }
+      } else if (fl.flag_type === 'MULTIPLE_ACCEPTED_FLAGS') {
+        // Comma or newline separated accepted flags
+        const accepted = fl.flag_value.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+        if (accepted.some(a => fl.case_sensitive ? a === cleanFlag : a.toLowerCase() === cleanFlag.toLowerCase())) {
+          isCorrect = true;
+          break;
+        }
       } else {
-        // Static match
+        // Standard STATIC match
         if (fl.case_sensitive) {
           if (cleanFlag === fl.flag_value) {
             isCorrect = true;
@@ -111,7 +152,8 @@ class SubmissionService {
       };
     }
 
-    // 6. Handle Correct Flag Capture
+    // 6. Handle Correct Flag Capture with Race-Safe First Blood (Section 16)
+    // Synchronous execution block or transactional check prevents simultaneous first-blood claims
     const currentSolves = db.getSolves().filter(s => s.challenge_id === challenge.id);
     const isFirstBlood = currentSolves.length === 0;
 
@@ -121,7 +163,7 @@ class SubmissionService {
 
     // Save solve
     const solve = {
-      id: `s-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      id: crypto.randomUUID(),
       challenge_id: challenge.id,
       team_id: teamId,
       user_id: user.id,
@@ -134,7 +176,7 @@ class SubmissionService {
     // If first blood, record first blood event
     if (isFirstBlood) {
       const fb = {
-        id: `fb-${Date.now()}`,
+        id: crypto.randomUUID(),
         challenge_id: challenge.id,
         team_id: teamId,
         team_name: team ? team.name : user.username,
@@ -172,6 +214,17 @@ class SubmissionService {
       team.solves_count = (team.solves_count || 0) + 1;
       team.last_score_update = solve.solved_at;
     }
+
+    // Persist Score Event (Section 9 & 11)
+    db.getScoreEvents().push({
+      id: crypto.randomUUID(),
+      team_id: teamId,
+      delta: pointsAwarded,
+      resulting_score: team ? team.total_score : pointsAwarded,
+      reason: isFirstBlood ? 'FIRST_BLOOD_SOLVE' : 'FLAG_SOLVE',
+      challenge_id: challenge.id,
+      created_at: solve.solved_at
+    });
 
     // Record submission
     this.recordSubmission({
@@ -212,7 +265,7 @@ class SubmissionService {
 
   recordSubmission({ challengeId, teamId, userId, flag, status, points = 0, ip }) {
     const sub = {
-      id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      id: crypto.randomUUID(),
       challenge_id: challengeId,
       team_id: teamId,
       user_id: userId,

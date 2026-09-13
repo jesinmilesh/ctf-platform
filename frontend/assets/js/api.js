@@ -88,6 +88,7 @@ const api = {
     deleteChallenge: (id) => apiRequest(`/admin/challenges/${id}`, { method: 'DELETE' }),
     testFlag: (data) => apiRequest('/admin/challenges/test-flag', { method: 'POST', body: JSON.stringify(data) }),
     getCategories: () => apiRequest('/admin/categories'),
+    getChallengeValidation: (id) => apiRequest(`/admin/challenges/${id}/validate`),
     getUsers: () => apiRequest('/admin/users'),
     toggleUserBan: (id) => apiRequest(`/admin/users/${id}/ban`, { method: 'POST' }),
     getTeams: () => apiRequest('/admin/teams'),

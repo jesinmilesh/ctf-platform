@@ -18,15 +18,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Update Telemetry Grid
     if (statusRes) {
       const liveOps = document.getElementById('statLiveOperatives');
-      if (liveOps) liveOps.textContent = statusRes.liveOperativesConnected || 1;
+      if (liveOps) liveOps.textContent = statusRes.liveOperativesConnected ?? 0;
     }
 
     if (lbRes) {
       const activeOps = document.getElementById('statTotalOperatives');
-      if (activeOps) activeOps.textContent = lbRes.totalOperatives || 342;
+      if (activeOps) activeOps.textContent = lbRes.totalOperatives ?? 0;
 
       const totalSquads = document.getElementById('statTotalSquads');
-      if (totalSquads) totalSquads.textContent = lbRes.totalTeams || 4;
+      if (totalSquads) totalSquads.textContent = lbRes.totalTeams ?? 0;
 
       // Render Mini Leaderboard Preview
       const lbPreview = document.getElementById('homeLeaderboardPreview');

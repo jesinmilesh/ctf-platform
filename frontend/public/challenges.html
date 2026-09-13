@@ -94,14 +94,25 @@
           </div>
         </div>
 
-        <!-- Toolbar -->
-        <div class="track-toolbar">
+        <!-- Toolbar with Search & Category/Difficulty Filters -->
+        <div class="track-toolbar" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
           <input 
             type="search" 
             id="challengeSearch"
             class="track-search-input" 
-            placeholder="Search challenges by name or category..."
+            placeholder="Search challenges by name, mission ID, or category..."
+            style="flex:1; min-width:240px;"
           >
+          <select id="categoryFilter" style="background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:10px 14px; border-radius:var(--radius-sm); font-family:var(--font-heading); font-size:13px; cursor:pointer;">
+            <option value="">All Categories</option>
+          </select>
+          <select id="difficultyFilter" style="background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:10px 14px; border-radius:var(--radius-sm); font-family:var(--font-heading); font-size:13px; cursor:pointer;">
+            <option value="">All Difficulties</option>
+            <option value="EASY">Easy</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="HARD">Hard</option>
+            <option value="INSANE">Insane</option>
+          </select>
         </div>
 
         <!-- Challenge Grid / Empty State -->

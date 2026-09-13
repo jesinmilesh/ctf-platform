@@ -1,11 +1,51 @@
 /**
  * XPLOITX // CYBER BATTLEFIELD
  * Authentication Service (backend/services/authService.js)
+ * Implements Section 6 & 11: Real Users, Secure Password Hashing & Authenticated Sessions.
  */
 
+const crypto = require('crypto');
 const db = require('../config/database');
 
+const JWT_SECRET = process.env.JWT_SECRET || 'c2_command_jwt_super_secret_key_change_in_production';
+
 class AuthService {
+  /**
+   * Cryptographically hash password with random salt using scrypt
+   */
+  hashPassword(password) {
+    const salt = crypto.randomBytes(16).toString('hex');
+    const derivedKey = crypto.scryptSync(password, salt, 64).toString('hex');
+    return `${salt}:${derivedKey}`;
+  }
+
+  /**
+   * Timing-safe verification of password against stored hash
+   */
+  verifyPassword(password, storedHash) {
+    if (!storedHash) return false;
+    // Support salt:derivedKey format
+    if (storedHash.includes(':')) {
+      const [salt, key] = storedHash.split(':');
+      const derivedKey = crypto.scryptSync(password, salt, 64);
+      const keyBuffer = Buffer.from(key, 'hex');
+      if (keyBuffer.length !== derivedKey.length) return false;
+      return crypto.timingSafeEqual(keyBuffer, derivedKey);
+    }
+    // Fallback for plain setup strings
+    return password === storedHash;
+  }
+
+  /**
+   * Sign authentication session token using HMAC-SHA256
+   */
+  generateToken(userId, username) {
+    const timestamp = Date.now();
+    const payload = `${userId}:${username}:${timestamp}`;
+    const signature = crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex');
+    return `${payload}:${signature}`;
+  }
+
   login(usernameOrEmail, password) {
     const term = (usernameOrEmail || '').trim().toLowerCase();
     const user = db.getUsers().find(u =>
@@ -20,13 +60,22 @@ class AuthService {
       throw new Error('OPERATIVE ACCOUNT TERMINATED BY C2 COMMAND.');
     }
 
-    // Password validation
-    if (user.password_hash !== password) {
+    // Cryptographic Password Validation
+    if (!this.verifyPassword(password, user.password_hash)) {
       throw new Error('Access denied: Invalid biometric/cryptographic passphrase.');
     }
 
-    const token = `${user.id}:${user.username}:${Date.now()}`;
+    const token = this.generateToken(user.id, user.username);
     const userTeam = db.getTeams().find(t => t.id === user.team_id);
+
+    // Record session
+    db.getSessions().push({
+      id: crypto.randomUUID(),
+      user_id: user.id,
+      token,
+      expires_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+      created_at: new Date().toISOString()
+    });
 
     return {
       token,
@@ -51,6 +100,10 @@ class AuthService {
       throw new Error('Callsign/Username must be at least 3 characters.');
     }
 
+    if (!password || password.length < 6) {
+      throw new Error('Passphrase must be at least 6 characters.');
+    }
+
     const exists = db.getUsers().find(u =>
       u.username.toLowerCase() === cleanUsername.toLowerCase() || u.email.toLowerCase() === cleanEmail
     );
@@ -58,23 +111,36 @@ class AuthService {
       throw new Error('Operative with this username or email already registered in system registry.');
     }
 
+    const passwordHash = this.hashPassword(password);
+    const userId = crypto.randomUUID();
+
     const newUser = {
-      id: `u-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      id: userId,
       competition_id: db.getCompetitions()[0]?.id,
       team_id: null,
       username: cleanUsername,
       email: cleanEmail,
-      password_hash: password,
+      password_hash: passwordHash,
       role: 'PLAYER',
       callsign: (callsign || cleanUsername).toUpperCase(),
-      affiliation: affiliation || 'Independent',
+      affiliation: affiliation || 'Independent Operative',
       is_banned: false,
       created_at: new Date().toISOString()
     };
 
     db.getUsers().push(newUser);
 
-    const token = `${newUser.id}:${newUser.username}:${Date.now()}`;
+    const token = this.generateToken(newUser.id, newUser.username);
+
+    // Record session
+    db.getSessions().push({
+      id: crypto.randomUUID(),
+      user_id: newUser.id,
+      token,
+      expires_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+      created_at: new Date().toISOString()
+    });
+
     return {
       token,
       user: {

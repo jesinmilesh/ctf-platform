@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node backend/server.js",
     "dev": "node backend/server.js",
+    "instance-server": "node instance-server/index.js",
     "test": "node test/verify.js"
   },
   "dependencies": {

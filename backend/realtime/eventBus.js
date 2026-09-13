@@ -61,6 +61,10 @@ class EventBus {
     }
     this.handlers.get(eventType).push(handler);
   }
+
+  subscribe(eventType, handler) {
+    return this.on(eventType, handler);
+  }
 }
 
 const eventBus = new EventBus();

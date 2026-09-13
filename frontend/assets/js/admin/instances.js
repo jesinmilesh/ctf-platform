@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const list = res.instances || [];
 
       if (list.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-secondary); font-family:var(--font-mono);">NO ACTIVE RUNNING SANDBOXES.</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-secondary); font-family:var(--font-mono);">NO ACTIVE INSTANCES</td></tr>`;
         return;
       }
 

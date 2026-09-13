@@ -16,6 +16,7 @@ router.get('/challenges', (req, res) => adminController.getChallenges(req, res))
 router.post('/challenges', (req, res) => adminController.createChallenge(req, res));
 router.put('/challenges/:id', (req, res) => adminController.updateChallenge(req, res));
 router.delete('/challenges/:id', (req, res) => adminController.deleteChallenge(req, res));
+router.get('/challenges/:id/validate', (req, res) => adminController.validateChallenge(req, res));
 router.post('/challenges/test-flag', (req, res) => adminController.testFlag(req, res));
 
 router.get('/categories', (req, res) => adminController.getCategories(req, res));

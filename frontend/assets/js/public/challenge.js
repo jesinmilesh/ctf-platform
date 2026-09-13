@@ -122,74 +122,93 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function renderInstanceUI(inst) {
-    const slot = document.getElementById('instanceStatusSlot');
-    if (inst) {
-      slot.innerHTML = `
-        <div style="background:var(--bg-secondary); border:1px solid var(--border); padding:14px; border-radius:var(--radius-sm);">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <span style="font-family:var(--font-mono); font-size:11px; color:var(--accent); font-weight:700;">● CONTAINER RUNNING</span>
-            <button class="btn btn-sm btn-outline" onclick="terminateSandbox()" style="color:var(--danger); border-color:var(--danger);">DESTROY</button>
-          </div>
-          <div style="font-family:var(--font-mono); font-size:13px; color:#fff; word-break:break-all;">
-            TARGET HOST: <strong style="color:var(--cyan);">${inst.host}:${inst.port}</strong>
-          </div>
-          <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted); margin-top:4px;">
-            AUTO-TERMINATION: ~${Math.floor(inst.timeRemainingSeconds / 60)} MINUTES
-          </div>
-        </div>
-      `;
-    } else {
-      slot.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-card); border:1px solid var(--border); padding:14px; border-radius:var(--radius-sm);">
-          <span style="font-family:var(--font-mono); font-size:12px; color:var(--text-secondary);">SANDBOX OFFLINE</span>
-          <button class="btn btn-sm btn-primary" onclick="spawnSandbox()">SPAWN INSTANCE</button>
-        </div>
-      `;
+    if (window.InstancePanel) {
+      window.InstancePanel.render({
+        targetId: 'instanceStatusSlot',
+        challengeId,
+        instance: inst,
+        onSpawn: window.spawnSandbox,
+        onTerminate: window.terminateSandbox
+      });
     }
   }
 
   window.spawnSandbox = async () => {
     try {
-      window.showSuccess('SPAWNING DOCKER CONTAINER TARGET...');
+      if (window.showSuccess) window.showSuccess('PROVISIONING SANDBOX TARGET...');
+      renderInstanceUI({ status: 'REQUESTED' });
       await window.api.deployInstance(challengeId);
       loadChallenge();
     } catch (err) {
-      window.showError(err.message);
+      if (window.showError) window.showError(err.message);
+      renderInstanceUI({ status: 'FAILED', error: err.message });
     }
   };
 
-  window.terminateSandbox = async () => {
-    try {
-      await window.api.terminateInstance(challengeId);
-      window.showSuccess('SANDBOX TERMINATED');
-      loadChallenge();
-    } catch (err) {
-      window.showError(err.message);
+  window.terminateSandbox = () => {
+    if (window.Dialog) {
+      window.Dialog.confirm({
+        title: 'TERMINATE TARGET SANDBOX',
+        message: 'This will destroy the active Docker container and release the assigned port. Any uncommitted state inside the sandbox will be wiped. Proceed?',
+        confirmText: 'TERMINATE',
+        cancelText: 'ABORT',
+        severity: 'danger',
+        onConfirm: async () => {
+          try {
+            await window.api.terminateInstance(challengeId);
+            if (window.showSuccess) window.showSuccess('SANDBOX NEUTRALIZED');
+            loadChallenge();
+          } catch (err) {
+            if (window.showError) window.showError(err.message);
+          }
+        }
+      });
     }
   };
 
   window.unlockHint = (hintId, cost) => {
-    window.Modal.open({
-      title: 'UNLOCK TACTICAL HINT',
-      content: `Revealing this hint may assess a deduction of <strong>${cost} XP</strong> from your operative squad score. Proceed?`,
-      actions: [
-        { label: 'ABORT', primary: false },
-        {
-          label: 'CONFIRM REVEAL',
-          primary: true,
-          onClick: async () => {
-            try {
-              await window.api.unlockHint(challengeId, hintId);
-              window.showSuccess('HINT REVEALED');
-              loadChallenge();
-            } catch (err) {
-              window.showError(err.message);
-            }
-          }
-        }
-      ]
-    });
+    const actionConfirm = async () => {
+      try {
+        await window.api.unlockHint(challengeId, hintId);
+        if (window.showSuccess) window.showSuccess('HINT UNLOCKED');
+        loadChallenge();
+      } catch (err) {
+        if (window.showError) window.showError(err.message);
+      }
+    };
+
+    if (window.Dialog) {
+      window.Dialog.confirm({
+        title: 'UNLOCK SIGNALS HINT',
+        message: `Revealing this tactical hint will deduct ${cost} XP from your squad score. Proceed?`,
+        confirmText: `UNLOCK (-${cost} XP)`,
+        cancelText: 'ABORT',
+        severity: 'warning',
+        onConfirm: actionConfirm
+      });
+    } else {
+      actionConfirm();
+    }
   };
+
+  // Real-time events for sandbox & challenge updates
+  if (window.tacticalSocket) {
+    window.tacticalSocket.on('INSTANCE_STARTED', (payload) => {
+      if (payload && payload.challengeId === challengeId) {
+        loadChallenge();
+      }
+    });
+    window.tacticalSocket.on('INSTANCE_STOPPED', (payload) => {
+      if (payload && payload.challengeId === challengeId) {
+        loadChallenge();
+      }
+    });
+    window.tacticalSocket.on('INSTANCE_EXPIRED', (payload) => {
+      if (payload && payload.challengeId === challengeId) {
+        loadChallenge();
+      }
+    });
+  }
 
   // Flag submission (Section 13)
   const flagForm = document.getElementById('flagForm');

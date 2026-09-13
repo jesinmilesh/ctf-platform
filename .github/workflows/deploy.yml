@@ -1,0 +1,48 @@
+name: XploitX Production Deployment
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  validate:
+    name: Pre-Deployment CI Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm test
+
+  deploy-frontend:
+    name: Deploy Frontend (Vercel)
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy Static Web Assets
+        run: |
+          echo "=========================================="
+          echo "DEPLOYING XPLOITX FRONTEND TO VERCEL"
+          echo "Public Portal: https://xploitxctf.me"
+          echo "Static Root: frontend/"
+          echo "=========================================="
+          # In live CI, uses amondnet/vercel-action with VERCEL_TOKEN secret
+
+  deploy-backend-and-instances:
+    name: Deploy Backend & Docker Instance Server
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy Core Engine & Docker Orchestration
+        run: |
+          echo "=========================================="
+          echo "DEPLOYING PERSISTENT BACKEND & DOCKER MGR"
+          echo "API & WebSocket Grid: backend:4000"
+          echo "Dedicated Instance Server: instance-server:5000"
+          echo "Port Range: 41000-41999"
+          echo "=========================================="
+          # In live CI, deploys via SSH or Container Registry to persistent Docker host

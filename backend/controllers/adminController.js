@@ -76,6 +76,16 @@ class AdminController {
     }
   }
 
+  validateChallenge(req, res) {
+    const id = req.params.id;
+    const challenge = db.getChallenges().find(c => c.id === id);
+    if (!challenge) {
+      return res.status(404).json({ success: false, error: 'Challenge not found' });
+    }
+    const result = challengeService.validateChallengeForPublish(challenge);
+    res.json(result);
+  }
+
   testFlag(req, res) {
     const { flag, challengeId } = req.body;
     const settings = db.getSettings();

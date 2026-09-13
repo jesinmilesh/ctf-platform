@@ -14,6 +14,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       const res = await window.api.admin.getTeams();
       const list = res.teams || [];
 
+      if (list.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-secondary); font-family:var(--font-mono);">NO TEAMS REGISTERED</td></tr>`;
+        return;
+      }
+
       tableBody.innerHTML = list.map(t => `
         <tr style="border-bottom:1px solid var(--border);">
           <td style="padding:12px 16px; font-family:var(--font-heading); font-weight:700; color:#fff;">

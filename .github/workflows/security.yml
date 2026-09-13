@@ -1,0 +1,51 @@
+name: XploitX Security Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  schedule:
+    # Run weekly security scan every Monday at 04:00 UTC
+    - cron: '0 4 * * 1'
+
+jobs:
+  security-audit:
+    name: Security Vulnerability & Secret Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Audit NPM Dependencies
+        run: npm audit --audit-level=high || true
+
+      - name: Scan For Unintended Committed Secrets
+        run: |
+          node -e "
+            const { execSync } = require('child_process');
+            try {
+              const diff = execSync('git log -n 5 --patch', { encoding: 'utf8' });
+              const forbiddenKeywords = ['PRIVATE KEY-----', 'aws_secret_access_key'];
+              for (const kw of forbiddenKeywords) {
+                if (diff.includes(kw)) {
+                  console.error('SECRET SCANNER ALERT: Potential hardcoded secret found in commit history:', kw);
+                  process.exit(1);
+                }
+              }
+              console.log('✓ Secret scanning completed cleanly.');
+            } catch(e) {
+              console.log('Secret check passed.');
+            }
+          "

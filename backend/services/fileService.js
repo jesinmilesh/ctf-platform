@@ -30,7 +30,7 @@ class FileService {
     fs.writeFileSync(filePath, buffer);
 
     const fileRecord = {
-      id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      id: crypto.randomUUID(),
       challenge_id: challengeId,
       filename: safeFilename,
       storage_key: storageKey,
@@ -57,8 +57,7 @@ class FileService {
     const filePath = path.join(STORAGE_DIR, safeKey);
 
     if (!fs.existsSync(filePath)) {
-      // Ensure file exists for demonstration
-      fs.writeFileSync(filePath, `# XPLOITX // ASSET: ${fileRecord.filename}\n# SHA256: ${fileRecord.sha256}\n[DATA STREAM]\n`);
+      throw new Error(`STORAGE_ERROR: Challenge file payload ${fileRecord.filename} not found in isolated storage.`);
     }
 
     fileRecord.download_count = (fileRecord.download_count || 0) + 1;
@@ -67,6 +66,10 @@ class FileService {
 
   // Aliases for interface flexibility
   async storeFile(args) {
+    return this.saveChallengeFile(args);
+  }
+
+  async saveFile(args) {
     return this.saveChallengeFile(args);
   }
 

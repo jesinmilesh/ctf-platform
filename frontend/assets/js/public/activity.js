@@ -15,8 +15,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (subs.length === 0) {
         streamSlot.innerHTML = `
-          <div style="text-align:center; padding:40px; color:var(--text-secondary); font-family:var(--font-mono);">
-            NO LIVE COMBAT SIGNALS DETECTED.
+          <div class="empty-state" style="text-align:center; padding:60px 20px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-sm);">
+            <div style="font-size:32px; margin-bottom:12px;">⚡</div>
+            <h3 style="font-family:var(--font-heading); font-size:18px; color:#fff; margin-bottom:8px;">NO RECENT ACTIVITY</h3>
+            <p style="color:var(--text-secondary); font-size:13px; font-family:var(--font-mono); margin:0;">
+              No combat actions or submissions recorded yet.
+            </p>
           </div>
         `;
         return;

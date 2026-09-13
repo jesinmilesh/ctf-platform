@@ -5,6 +5,10 @@
 
 const Leaderboard = {
   renderPodium(podium) {
+    if (!podium || (!podium.first && !podium.second && !podium.third) || (podium.first && podium.first.score === 0)) {
+      return '';
+    }
+
     const esc = window.Utils ? window.Utils.escapeHTML : (s => s);
     const formatXP = window.Utils ? window.Utils.formatXP : (s => `${s} XP`);
 
@@ -65,10 +69,15 @@ const Leaderboard = {
     const formatXP = window.Utils ? window.Utils.formatXP : (s => `${s} XP`);
     const timeAgo = window.Utils ? window.Utils.timeAgo : (s => s);
 
-    if (!teams || teams.length === 0) {
+    const hasAnyScores = teams.some(t => (t.score || 0) > 0 || (t.solvesCount || 0) > 0);
+    if (!teams || teams.length === 0 || !hasAnyScores) {
       return `
-        <div style="text-align:center; padding:40px; color:var(--text-secondary); font-family:var(--font-mono);">
-          NO SQUADS REGISTERED ON LIVE BATTLEFIELD GRID YET.
+        <div class="empty-state" style="text-align:center; padding:60px 20px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-sm);">
+          <div style="font-size:32px; margin-bottom:12px;">🏆</div>
+          <h3 style="font-family:var(--font-heading); font-size:18px; color:#fff; margin-bottom:8px;">NO SCORES YET</h3>
+          <p style="color:var(--text-secondary); font-size:13px; font-family:var(--font-mono); margin:0;">
+            No scores have been recorded on the live battlefield grid yet.
+          </p>
         </div>
       `;
     }

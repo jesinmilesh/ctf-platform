@@ -44,7 +44,8 @@ class InstanceManager {
       };
     }
 
-    const instanceId = `inst-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 4)}`;
+    const crypto = require('crypto');
+    const instanceId = `inst-${crypto.randomUUID()}`;
 
     // 1. Emit REQUESTED
     await realtimeService.broadcastInstanceEvent(Events.INSTANCE_REQUESTED, {

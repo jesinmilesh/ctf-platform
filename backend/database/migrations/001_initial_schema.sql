@@ -232,9 +232,45 @@ CREATE TABLE IF NOT EXISTS port_allocations (
     allocated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 18. HINT REVEALS
+CREATE TABLE IF NOT EXISTS hint_reveals (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    hint_id UUID REFERENCES challenge_hints(id) ON DELETE CASCADE,
+    team_id UUID REFERENCES teams(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    points_deducted INT NOT NULL DEFAULT 0,
+    revealed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(hint_id, team_id)
+);
+
+-- 19. SESSIONS
+CREATE TABLE IF NOT EXISTS sessions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    token VARCHAR(500) UNIQUE NOT NULL,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 20. NOTIFICATIONS
+CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    type VARCHAR(50) DEFAULT 'INFO',
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- INDEXES
 CREATE INDEX IF NOT EXISTS idx_teams_score ON teams(competition_id, total_score DESC, last_score_update ASC);
 CREATE INDEX IF NOT EXISTS idx_challenges_comp ON challenges(competition_id, status, category_id);
 CREATE INDEX IF NOT EXISTS idx_submissions_lookup ON submissions(challenge_id, team_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_solves_team ON solves(team_id, solved_at);
 CREATE INDEX IF NOT EXISTS idx_port_allocations_instance ON port_allocations(instance_id);
+CREATE INDEX IF NOT EXISTS idx_hint_reveals_team ON hint_reveals(team_id, hint_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);

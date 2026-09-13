@@ -1,0 +1,59 @@
+name: XploitX CI Pipeline
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-and-verify:
+    name: Test & Architecture Verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Validate Package Integrity
+        run: npm ls
+
+      - name: Run Backend & Core Verification Suite
+        run: npm test
+
+      - name: Verify PostgreSQL Schema Syntax
+        run: |
+          node -e "
+            const fs = require('fs');
+            const schema = fs.readFileSync('backend/database/migrations/001_initial_schema.sql', 'utf8');
+            if (!schema.includes('CREATE TABLE challenges') || !schema.includes('CREATE TABLE users')) {
+              console.error('Schema validation failed: Missing core table definitions');
+              process.exit(1);
+            }
+            console.log('✓ Database Schema Migration syntax verified.');
+          "
+
+      - name: Verify Frontend Asset Delivery & Link Integrity
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const publicDir = path.join(__dirname, 'frontend', 'public');
+            const adminDir = path.join(__dirname, 'frontend', 'admin');
+            const assetsDir = path.join(__dirname, 'frontend', 'assets');
+            
+            if (!fs.existsSync(publicDir) || !fs.existsSync(adminDir) || !fs.existsSync(assetsDir)) {
+              console.error('Frontend asset structure missing!');
+              process.exit(1);
+            }
+            console.log('✓ Frontend static directory layout verified.');
+          "

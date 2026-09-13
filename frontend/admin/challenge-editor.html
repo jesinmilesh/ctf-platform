@@ -182,9 +182,20 @@
             </div>
           </div>
 
+          <!-- Validation Errors Banner (Section 12) -->
+          <div id="publishValidationErrors" style="display:none; background:rgba(255,0,85,0.08); border:1px solid var(--danger); border-left:4px solid var(--danger); padding:16px 20px; border-radius:var(--radius-sm); margin-top:20px;">
+            <div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--danger); margin-bottom:8px;">
+              ⚠ MISSION VALIDATION DEFICIENCIES DETECTED:
+            </div>
+            <ul id="publishErrorsList" style="margin:0; padding-left:20px; color:#fff; font-size:13px; line-height:1.6;"></ul>
+          </div>
+
           <!-- Submit Buttons -->
           <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
             <a href="/admin/challenges.html" class="btn btn-outline">DISCARD</a>
+            <button type="button" id="validateOnlyBtn" class="btn btn-outline" style="color:var(--cyan); border-color:var(--cyan);">
+              VERIFY CONFIGURATION
+            </button>
             <button type="submit" class="btn btn-primary" style="padding:12px 28px;">
               PUBLISH MISSION
             </button>
@@ -199,6 +210,7 @@
   <script src="/assets/js/api.js"></script>
   <script src="/assets/js/auth.js"></script>
   <script src="/assets/js/components/toast.js"></script>
+  <script src="/assets/js/components/dialog.js"></script>
   <script src="/assets/js/components/challengeCard.js"></script>
   <script src="/assets/js/components/sidebar.js"></script>
   <script src="/assets/js/admin/challenge-editor.js"></script>
