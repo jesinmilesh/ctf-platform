@@ -41,9 +41,9 @@ const app = express();
 const server = http.createServer(app);
 
 const PORT = process.env.PORT || 4000;
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
-const ADMIN_DIR = path.join(__dirname, '..', 'admin');
-const ASSETS_DIR = path.join(__dirname, '..', 'assets');
+const PUBLIC_DIR = path.join(__dirname, '..', 'frontend', 'public');
+const ADMIN_DIR = path.join(__dirname, '..', 'frontend', 'admin');
+const ASSETS_DIR = path.join(__dirname, '..', 'frontend', 'assets');
 
 // Security imports
 const helmet = require('helmet');
