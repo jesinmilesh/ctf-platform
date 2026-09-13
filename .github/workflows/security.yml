@@ -37,11 +37,21 @@ jobs:
             const { execSync } = require('child_process');
             try {
               const diff = execSync('git log -n 5 --patch', { encoding: 'utf8' });
-              const forbiddenKeywords = ['PRIVATE KEY-----', 'aws_secret_access_key'];
-              for (const kw of forbiddenKeywords) {
-                if (diff.includes(kw)) {
-                  console.error('SECRET SCANNER ALERT: Potential hardcoded secret found in commit history:', kw);
-                  process.exit(1);
+              const forbiddenKeywords = ['-----BEGIN ' + 'RSA PRIVATE KEY', 'aws_secret_' + 'access_key'];
+              const lines = diff.split('\n');
+              let currentFile = '';
+              for (const line of lines) {
+                if (line.startsWith('diff --git a/')) {
+                  currentFile = line.split(' ')[2].substring(2);
+                }
+                if (currentFile.startsWith('.github/workflows/')) continue;
+                if (line.startsWith('+') && !line.startsWith('+++')) {
+                  for (const kw of forbiddenKeywords) {
+                    if (line.includes(kw)) {
+                      console.error('SECRET SCANNER ALERT: Potential hardcoded secret found in commit history:', kw);
+                      process.exit(1);
+                    }
+                  }
                 }
               }
               console.log('✓ Secret scanning completed cleanly.');

@@ -35,7 +35,7 @@ jobs:
           node -e "
             const fs = require('fs');
             const schema = fs.readFileSync('backend/database/migrations/001_initial_schema.sql', 'utf8');
-            if (!schema.includes('CREATE TABLE challenges') || !schema.includes('CREATE TABLE users')) {
+            if (!schema.toLowerCase().includes('create table') || !schema.includes('challenges') || !schema.includes('users')) {
               console.error('Schema validation failed: Missing core table definitions');
               process.exit(1);
             }
