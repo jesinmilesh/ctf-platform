@@ -1,3 +1,4 @@
+require('dotenv').config();
 /**
  * XPLOITX // CYBER BATTLEFIELD
  * Authentication Middleware (backend/middleware/auth.js)
@@ -6,8 +7,6 @@
 
 const crypto = require('crypto');
 const db = require('../config/database');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'c2_command_jwt_super_secret_key_change_in_production';
 
 function authMiddleware(req, res, next) {
   let token = null;
@@ -41,7 +40,8 @@ function authMiddleware(req, res, next) {
     if (parts.length >= 4) {
       const [userId, username, timestamp, signature] = parts;
       const payload = `${userId}:${username}:${timestamp}`;
-      const expectedSignature = crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex');
+      const secret = process.env.JWT_SECRET || 'c2_command_jwt_super_secret_key_change_in_production';
+      const expectedSignature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
 
       // Check token expiration (7 days)
       const tokenTime = parseInt(timestamp, 10);

@@ -1,3 +1,4 @@
+require('dotenv').config();
 /**
  * XPLOITX // CYBER BATTLEFIELD
  * Authentication Service (backend/services/authService.js)
@@ -6,8 +7,6 @@
 
 const crypto = require('crypto');
 const db = require('../config/database');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'c2_command_jwt_super_secret_key_change_in_production';
 
 class AuthService {
   /**
@@ -42,7 +41,8 @@ class AuthService {
   generateToken(userId, username) {
     const timestamp = Date.now();
     const payload = `${userId}:${username}:${timestamp}`;
-    const signature = crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex');
+    const secret = process.env.JWT_SECRET || 'c2_command_jwt_super_secret_key_change_in_production';
+    const signature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
     return `${payload}:${signature}`;
   }
 

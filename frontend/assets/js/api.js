@@ -27,15 +27,29 @@ async function apiRequest(endpoint, options = {}) {
 
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, config);
-    const data = await response.json().catch(() => ({}));
+    let data;
+    try {
+      data = await response.json();
+    } catch (e) {
+      data = {};
+    }
 
     if (!response.ok) {
-      throw new Error(data.message || data.error || 'API request failed');
+      const errorMsg = data.message || (typeof data.error === 'string' ? data.error : null) || 
+        (response.status === 401 ? 'Invalid callsign or passphrase.' :
+         response.status === 404 ? `Endpoint not found (${endpoint}). Check server routing.` :
+         response.status === 429 ? 'Rate limit exceeded. Stand by.' :
+         response.status >= 500 ? `Server error (${response.status}). Check server logs.` :
+         `Request failed with status ${response.status}`);
+      throw new Error(errorMsg);
     }
 
     return data;
   } catch (err) {
     console.error(`[TACTICAL API ERROR ${endpoint}]:`, err);
+    if (err.name === 'TypeError' && err.message && err.message.toLowerCase().includes('fetch')) {
+      throw new Error('Unable to reach CTF mission server. Check your network or API status.');
+    }
     throw err;
   }
 }

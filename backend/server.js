@@ -42,6 +42,7 @@ const syncRoutes = require('./routes/sync');
 const adminRoutes = require('./routes/admin');
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 const PORT = process.env.PORT || 4000;
@@ -55,22 +56,33 @@ const rateLimit = require('express-rate-limit');
 
 // Basic settings
 app.use(helmet({
-  contentSecurityPolicy: false // Disable CSP temporarily to not break CDN Tailwind/Fonts
+  contentSecurityPolicy: false // Disable CSP to allow fonts and icons
 }));
 
 // Apply rate limiting to all requests
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // Limit each IP to 1000 requests per `window` (here, per 15 minutes)
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
   standardHeaders: true, 
   legacyHeaders: false, 
 });
 app.use(limiter);
 
-// Restrict CORS to same-origin for security
+// Dynamic CORS for local development, Vercel deployments, and production domains
 app.use(cors({ 
-  origin: process.env.NODE_ENV === 'production' ? 'https://your-production-url.com' : 'http://localhost:4000', 
-  credentials: true 
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (origin.endsWith('.vercel.app')) return callback(null, true);
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) return callback(null, true);
+    if (process.env.CORS_ORIGIN) {
+      const allowed = process.env.CORS_ORIGIN.split(',').map(s => s.trim());
+      if (allowed.includes('*') || allowed.includes(origin)) return callback(null, true);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Cookie']
 }));
 
 app.use(express.json({ limit: '10kb' })); // Limit body payload to prevent DoS
@@ -123,9 +135,11 @@ submissionService.setBroadcaster(broadcastEvent);
 adminController.setBroadcaster(broadcastEvent);
 
 // --------------------------------------------------------------------------
-// System Telemetry Endpoint
+// API Route Router & Mounting
 // --------------------------------------------------------------------------
-app.get('/api/status', (req, res) => {
+const apiRouter = express.Router();
+
+apiRouter.get('/status', (req, res) => {
   res.json({
     platform: 'XPLOITX // CYBER BATTLEFIELD',
     status: 'OPERATIONAL',
@@ -133,26 +147,35 @@ app.get('/api/status', (req, res) => {
     database: db.isMongo ? 'MongoDB Atlas' : (db.isPostgres ? 'PostgreSQL' : 'In-Memory'),
     databaseConnected: db.connected,
     timestamp: new Date().toISOString(),
-    liveOperativesConnected: wsServer.getConnectedCount()
+    liveOperativesConnected: wsServer ? wsServer.getConnectedCount() : 0
   });
 });
 
-// --------------------------------------------------------------------------
-// API Route Mounting
-// --------------------------------------------------------------------------
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/teams', teamRoutes);
-app.use('/api/competitions', competitionRoutes);
-app.use('/api/challenges', challengeRoutes);
-app.use('/api/submissions', submissionRoutes);
-app.use('/api/scoreboard', scoreboardRoutes);
-app.use('/api/hints', hintRoutes);
-app.use('/api/announcements', announcementRoutes);
-app.use('/api/files', fileRoutes);
-app.use('/api/instances', instanceRoutes);
-app.use('/api/sync', syncRoutes);
-app.use('/api/admin', adminRoutes);
+apiRouter.use('/auth', authRoutes);
+apiRouter.use('/users', userRoutes);
+apiRouter.use('/teams', teamRoutes);
+apiRouter.use('/competitions', competitionRoutes);
+apiRouter.use('/challenges', challengeRoutes);
+apiRouter.use('/submissions', submissionRoutes);
+apiRouter.use('/scoreboard', scoreboardRoutes);
+apiRouter.use('/hints', hintRoutes);
+apiRouter.use('/announcements', announcementRoutes);
+apiRouter.use('/files', fileRoutes);
+apiRouter.use('/instances', instanceRoutes);
+apiRouter.use('/sync', syncRoutes);
+apiRouter.use('/admin', adminRoutes);
+
+// Mount on /api (standard)
+app.use('/api', apiRouter);
+
+// Fallback mount for Serverless Functions where Vercel strips the /api prefix
+app.use((req, res, next) => {
+  const apiPaths = ['/auth', '/users', '/teams', '/competitions', '/challenges', '/submissions', '/scoreboard', '/hints', '/announcements', '/files', '/instances', '/sync', '/admin', '/status'];
+  if (apiPaths.some(p => req.path === p || req.path.startsWith(p + '/'))) {
+    return apiRouter(req, res, next);
+  }
+  next();
+});
 
 // --------------------------------------------------------------------------
 // Static Asset & Application Serving
