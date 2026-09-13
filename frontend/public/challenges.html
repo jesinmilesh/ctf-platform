@@ -12,118 +12,134 @@
   <link rel="stylesheet" href="/assets/css/animations.css">
   <link rel="stylesheet" href="/assets/css/responsive.css">
   <link rel="stylesheet" href="/assets/css/public.css">
-
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      corePlugins: {
-        preflight: false, // Prevent Tailwind from resetting original CSS
-      }
-    }
-  </script>
 </head>
-<body class="bg-[#0a0a0f] text-gray-300">
+<body>
   
   <!-- Original Dynamic Header -->
   <div id="navbar-container"></div>
 
   <main class="container" style="padding: 40px 20px;">
     
-    <!-- New Event Track Layout Inside Main -->
-    <div class="flex flex-col gap-10 mt-4 font-sans">
+    <!-- New Event Track Layout Inside Main (Native CSS) -->
+    <div class="event-track-container">
       
       <!-- Event Track Graph -->
-      <div class="w-full">
-        <h2 class="text-md font-bold text-white mb-10" style="font-family: var(--font-heading);">Event Track</h2>
+      <div style="width: 100%;">
+        <h2 class="event-track-header">Event Track</h2>
         
-        <div class="relative flex justify-between items-start w-full px-8">
+        <div class="event-track-timeline">
           <!-- Connecting Line -->
-          <div class="absolute top-8 left-16 right-16 h-px bg-[#333] z-0"></div>
+          <div class="event-track-line"></div>
           
           <!-- Track Nodes -->
-          <div class="relative z-10 flex flex-col items-center gap-3 cursor-pointer group">
-            <div class="w-16 h-16 rounded-full bg-[#111116] flex items-center justify-center p-1 relative transition-all duration-200 ring-2 ring-[#00ffcc] ring-offset-2 ring-offset-[#0a0a0f]">
-              <div class="w-full h-full rounded-full bg-[#0a0a0f] border border-[#333] flex items-center justify-center">
-                <span class="text-[#00ffcc] font-bold" style="font-family: var(--font-mono); font-size:11px;">PWN</span>
+          <div class="track-node-wrapper" onclick="selectTrack(1, 'PWN')">
+            <div class="track-node active completed" id="node-1">
+              <div class="track-node-inner">
+                <span class="track-node-icon">PWN</span>
               </div>
-              <div class="absolute -bottom-1 -right-1 w-5 h-5 bg-[#00ffcc] rounded-full border-2 border-[#111116] flex items-center justify-center text-black z-20" style="font-size:12px;">✓</div>
-              <div class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-[#111116] z-20"></div>
+              <div class="track-badge-completed">✓</div>
+              <div class="track-badge-active" id="active-dot-1"></div>
             </div>
-            <div class="text-center mt-1">
-              <p class="font-bold text-[13px] text-white">Track 1 (PWN)</p>
-              <p class="text-[10px] font-bold text-[#00ffcc] uppercase tracking-widest mt-0.5">COMPLETED</p>
+            <div class="track-label">
+              <p class="track-title">Track 1 (PWN)</p>
+              <p class="track-status">COMPLETED</p>
             </div>
           </div>
 
-          <div class="relative z-10 flex flex-col items-center gap-3 cursor-pointer group">
-            <div class="w-16 h-16 rounded-full bg-[#111116] flex items-center justify-center p-1 relative transition-all duration-200 border border-[#333] hover:ring-2 hover:ring-[#444] hover:ring-offset-2 ring-offset-[#0a0a0f]">
-              <div class="w-full h-full rounded-full bg-[#0a0a0f] border border-[#333] flex items-center justify-center">
-                <span class="text-gray-500 font-bold" style="font-family: var(--font-mono); font-size:11px;">WEB</span>
+          <div class="track-node-wrapper" onclick="selectTrack(2, 'WEB')">
+            <div class="track-node" id="node-2">
+              <div class="track-node-inner">
+                <span class="track-node-icon">WEB</span>
               </div>
             </div>
-            <div class="text-center mt-1">
-              <p class="font-bold text-[13px] text-gray-400">Track 2 (Web)</p>
+            <div class="track-label">
+              <p class="track-title">Track 2 (Web)</p>
             </div>
           </div>
           
-          <div class="relative z-10 flex flex-col items-center gap-3 cursor-pointer group">
-            <div class="w-16 h-16 rounded-full bg-[#111116] flex items-center justify-center p-1 relative transition-all duration-200 border border-[#333] hover:ring-2 hover:ring-[#444] hover:ring-offset-2 ring-offset-[#0a0a0f]">
-              <div class="w-full h-full rounded-full bg-[#0a0a0f] border border-[#333] flex items-center justify-center">
-                <span class="text-gray-500 font-bold" style="font-family: var(--font-mono); font-size:11px;">REV</span>
+          <div class="track-node-wrapper" onclick="selectTrack(3, 'REV')">
+            <div class="track-node" id="node-3">
+              <div class="track-node-inner">
+                <span class="track-node-icon">REV</span>
               </div>
             </div>
-            <div class="text-center mt-1">
-              <p class="font-bold text-[13px] text-gray-400">Track 3 (Reverse)</p>
+            <div class="track-label">
+              <p class="track-title">Track 3 (Reverse)</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="w-full h-px bg-[#222] my-2"></div>
+      <div style="width: 100%; height: 1px; background: var(--border); margin: 8px 0;"></div>
 
       <!-- Selected Track Details Area -->
-      <div class="flex flex-col gap-6">
+      <div style="display: flex; flex-direction: column; gap: 24px;">
         <!-- Banner -->
-        <div class="bg-[#111116] rounded-lg border border-[#333] p-6 flex justify-between items-center shadow-sm relative overflow-hidden">
-          <div class="relative z-10">
-            <h2 id="trackTitle" class="text-lg font-bold text-white mb-1" style="font-family: var(--font-heading);">Track 1 (PWN)</h2>
-            <p class="text-sm text-gray-400">Complete the available challenge path for this track.</p>
+        <div class="track-details-banner">
+          <div class="track-details-left">
+            <h2 id="trackTitle">Track 1 (PWN)</h2>
+            <p>Complete the available challenge path for this track.</p>
           </div>
           
-          <div class="flex items-center gap-8 relative z-10">
-            <div class="flex flex-col items-center">
-              <span class="text-[10px] font-bold text-[#00ffcc] uppercase tracking-widest mb-1" style="font-family: var(--font-mono);">Challenges Solved</span>
-              <span class="text-lg font-bold text-white tracking-widest" style="font-family: var(--font-mono);">0 / 0</span>
+          <div class="track-details-stats">
+            <div class="track-stat-block">
+              <span class="track-stat-label" style="color: var(--accent);">Challenges Solved</span>
+              <span class="track-stat-value">0 / 0</span>
             </div>
-            <div class="h-10 w-px bg-[#333]"></div>
-            <div class="flex items-center gap-3">
-              <div class="flex flex-col items-start">
-                <span class="text-[10px] font-bold text-red-500 uppercase tracking-widest mb-1" style="font-family: var(--font-mono);">Track Ended</span>
-                <span class="font-bold tracking-widest text-gray-300" style="font-family: var(--font-mono);">00:00:00</span>
-              </div>
+            <div class="track-stat-divider"></div>
+            <div class="track-stat-block">
+              <span class="track-stat-label" style="color: var(--danger);">Track Ended</span>
+              <span class="track-stat-value" style="color: var(--text-secondary);">00:00:00</span>
             </div>
           </div>
         </div>
 
         <!-- Toolbar -->
-        <div class="flex justify-between items-center">
-          <div class="relative w-full max-w-md">
-            <input 
-              type="search" 
-              id="challengeSearch"
-              class="pl-4 pr-4 py-2 w-full border border-[#333] bg-[#111116] text-white rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#00ffcc] shadow-sm" 
-              placeholder="Search challenges by name or category..."
-            >
-          </div>
+        <div class="track-toolbar">
+          <input 
+            type="search" 
+            id="challengeSearch"
+            class="track-search-input" 
+            placeholder="Search challenges by name or category..."
+          >
         </div>
 
         <!-- Challenge Grid / Empty State -->
-        <div id="challengeGrid" class="challenge-grid mt-4">
-          <!-- Will be injected by challenges.js -->
+        <div id="challengeGrid" class="challenge-grid" style="margin-top: 16px; text-align: center; padding: 60px 0;">
+          <p style="font-family: var(--font-heading); font-size: 15px; font-weight: 700; color: var(--accent);">
+            Challenges are being prepared
+          </p>
         </div>
       </div>
     </div>
   </main>
+
+  <script>
+    function selectTrack(id, title) {
+      // Reset all nodes
+      for(let i=1; i<=3; i++) {
+        const node = document.getElementById('node-' + i);
+        if(node) {
+          node.classList.remove('active');
+          const dot = document.getElementById('active-dot-' + i);
+          if(dot) dot.remove();
+        }
+      }
+      
+      // Activate clicked
+      const activeNode = document.getElementById('node-' + id);
+      if(activeNode) {
+        activeNode.classList.add('active');
+        const dot = document.createElement('div');
+        dot.className = 'track-badge-active';
+        dot.id = 'active-dot-' + id;
+        activeNode.appendChild(dot);
+      }
+      
+      // Update title
+      document.getElementById('trackTitle').innerText = 'Track ' + id + ' (' + title + ')';
+    }
+  </script>
 
   <script src="/assets/js/utils.js"></script>
   <script src="/assets/js/storage.js"></script>

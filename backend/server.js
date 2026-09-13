@@ -57,7 +57,7 @@ app.use(helmet({
 // Apply rate limiting to all requests
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
+  max: 1000, // Limit each IP to 1000 requests per `window` (here, per 15 minutes)
   standardHeaders: true, 
   legacyHeaders: false, 
 });
@@ -140,11 +140,16 @@ app.use('/api/admin', adminRoutes);
 // --------------------------------------------------------------------------
 app.use('/assets', express.static(ASSETS_DIR));
 app.use('/admin', express.static(ADMIN_DIR));
-app.use('/', express.static(PUBLIC_DIR));
+app.use('/', express.static(PUBLIC_DIR, { extensions: ['html'] }));
 
 // Fallback for Admin SPA or Direct Entry
-app.get('/admin', (req, res) => {
+app.get('/admin/*', (req, res) => {
   res.sendFile(path.join(ADMIN_DIR, 'index.html'));
+});
+
+// Fallback for Public SPA
+app.get('*', (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
 // Central Error Handler
