@@ -1,6 +1,6 @@
 /**
- * Vercel Serverless Root API Handler (api/index.js)
- * Catches /api root requests
+ * Vercel Serverless Catch-All API Handler (api/[...all].js)
+ * Catches all /api/* routes (e.g., /api/auth/login, /api/challenges, /api/status)
  */
 
 const { app } = require('../backend/server');

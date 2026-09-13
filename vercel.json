@@ -3,10 +3,6 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/api/:match*",
-      "destination": "/api/index.js"
-    },
-    {
       "source": "/assets/:match*",
       "destination": "/frontend/assets/:match*"
     },
@@ -27,8 +23,8 @@
       "destination": "/frontend/public/index.html"
     },
     {
-      "source": "/:match*",
-      "destination": "/frontend/public/:match*"
+      "source": "/((?!api).*)",
+      "destination": "/frontend/public/$1"
     }
   ]
 }
