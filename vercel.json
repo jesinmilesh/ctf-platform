@@ -3,8 +3,12 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/assets/(.*)",
-      "destination": "/frontend/assets/$1"
+      "source": "/api/:match*",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/assets/:match*",
+      "destination": "/frontend/assets/:match*"
     },
     {
       "source": "/admin",
@@ -15,20 +19,16 @@
       "destination": "/frontend/admin/index.html"
     },
     {
-      "source": "/admin/(.*)",
-      "destination": "/frontend/admin/$1"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/index.js"
+      "source": "/admin/:match*",
+      "destination": "/frontend/admin/:match*"
     },
     {
       "source": "/",
       "destination": "/frontend/public/index.html"
     },
     {
-      "source": "/((?!api|admin|assets).*)",
-      "destination": "/frontend/public/$1"
+      "source": "/:match*",
+      "destination": "/frontend/public/:match*"
     }
   ]
 }

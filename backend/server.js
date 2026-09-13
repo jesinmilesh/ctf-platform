@@ -1,3 +1,4 @@
+require('dotenv').config();
 /**
  * XPLOITX // CYBER BATTLEFIELD
  * Express Core API & WebSocket Engine (backend/server.js)
@@ -8,6 +9,9 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const { WebSocketServer } = require('ws');
+
+// Database Engine
+const db = require('./config/database');
 
 // Middleware
 const { authMiddleware } = require('./middleware/auth');
@@ -84,6 +88,19 @@ app.use((req, res, next) => {
   next();
 });
 
+// Ensure database initialization (especially in serverless environments)
+let dbInitPromise = null;
+app.use(async (req, res, next) => {
+  if (!dbInitPromise) {
+    dbInitPromise = db.init().catch(err => {
+      console.error('[DATABASE] Initialization error:', err.message);
+      dbInitPromise = null;
+    });
+  }
+  await dbInitPromise;
+  next();
+});
+
 // Authentication state detection
 app.use(authMiddleware);
 
@@ -113,6 +130,8 @@ app.get('/api/status', (req, res) => {
     platform: 'XPLOITX // CYBER BATTLEFIELD',
     status: 'OPERATIONAL',
     uptimeSeconds: Math.floor(process.uptime()),
+    database: db.isMongo ? 'MongoDB Atlas' : (db.isPostgres ? 'PostgreSQL' : 'In-Memory'),
+    databaseConnected: db.connected,
     timestamp: new Date().toISOString(),
     liveOperativesConnected: wsServer.getConnectedCount()
   });
@@ -155,9 +174,11 @@ app.get('*', (req, res) => {
 // Central Error Handler
 app.use(errorHandler);
 
-// Start listening with Redis EventBus & Cleanup Worker initialization
+// Start listening with Database, Redis EventBus & Cleanup Worker initialization
 if (require.main === module) {
-  eventBus.init().then(() => {
+  db.init().then(() => {
+    return eventBus.init();
+  }).then(() => {
     cleanupWorker.start();
     server.listen(PORT, () => {
       console.log('========================================================');
@@ -165,6 +186,7 @@ if (require.main === module) {
       console.log(`  PORT: http://localhost:${PORT}`);
       console.log(`  PUBLIC PORTAL: http://localhost:${PORT}/`);
       console.log(`  ADMIN C2 ROOM: http://localhost:${PORT}/admin/`);
+      console.log(`  DATABASE: ${db.isMongo ? 'MongoDB Atlas' : (db.isPostgres ? 'PostgreSQL' : 'In-Memory')} (${db.connected ? 'ONLINE' : 'CONNECTING'})`);
       console.log('  STATUS: ALL DEFENSE & OFFENSE GRIDS OPERATIONAL');
       console.log('========================================================');
     });
