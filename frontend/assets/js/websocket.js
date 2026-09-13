@@ -22,7 +22,7 @@ class TacticalSocket {
     }
 
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${location.host}/ws`;
+    const wsUrl = window.XPLOITX_WS_URL || `${protocol}//${location.host}/ws`;
 
     try {
       this.socket = new WebSocket(wsUrl);

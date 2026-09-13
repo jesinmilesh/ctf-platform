@@ -4,7 +4,7 @@
  * Implements Section 8 of the Architectural Blueprint
  */
 
-const API_BASE = '/api';
+const API_BASE = window.XPLOITX_API_BASE || '/api';
 
 async function apiRequest(endpoint, options = {}) {
   const defaultHeaders = {
