@@ -8,9 +8,13 @@
  * - Zero Fake Data Architecture: strictly authentic operatives, teams, challenges, and solves.
  */
 
-require('dotenv').config();
-const crypto = require('crypto');
 const path = require('path');
+const dotenv = require('dotenv');
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
+dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
+dotenv.config();
+
+const crypto = require('crypto');
 
 let MongoClient = null;
 try {

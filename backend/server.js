@@ -1,11 +1,14 @@
-require('dotenv').config();
+const path = require('path');
+const dotenv = require('dotenv');
+dotenv.config({ path: path.join(__dirname, '.env') });
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
+dotenv.config();
 /**
  * XPLOITX // CYBER BATTLEFIELD
  * Express Core API & WebSocket Engine (backend/server.js)
  */
 
 const http = require('http');
-const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const { WebSocketServer } = require('ws');
