@@ -45,10 +45,32 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const ADMIN_DIR = path.join(__dirname, '..', 'admin');
 const ASSETS_DIR = path.join(__dirname, '..', 'assets');
 
+// Security imports
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+
 // Basic settings
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(helmet({
+  contentSecurityPolicy: false // Disable CSP temporarily to not break CDN Tailwind/Fonts
+}));
+
+// Apply rate limiting to all requests
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
+  standardHeaders: true, 
+  legacyHeaders: false, 
+});
+app.use(limiter);
+
+// Restrict CORS to same-origin for security
+app.use(cors({ 
+  origin: process.env.NODE_ENV === 'production' ? 'https://your-production-url.com' : 'http://localhost:4000', 
+  credentials: true 
+}));
+
+app.use(express.json({ limit: '10kb' })); // Limit body payload to prevent DoS
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 // Cookie parsing helper
 app.use((req, res, next) => {

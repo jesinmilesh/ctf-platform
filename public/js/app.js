@@ -797,7 +797,7 @@ class AppController {
     document.getElementById('hudProgressBarFill').style.width = `${pct}%`;
 
     // Category breakdown
-    const categories = ['WEB', 'CRYPTO', 'FORENSICS', 'PWN', 'REVERSING', 'OSINT'];
+    const categories = ['PWN', 'Misc', 'Web', 'Network', 'Digital Forensic', 'OSINT', 'Cryptography', 'Steganograhy'];
     const catList = document.getElementById('hudCategoryOpsList');
     catList.innerHTML = '';
 
@@ -810,7 +810,7 @@ class AppController {
       item.className = 'cat-op-item';
       item.innerHTML = `
         <div class="cat-op-info">
-          <span class="badge-tactical badge-${cat.toLowerCase()}">${cat}</span>
+          <span class="badge-tactical badge-${cat.toLowerCase().replace(/\s+/g, '-')}">${cat}</span>
           <span style="font-family:var(--font-heading); font-size:12px; font-weight:700; color:#fff;">${cat}</span>
         </div>
         <div style="display:flex; align-items:center; gap:12px;">

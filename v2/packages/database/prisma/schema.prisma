@@ -1,0 +1,121 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Competition {
+  id              String   @id @default(uuid())
+  name            String
+  slug            String   @unique
+  tagline         String?
+  description     String?
+  status          String   @default("UPCOMING")
+  start_time      DateTime
+  end_time        DateTime
+  freeze_time     DateTime?
+  flag_prefix     String   @default("XploitX{")
+  flag_suffix     String   @default("}")
+  dynamic_scoring Boolean  @default(true)
+  scoring_decay   Int      @default(30)
+  createdAt       DateTime @default(now())
+
+  users      User[]
+  teams      Team[]
+  phases     Phase[]
+  tracks     Track[]
+  challenges Challenge[]
+}
+
+model User {
+  id             String       @id @default(uuid())
+  competition_id String
+  team_id        String?
+  username       String       @unique
+  email          String       @unique
+  password_hash  String
+  role           String       @default("PARTICIPANT") // SUPER_ADMIN, ADMIN, PARTICIPANT
+  callsign       String?
+  status         String       @default("ACTIVE")
+  createdAt      DateTime     @default(now())
+
+  competition Competition @relation(fields: [competition_id], references: [id])
+  team        Team?       @relation(fields: [team_id], references: [id])
+  solves      Solve[]
+}
+
+model Team {
+  id              String   @id @default(uuid())
+  competition_id  String
+  name            String
+  slug            String   @unique
+  access_code     String
+  total_score     Int      @default(0)
+  is_disqualified Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  competition Competition @relation(fields: [competition_id], references: [id])
+  users       User[]
+  solves      Solve[]
+}
+
+model Track {
+  id             String   @id @default(uuid())
+  competition_id String
+  name           String
+  slug           String
+  display_order  Int      @default(0)
+
+  competition Competition @relation(fields: [competition_id], references: [id])
+  challenges  Challenge[]
+}
+
+model Phase {
+  id             String   @id @default(uuid())
+  competition_id String
+  name           String
+  release_time   DateTime
+  status         String   @default("UPCOMING") // UPCOMING, ACTIVE, ENDED
+
+  competition Competition @relation(fields: [competition_id], references: [id])
+  challenges  Challenge[]
+}
+
+model Challenge {
+  id             String   @id @default(uuid())
+  competition_id String
+  track_id       String
+  phase_id       String
+  title          String
+  slug           String   @unique
+  difficulty     String   @default("MEDIUM")
+  description    String
+  author         String?
+  base_points    Int      @default(100)
+  status         String   @default("DRAFT")
+  createdAt      DateTime @default(now())
+
+  competition Competition @relation(fields: [competition_id], references: [id])
+  track       Track       @relation(fields: [track_id], references: [id])
+  phase       Phase       @relation(fields: [phase_id], references: [id])
+  solves      Solve[]
+}
+
+model Solve {
+  id             String   @id @default(uuid())
+  challenge_id   String
+  team_id        String
+  user_id        String
+  points_awarded Int
+  is_first_blood Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  challenge Challenge @relation(fields: [challenge_id], references: [id])
+  team      Team      @relation(fields: [team_id], references: [id])
+  user      User      @relation(fields: [user_id], references: [id])
+
+  @@unique([team_id, challenge_id])
+}

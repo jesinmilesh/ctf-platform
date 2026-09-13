@@ -4,8 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MISSIONS // XPLOITX CYBER BATTLEFIELD</title>
-  <meta name="description" content="Browse active operations, exploit vulnerabilities, and capture cryptographic flags.">
-
+  
   <link rel="stylesheet" href="/assets/css/variables.css">
   <link rel="stylesheet" href="/assets/css/reset.css">
   <link rel="stylesheet" href="/assets/css/global.css">
@@ -13,53 +12,117 @@
   <link rel="stylesheet" href="/assets/css/animations.css">
   <link rel="stylesheet" href="/assets/css/responsive.css">
   <link rel="stylesheet" href="/assets/css/public.css">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      corePlugins: {
+        preflight: false, // Prevent Tailwind from resetting original CSS
+      }
+    }
+  </script>
 </head>
-<body>
+<body class="bg-[#0a0a0f] text-gray-300">
+  
+  <!-- Original Dynamic Header -->
   <div id="navbar-container"></div>
 
   <main class="container" style="padding: 40px 20px;">
-    <section class="missions">
-      <header class="page-header" style="margin-bottom: 28px;">
-        <span class="eyebrow" style="font-family:var(--font-mono); font-size:12px; color:var(--accent); font-weight:700; letter-spacing:0.12em;">
-          BATTLEFIELD // MISSIONS
-        </span>
-        <h1 style="font-family:var(--font-heading); font-size:32px; font-weight:800; color:#fff; margin:6px 0 8px 0;">
-          Active Operations
-        </h1>
-        <p style="color:var(--text-secondary); font-size:14px; margin:0;">
-          Identify your target. Breach the system. Capture the flag.
-        </p>
-      </header>
+    
+    <!-- New Event Track Layout Inside Main -->
+    <div class="flex flex-col gap-10 mt-4 font-sans">
+      
+      <!-- Event Track Graph -->
+      <div class="w-full">
+        <h2 class="text-md font-bold text-white mb-10" style="font-family: var(--font-heading);">Event Track</h2>
+        
+        <div class="relative flex justify-between items-start w-full px-8">
+          <!-- Connecting Line -->
+          <div class="absolute top-8 left-16 right-16 h-px bg-[#333] z-0"></div>
+          
+          <!-- Track Nodes -->
+          <div class="relative z-10 flex flex-col items-center gap-3 cursor-pointer group">
+            <div class="w-16 h-16 rounded-full bg-[#111116] flex items-center justify-center p-1 relative transition-all duration-200 ring-2 ring-[#00ffcc] ring-offset-2 ring-offset-[#0a0a0f]">
+              <div class="w-full h-full rounded-full bg-[#0a0a0f] border border-[#333] flex items-center justify-center">
+                <span class="text-[#00ffcc] font-bold" style="font-family: var(--font-mono); font-size:11px;">PWN</span>
+              </div>
+              <div class="absolute -bottom-1 -right-1 w-5 h-5 bg-[#00ffcc] rounded-full border-2 border-[#111116] flex items-center justify-center text-black z-20" style="font-size:12px;">✓</div>
+              <div class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-[#111116] z-20"></div>
+            </div>
+            <div class="text-center mt-1">
+              <p class="font-bold text-[13px] text-white">Track 1 (PWN)</p>
+              <p class="text-[10px] font-bold text-[#00ffcc] uppercase tracking-widest mt-0.5">COMPLETED</p>
+            </div>
+          </div>
 
-      <!-- Mission Filters (Section 10) -->
-      <div class="mission-filters" style="display:flex; gap:12px; flex-wrap:wrap; background:var(--bg-card); border:1px solid var(--border); padding:16px; border-radius:var(--radius-sm); margin-bottom:28px;">
-        <input
-          type="search"
-          id="challengeSearch"
-          placeholder="Search missions, CVE vectors, or categories..."
-          style="flex:1; min-width:220px; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:10px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;"
-        >
-
-        <select id="categoryFilter" style="background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:10px 14px; border-radius:var(--radius-sm); font-family:var(--font-heading); font-size:13px;">
-          <option value="">All Categories</option>
-        </select>
-
-        <select id="difficultyFilter" style="background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:10px 14px; border-radius:var(--radius-sm); font-family:var(--font-heading); font-size:13px;">
-          <option value="">All Difficulties</option>
-          <option value="EASY">Easy</option>
-          <option value="MEDIUM">Medium</option>
-          <option value="HARD">Hard</option>
-          <option value="INSANE">Insane</option>
-        </select>
-      </div>
-
-      <!-- Challenge Grid -->
-      <div id="challengeGrid" class="challenge-grid">
-        <div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--text-secondary); font-family:var(--font-mono);">
-          TRANSMITTING MISSION DOSSIERS...
+          <div class="relative z-10 flex flex-col items-center gap-3 cursor-pointer group">
+            <div class="w-16 h-16 rounded-full bg-[#111116] flex items-center justify-center p-1 relative transition-all duration-200 border border-[#333] hover:ring-2 hover:ring-[#444] hover:ring-offset-2 ring-offset-[#0a0a0f]">
+              <div class="w-full h-full rounded-full bg-[#0a0a0f] border border-[#333] flex items-center justify-center">
+                <span class="text-gray-500 font-bold" style="font-family: var(--font-mono); font-size:11px;">WEB</span>
+              </div>
+            </div>
+            <div class="text-center mt-1">
+              <p class="font-bold text-[13px] text-gray-400">Track 2 (Web)</p>
+            </div>
+          </div>
+          
+          <div class="relative z-10 flex flex-col items-center gap-3 cursor-pointer group">
+            <div class="w-16 h-16 rounded-full bg-[#111116] flex items-center justify-center p-1 relative transition-all duration-200 border border-[#333] hover:ring-2 hover:ring-[#444] hover:ring-offset-2 ring-offset-[#0a0a0f]">
+              <div class="w-full h-full rounded-full bg-[#0a0a0f] border border-[#333] flex items-center justify-center">
+                <span class="text-gray-500 font-bold" style="font-family: var(--font-mono); font-size:11px;">REV</span>
+              </div>
+            </div>
+            <div class="text-center mt-1">
+              <p class="font-bold text-[13px] text-gray-400">Track 3 (Reverse)</p>
+            </div>
+          </div>
         </div>
       </div>
-    </section>
+
+      <div class="w-full h-px bg-[#222] my-2"></div>
+
+      <!-- Selected Track Details Area -->
+      <div class="flex flex-col gap-6">
+        <!-- Banner -->
+        <div class="bg-[#111116] rounded-lg border border-[#333] p-6 flex justify-between items-center shadow-sm relative overflow-hidden">
+          <div class="relative z-10">
+            <h2 id="trackTitle" class="text-lg font-bold text-white mb-1" style="font-family: var(--font-heading);">Track 1 (PWN)</h2>
+            <p class="text-sm text-gray-400">Complete the available challenge path for this track.</p>
+          </div>
+          
+          <div class="flex items-center gap-8 relative z-10">
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] font-bold text-[#00ffcc] uppercase tracking-widest mb-1" style="font-family: var(--font-mono);">Challenges Solved</span>
+              <span class="text-lg font-bold text-white tracking-widest" style="font-family: var(--font-mono);">0 / 0</span>
+            </div>
+            <div class="h-10 w-px bg-[#333]"></div>
+            <div class="flex items-center gap-3">
+              <div class="flex flex-col items-start">
+                <span class="text-[10px] font-bold text-red-500 uppercase tracking-widest mb-1" style="font-family: var(--font-mono);">Track Ended</span>
+                <span class="font-bold tracking-widest text-gray-300" style="font-family: var(--font-mono);">00:00:00</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="flex justify-between items-center">
+          <div class="relative w-full max-w-md">
+            <input 
+              type="search" 
+              id="challengeSearch"
+              class="pl-4 pr-4 py-2 w-full border border-[#333] bg-[#111116] text-white rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#00ffcc] shadow-sm" 
+              placeholder="Search challenges by name or category..."
+            >
+          </div>
+        </div>
+
+        <!-- Challenge Grid / Empty State -->
+        <div id="challengeGrid" class="challenge-grid mt-4">
+          <!-- Will be injected by challenges.js -->
+        </div>
+      </div>
+    </div>
   </main>
 
   <script src="/assets/js/utils.js"></script>

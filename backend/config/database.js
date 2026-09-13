@@ -70,12 +70,14 @@ class DatabaseEngine {
     ];
 
     this.data.categories = [
-      { id: 'cat-crypto', competition_id: compId, name: 'CRYPTO', slug: 'crypto', description: 'Ciphers, discrete log, and broken PRNGs', color_accent: '#c77dff', display_order: 1 },
-      { id: 'cat-web', competition_id: compId, name: 'WEB', slug: 'web', description: 'XSS, SQLi, SSRF, and prototype pollution', color_accent: '#00d8f6', display_order: 2 },
-      { id: 'cat-pwn', competition_id: compId, name: 'PWN', slug: 'pwn', description: 'Binary exploitation, ROP chains, and heap overflow', color_accent: '#ff3b5c', display_order: 3 },
-      { id: 'cat-forensics', competition_id: compId, name: 'FORENSICS', slug: 'forensics', description: 'Memory dump analysis and network packet inspection', color_accent: '#00ff9c', display_order: 4 },
-      { id: 'cat-reversing', competition_id: compId, name: 'REVERSING', slug: 'reversing', description: 'Assembly deobfuscation and firmware inspection', color_accent: '#ffb020', display_order: 5 },
-      { id: 'cat-osint', competition_id: compId, name: 'OSINT', slug: 'osint', description: 'Open source intelligence and asset tracing', color_accent: '#4cc9f0', display_order: 6 }
+      { id: 'cat-01', competition_id: compId, name: 'PWN', slug: 'pwn', description: 'Binary exploitation, ROP chains, and heap overflow', color_accent: '#ff3b5c', display_order: 1 },
+      { id: 'cat-02', competition_id: compId, name: 'Misc', slug: 'misc', description: 'Miscellaneous challenges', color_accent: '#a3a3a3', display_order: 2 },
+      { id: 'cat-03', competition_id: compId, name: 'Web', slug: 'web', description: 'XSS, SQLi, SSRF, and prototype pollution', color_accent: '#00d8f6', display_order: 3 },
+      { id: 'cat-04', competition_id: compId, name: 'Network', slug: 'network', description: 'Network packet inspection and routing', color_accent: '#f9c74f', display_order: 4 },
+      { id: 'cat-05', competition_id: compId, name: 'Digital Forensic', slug: 'forensic', description: 'Memory dump analysis and network packet inspection', color_accent: '#00ff9c', display_order: 5 },
+      { id: 'cat-06', competition_id: compId, name: 'OSINT', slug: 'osint', description: 'Open source intelligence and asset tracing', color_accent: '#4cc9f0', display_order: 6 },
+      { id: 'cat-07', competition_id: compId, name: 'Cryptography', slug: 'crypto', description: 'Ciphers, discrete log, and broken PRNGs', color_accent: '#c77dff', display_order: 7 },
+      { id: 'cat-08', competition_id: compId, name: 'Steganograhy', slug: 'stegano', description: 'Hidden data inside files and images', color_accent: '#ffb020', display_order: 8 }
     ];
 
     // Seed Teams
@@ -133,150 +135,64 @@ class DatabaseEngine {
       { id: 'tm-2', team_id: team1.id, user_id: 'u0000000-0000-0000-0000-000000000003', role: 'CAPTAIN', joined_at: new Date().toISOString() }
     ];
 
-    // Seed Challenges
-    this.data.challenges = [
-      {
-        id: 'ch-01',
-        competition_id: compId,
-        category_id: 'cat-crypto',
-        category_name: 'CRYPTO',
-        mission_id: 'OP-CRYPT-01',
-        slug: 'the-last-digit',
-        title: 'The Last Digit',
-        difficulty: 'MEDIUM',
-        description: 'An intercepted transmission from an adversarial satellite contains a pseudorandom number generator with poor entropy. Recover the initial seed to decode the secret message.\n\nTarget parameter: Linear Congruential Generator modulus $M = 2^{31}-1$.',
-        base_points: 450,
-        minimum_points: 100,
-        decay_threshold: 30,
-        current_points: 420,
-        solve_count: 17,
-        status: 'PUBLISHED',
-        has_instance: false,
-        instance_host: null,
-        instance_port: null,
-        created_at: new Date().toISOString()
-      },
-      {
-        id: 'ch-02',
-        competition_id: compId,
-        category_id: 'cat-web',
-        category_name: 'WEB',
-        mission_id: 'OP-WEB-02',
-        slug: 'classified-vault',
-        title: 'Classified Vault Breach',
-        difficulty: 'EASY',
-        description: 'The internal terminal of the target agency permits remote document queries. Can you bypass their query sanitization filter to extract the administrator access token?',
-        base_points: 300,
-        minimum_points: 100,
-        decay_threshold: 30,
-        current_points: 180,
-        solve_count: 42,
-        status: 'PUBLISHED',
-        has_instance: true,
-        instance_host: 'challenge.xploitxctf.me',
-        instance_port: 31337,
-        created_at: new Date().toISOString()
-      },
-      {
-        id: 'ch-03',
-        competition_id: compId,
-        category_id: 'cat-pwn',
-        category_name: 'PWN',
-        mission_id: 'OP-PWN-03',
-        slug: 'buffer-strike',
-        title: 'Buffer Strike // ROP Arena',
-        difficulty: 'HARD',
-        description: 'A 64-bit ELF binary running on a hardened remote daemon. ASLR is enabled, NX is enabled, but Canary is absent. Build a Return-Oriented Programming (ROP) chain to spawn an interactive shell.',
-        base_points: 500,
-        minimum_points: 150,
-        decay_threshold: 30,
-        current_points: 475,
-        solve_count: 6,
-        status: 'PUBLISHED',
-        has_instance: true,
-        instance_host: 'pwn.xploitxctf.me',
-        instance_port: 39001,
-        created_at: new Date().toISOString()
-      },
-      {
-        id: 'ch-04',
-        competition_id: compId,
-        category_id: 'cat-forensics',
-        category_name: 'FORENSICS',
-        mission_id: 'OP-FOR-04',
-        slug: 'quantum-packet',
-        title: 'Quantum Packet Capture',
-        difficulty: 'MEDIUM',
-        description: 'Exfiltrated PCAPng file captured during a simulated network breach. Deep packet analysis is required to reassemble an encrypted TLS stream and extract the exfiltrated artifact.',
-        base_points: 400,
-        minimum_points: 100,
-        decay_threshold: 30,
-        current_points: 340,
-        solve_count: 19,
-        status: 'PUBLISHED',
-        has_instance: false,
-        instance_host: null,
-        instance_port: null,
-        created_at: new Date().toISOString()
-      },
-      {
-        id: 'ch-05',
-        competition_id: compId,
-        category_id: 'cat-reversing',
-        category_name: 'REVERSING',
-        mission_id: 'OP-REV-05',
-        slug: 'matrix-decryptor',
-        title: 'Matrix Decryptor v2',
-        difficulty: 'HARD',
-        description: 'A heavily obfuscated Mach-O / PE32 executable implementing custom virtual machine bytecode instructions. Reverse the dispatch table to extract the validation algorithm.',
-        base_points: 500,
-        minimum_points: 100,
-        decay_threshold: 30,
-        current_points: 490,
-        solve_count: 3,
-        status: 'PUBLISHED',
-        has_instance: false,
-        created_at: new Date().toISOString()
-      },
-      {
-        id: 'ch-06',
-        competition_id: compId,
-        category_id: 'cat-osint',
-        category_name: 'OSINT',
-        mission_id: 'OP-OSI-06',
-        slug: 'shadow-trail',
-        title: 'Shadow Operative Trail',
-        difficulty: 'EASY',
-        description: 'A rogue operative published encrypted coordinates across public code repositories and decentralized ledgers. Trace the digital footprint to locate their clandestine server.',
-        base_points: 250,
-        minimum_points: 100,
-        decay_threshold: 30,
-        current_points: 120,
-        solve_count: 58,
-        status: 'PUBLISHED',
-        has_instance: false,
-        created_at: new Date().toISOString()
-      }
+    // Seed Challenges dynamically based on requirements
+    this.data.challenges = [];
+    
+    const catMap = {
+      'PWN': 'cat-01', 'Misc': 'cat-02', 'Web': 'cat-03',
+      'Network': 'cat-04', 'Digital Forensic': 'cat-05',
+      'OSINT': 'cat-06', 'Cryptography': 'cat-07', 'Steganograhy': 'cat-08'
+    };
+
+    const requirements = [
+      { cats: ['PWN', 'Misc', 'Web'], counts: { MEDIUM: 10, HARD: 10, INSANE: 15 } },
+      { cats: ['Network'], counts: { MEDIUM: 3, HARD: 5, INSANE: 5 } },
+      { cats: ['Digital Forensic'], counts: { MEDIUM: 2, HARD: 5, INSANE: 5 } },
+      { cats: ['OSINT'], counts: { MEDIUM: 10, HARD: 10, INSANE: 10 } },
+      { cats: ['Cryptography'], counts: { MEDIUM: 10, HARD: 10, INSANE: 10 } },
+      { cats: ['Steganograhy'], counts: { MEDIUM: 10, HARD: 10, INSANE: 10 } }
     ];
+
+    let chId = 1;
+    requirements.forEach(req => {
+      let catIndex = 0;
+      for (const [diff, count] of Object.entries(req.counts)) {
+        for (let i = 0; i < count; i++) {
+          const cName = req.cats[catIndex % req.cats.length];
+          catIndex++;
+          this.data.challenges.push({
+            id: 'ch-' + String(chId).padStart(3, '0'),
+            competition_id: compId,
+            category_id: catMap[cName],
+            category_name: cName,
+            mission_id: 'OP-' + cName.substring(0,3).toUpperCase() + '-' + chId,
+            slug: 'challenge-' + chId,
+            title: cName + ' Challenge ' + chId,
+            difficulty: diff,
+            description: 'This is an auto-generated ' + diff + ' challenge for ' + cName + '.',
+            base_points: diff === 'MEDIUM' ? 300 : (diff === 'HARD' ? 500 : 1000),
+            minimum_points: 100,
+            decay_threshold: 30,
+            current_points: diff === 'MEDIUM' ? 300 : (diff === 'HARD' ? 500 : 1000),
+            solve_count: Math.floor(Math.random() * 50),
+            status: 'PUBLISHED',
+            has_instance: false,
+            created_at: new Date().toISOString()
+          });
+          chId++;
+        }
+      }
+    });
 
     // Seed Flags
-    this.data.flags = [
-      { id: 'f-1', challenge_id: 'ch-01', flag_type: 'STATIC', flag_value: 'XploitXβ{l4st_d1g1t_lcg_br34k_9918}', case_sensitive: true },
-      { id: 'f-2', challenge_id: 'ch-02', flag_type: 'STATIC', flag_value: 'XploitXβ{sqli_cl4ssified_v4ult_unl0ck3d}', case_sensitive: true },
-      { id: 'f-3', challenge_id: 'ch-03', flag_type: 'STATIC', flag_value: 'XploitXβ{r0p_g4dg3t_m4st3r_sh3ll_sp4wn}', case_sensitive: true },
-      { id: 'f-4', challenge_id: 'ch-04', flag_type: 'STATIC', flag_value: 'XploitXβ{pcap_tls_k3y_l0g_r34ss3mbly}', case_sensitive: true },
-      { id: 'f-5', challenge_id: 'ch-05', flag_type: 'STATIC', flag_value: 'XploitXβ{vm_byt3c0d3_d30bfusc4t10n}', case_sensitive: true },
-      { id: 'f-6', challenge_id: 'ch-06', flag_type: 'STATIC', flag_value: 'XploitXβ{0s1nt_tr4c1ng_gl0b4l_sh4d0w}', case_sensitive: true }
-    ];
+    this.data.flags = this.data.challenges.map(ch => ({
+      id: 'f-' + ch.id.split('-')[1],
+      challenge_id: ch.id,
+      flag_type: 'STATIC',
+      flag_value: 'XploitXβ{flag_' + ch.id + '}',
+      case_sensitive: true
+    }));
 
-    // Seed Hints
-    this.data.challengeHints = [
-      { id: 'h-1', challenge_id: 'ch-01', content: 'Notice that state[n+1] = (a * state[n] + c) % m. Look at the lower bits carefully.', cost: 50, order_index: 1, enabled: true },
-      { id: 'h-2', challenge_id: 'ch-02', content: 'Union-based extraction might be blocked, but error-based boolean blind is responsive.', cost: 30, order_index: 1, enabled: true },
-      { id: 'h-3', challenge_id: 'ch-03', content: 'Check `pop rdi; ret` address at libc offset +0x23b6a.', cost: 75, order_index: 1, enabled: true }
-    ];
-
-    // Seed Files
     this.data.challengeFiles = [
       { id: 'file-01', challenge_id: 'ch-01', filename: 'generator.py', storage_key: 'generator.py', file_size_bytes: 1420, sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08' },
       { id: 'file-04', challenge_id: 'ch-04', filename: 'intercept.pcapng', storage_key: 'intercept.pcapng', file_size_bytes: 489200, sha256: '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8' },
@@ -368,3 +284,6 @@ class DatabaseEngine {
 
 const db = new DatabaseEngine();
 module.exports = db;
+
+
+

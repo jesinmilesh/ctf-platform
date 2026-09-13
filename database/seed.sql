@@ -54,10 +54,12 @@ ON CONFLICT DO NOTHING;
 -- Categories
 INSERT INTO categories (id, competition_id, name, slug, color_accent, display_order)
 VALUES
-('cat-01', 'c0000000-0000-0000-0000-000000000001', 'CRYPTO', 'crypto', '#c77dff', 1),
-('cat-02', 'c0000000-0000-0000-0000-000000000001', 'WEB', 'web', '#00d8f6', 2),
-('cat-03', 'c0000000-0000-0000-0000-000000000001', 'PWN', 'pwn', '#ff3b5c', 3),
-('cat-04', 'c0000000-0000-0000-0000-000000000001', 'FORENSICS', 'forensics', '#00ff9c', 4),
-('cat-05', 'c0000000-0000-0000-0000-000000000001', 'REVERSING', 'reversing', '#ffb020', 5),
-('cat-06', 'c0000000-0000-0000-0000-000000000001', 'OSINT', 'osint', '#4cc9f0', 6)
+('cat-01', 'c0000000-0000-0000-0000-000000000001', 'PWN', 'pwn', '#ff3b5c', 1),
+('cat-02', 'c0000000-0000-0000-0000-000000000001', 'Misc', 'misc', '#a3a3a3', 2),
+('cat-03', 'c0000000-0000-0000-0000-000000000001', 'Web', 'web', '#00d8f6', 3),
+('cat-04', 'c0000000-0000-0000-0000-000000000001', 'Network', 'network', '#f9c74f', 4),
+('cat-05', 'c0000000-0000-0000-0000-000000000001', 'Digital Forensic', 'forensic', '#00ff9c', 5),
+('cat-06', 'c0000000-0000-0000-0000-000000000001', 'OSINT', 'osint', '#4cc9f0', 6),
+('cat-07', 'c0000000-0000-0000-0000-000000000001', 'Cryptography', 'crypto', '#c77dff', 7),
+('cat-08', 'c0000000-0000-0000-0000-000000000001', 'Steganograhy', 'stegano', '#ffb020', 8)
 ON CONFLICT DO NOTHING;
