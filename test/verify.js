@@ -232,6 +232,10 @@ async function runSuite() {
 
   const retrieved = await fileService.getFileStream(fileMeta.id);
   assert(retrieved !== null, 'Saved file must be retrievable from storage');
+  retrieved.on('error', () => {});
+  retrieved.destroy();
+  await new Promise(r => setTimeout(r, 50));
+  await fileService.deleteFile(fileMeta.id);
   console.log(`✓ File Service stored file with SHA-256: ${fileMeta.sha256.substring(0, 16)}...`);
 
   // Test 7: Architecture File & Component Verification (Section 5, 7, 61)

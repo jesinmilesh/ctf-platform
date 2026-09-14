@@ -68,8 +68,11 @@ class ChallengeService {
 
     const isSolved = db.getSolves().some(s => s.challenge_id === c.id && ((teamId && s.team_id === teamId) || (userId && s.user_id === userId)));
 
-    // Active instance check
-    const instance = db.getInstances().find(i => i.challenge_id === c.id && (i.team_id === teamId || (userId && i.user_id === userId)) && i.status === 'RUNNING');
+    const instance = db.getInstances().find(i =>
+      (i.challengeId === c.id || i.challenge_id === c.id) &&
+      ((teamId && (i.teamId === teamId || i.team_id === teamId)) || (userId && (i.ownerUserId === userId || i.userId === userId || i.user_id === userId))) &&
+      i.status === 'RUNNING'
+    );
 
     return {
       id: c.id,
@@ -82,12 +85,18 @@ class ChallengeService {
       points: c.current_points || c.base_points,
       solve_count: c.solve_count || 0,
       description: c.description,
-      has_instance: !!c.has_instance,
+      has_instance: !!(c.runtime?.enabled || c.has_instance),
       instance: instance ? {
+        instanceId: instance.instanceId || instance.id,
         host: instance.host,
         port: instance.port,
-        expires_at: instance.expires_at,
-        timeRemainingSeconds: Math.max(0, Math.floor((new Date(instance.expires_at) - Date.now()) / 1000))
+        protocol: instance.protocol || 'http',
+        status: instance.status,
+        url: instance.url || `http://${instance.subdomain || instance.host || '127.0.0.1'}:${instance.port}`,
+        subdomain: instance.subdomain,
+        expiresAt: instance.expiresAt || instance.expires_at,
+        expires_at: instance.expiresAt || instance.expires_at,
+        timeRemainingSeconds: Math.max(0, Math.floor((new Date(instance.expiresAt || instance.expires_at) - Date.now()) / 1000))
       } : null,
       files,
       hints,

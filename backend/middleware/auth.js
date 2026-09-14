@@ -51,7 +51,11 @@ function authMiddleware(req, res, next) {
       const tokenTime = parseInt(timestamp, 10);
       const isExpired = isNaN(tokenTime) || (Date.now() - tokenTime) > (7 * 24 * 3600 * 1000);
 
-      if (!isExpired && crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expectedSignature, 'hex'))) {
+      // Check session table if session is registered and expired
+      const session = db.getSessions().find(s => s.token === token);
+      const isSessionExpired = session && new Date(session.expires_at) <= new Date();
+
+      if (!isExpired && !isSessionExpired && crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expectedSignature, 'hex'))) {
         validUserId = userId;
       }
     } else if (parts.length === 3) {

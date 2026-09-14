@@ -9,6 +9,7 @@ dotenv.config();
  */
 
 const http = require('http');
+const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const { WebSocketServer } = require('ws');
@@ -234,11 +235,26 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start listening with Database, Redis EventBus & Cleanup Worker initialization
+const reconciliation = require('./instances/reconciliation');
+const dockerClient = require('./instances/dockerClient');
+
+// Start listening with Database, Redis EventBus, Docker Reconciliation & Cleanup Worker initialization
 if (require.main === module) {
   db.init().then(() => {
     return eventBus.init();
-  }).then(() => {
+  }).then(async () => {
+    try {
+      const isDockerReady = await dockerClient.isAvailable();
+      if (isDockerReady) {
+        await dockerClient.ensureNetwork('xploitx-instances');
+        await reconciliation.reconcile();
+      } else {
+        console.warn('⚠️ [DOCKER NOTICE]: Docker Engine not reachable at startup. Challenge instances will be enabled once Docker starts.');
+      }
+    } catch (e) {
+      console.warn('[DOCKER INIT NOTICE]:', e.message);
+    }
+
     cleanupWorker.start();
     server.listen(PORT, () => {
       console.log('========================================================');

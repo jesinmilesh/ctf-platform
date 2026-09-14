@@ -49,8 +49,8 @@ class DockerManager {
   async createAndStart({ instanceId, challenge, hostPort, ttlMinutes = 30 }) {
     const containerName = `xploitx-${instanceId}`;
     const image = challenge.docker_image || `xploitx/${challenge.slug || 'target'}:latest`;
-    const containerPort = challenge.container_port || 80;
-    const protocol = challenge.protocol || 'HTTP';
+    const containerPort = challenge.container_port || challenge.containerPort || 8080;
+    const protocol = (challenge.protocol || 'http').toLowerCase();
 
     if (!security.validateImage(image)) {
       throw new Error(`ILLEGAL_IMAGE: The specified container image '${image}' contains unauthorized characters.`);

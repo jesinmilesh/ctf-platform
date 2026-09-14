@@ -9,36 +9,39 @@
 
 class InstanceRouter {
   constructor() {
-    this.domain = process.env.INSTANCE_DOMAIN || process.env.SERVER_HOST || 'xploitxctf.me';
-    this.protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+    this.domain = process.env.INSTANCE_BASE_DOMAIN || process.env.INSTANCE_DOMAIN || process.env.SERVER_HOST || 'xploitxctf.me';
+    this.protocol = (process.env.INSTANCE_PROTOCOL || 'http').toLowerCase();
     this.domainTemplate = process.env.INSTANCE_DOMAIN_TEMPLATE || 'inst-{id}.xploitxctf.me';
   }
 
   /**
    * Resolve public target information for a running sandbox instance
    */
-  resolveTargetEndpoints({ instanceId, port, challengeProtocol = 'HTTP' }) {
+  resolveTargetEndpoints({ instanceId, port, challengeProtocol = 'http' }) {
     const cleanId = String(instanceId).replace(/^inst-/, '');
     const subdomain = this.domainTemplate.replace('{id}', cleanId);
     
-    const isHttp = (challengeProtocol || 'HTTP').toUpperCase() === 'HTTP';
-    const webUrl = `${this.protocol}://${subdomain}`;
+    const proto = (challengeProtocol || this.protocol || 'http').toLowerCase();
+    const url = `${proto}://${subdomain}:${port}`;
     const directHost = `${this.domain}:${port}`;
+    const directUrl = `${proto}://${directHost}`;
 
     return {
       instanceId,
       subdomain,
       domain: this.domain,
-      port,
-      protocol: challengeProtocol,
+      port: Number(port),
+      protocol: proto,
       // Public Web URL for browser-based challenges
-      webUrl: isHttp ? webUrl : null,
+      url,
+      webUrl: url,
+      directUrl,
       // Direct host:port for raw netcat / TCP / SSH targets
       directHost,
       // Pre-formatted netcat command for reverse / pwn missions
       netcatCommand: `nc ${this.domain} ${port}`,
       // Curl command
-      curlCommand: `curl -I ${webUrl}`
+      curlCommand: `curl -I ${url}`
     };
   }
 

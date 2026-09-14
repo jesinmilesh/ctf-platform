@@ -79,6 +79,22 @@ class FileService {
     const p = this.getFilePath(rec);
     return fs.createReadStream(p);
   }
+
+  async deleteFile(fileId) {
+    const rec = this.getFileRecord(fileId);
+    if (rec) {
+      const safeKey = path.basename(rec.storage_key || rec.filename);
+      const filePath = path.join(STORAGE_DIR, safeKey);
+      if (fs.existsSync(filePath)) {
+        try { fs.unlinkSync(filePath); } catch (e) {}
+      }
+      const files = db.getFiles ? db.getFiles() : [];
+      const idx = files.findIndex(f => f.id === rec.id);
+      if (idx !== -1) files.splice(idx, 1);
+      return true;
+    }
+    return false;
+  }
 }
 
 const fileService = new FileService();

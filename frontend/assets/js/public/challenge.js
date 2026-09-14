@@ -135,13 +135,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   window.spawnSandbox = async () => {
     try {
-      if (window.showSuccess) window.showSuccess('PROVISIONING SANDBOX TARGET...');
       renderInstanceUI({ status: 'REQUESTED' });
-      await window.api.deployInstance(challengeId);
-      loadChallenge();
+      const res = await window.api.instances.spawn(challengeId);
+      if (res && res.instance) {
+        renderInstanceUI(res.instance);
+      } else {
+        await loadChallenge();
+      }
     } catch (err) {
-      if (window.showError) window.showError(err.message);
-      renderInstanceUI({ status: 'FAILED', error: err.message });
+      const errMsg = err.error?.message || err.message || 'Failed to spawn challenge instance';
+      if (window.showError) window.showError(errMsg);
+      renderInstanceUI({ status: 'FAILED', error: errMsg });
     }
   };
 
@@ -155,9 +159,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         severity: 'danger',
         onConfirm: async () => {
           try {
-            await window.api.terminateInstance(challengeId);
+            await window.api.instances.terminate(challengeId);
             if (window.showSuccess) window.showSuccess('SANDBOX NEUTRALIZED');
-            loadChallenge();
+            await loadChallenge();
           } catch (err) {
             if (window.showError) window.showError(err.message);
           }

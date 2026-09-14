@@ -8,7 +8,9 @@ const fs = require('fs');
 
 // Simple .env parser without external dependencies
 function loadEnv() {
-  const envPath = path.join(__dirname, '..', '..', '.env');
+  const backendEnv = path.join(__dirname, '..', '.env');
+  const rootEnv = path.join(__dirname, '..', '..', '.env');
+  const envPath = fs.existsSync(backendEnv) ? backendEnv : rootEnv;
   if (fs.existsSync(envPath)) {
     const lines = fs.readFileSync(envPath, 'utf-8').split('\n');
     for (const line of lines) {

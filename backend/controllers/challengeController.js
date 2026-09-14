@@ -60,26 +60,28 @@ exports.unlockHint = (req, res) => {
 
 exports.deployInstance = async (req, res) => {
   if (!req.user) {
-    return res.status(401).json({ error: 'AUTH_REQUIRED', message: 'Authentication required' });
+    return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required' } });
   }
 
   try {
     const result = await instanceManager.spawnInstance(req.params.id, req.user);
     res.status(201).json(result);
   } catch (err) {
-    res.status(400).json({ error: 'INSTANCE_ERROR', message: err.message });
+    const status = err.statusCode || (err.message.includes('NOT_FOUND') ? 404 : err.message.includes('PORT_EXHAUSTION') ? 503 : 400);
+    res.status(status).json({ success: false, error: { code: 'INSTANCE_ERROR', message: err.message } });
   }
 };
 
 exports.terminateInstance = async (req, res) => {
   if (!req.user) {
-    return res.status(401).json({ error: 'AUTH_REQUIRED', message: 'Authentication required' });
+    return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required' } });
   }
 
   try {
     const result = await instanceManager.terminateInstance(req.params.id, req.user);
     res.json(result);
   } catch (err) {
-    res.status(400).json({ error: 'INSTANCE_ERROR', message: err.message });
+    const status = err.message.includes('NOT_FOUND') ? 404 : err.message.includes('AUTH') ? 403 : 400;
+    res.status(status).json({ success: false, error: { code: 'INSTANCE_ERROR', message: err.message } });
   }
 };

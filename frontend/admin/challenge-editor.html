@@ -163,9 +163,47 @@
                 REQUIRE DYNAMIC DOCKER CONTAINER SANDBOX
               </label>
             </div>
-            <p style="color:var(--text-secondary); font-size:12px; line-height:1.6;">
-              When checked, operatives will be able to launch on-demand sandbox daemon instances with individual ports and auto-destruction TTL timers.
+            <p style="color:var(--text-secondary); font-size:12px; line-height:1.6; margin-bottom:20px;">
+              When checked, operatives will launch on-demand isolated Docker containers with unique host ports (41000–41999) and automatic expiration timers.
             </p>
+
+            <div id="sandboxRuntimeConfigPanel" style="display:none; background:var(--bg-secondary); border:1px solid var(--border); padding:20px; border-radius:var(--radius-sm);">
+              <div style="font-family:var(--font-mono); font-size:11px; color:var(--cyan); font-weight:700; margin-bottom:16px; letter-spacing:0.08em;">
+                CONTAINER RUNTIME SPECIFICATION (SECTION 14)
+              </div>
+              <div style="display:grid; grid-template-columns: 2fr 1fr 1fr; gap:16px; margin-bottom:16px;">
+                <div>
+                  <label for="editDockerImage" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">DOCKER IMAGE *</label>
+                  <input type="text" id="editDockerImage" placeholder="xploitx/vault:latest" style="width:100%; background:var(--bg-card); border:1px solid var(--border); color:#fff; padding:10px 12px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:12px;">
+                </div>
+                <div>
+                  <label for="editContainerPort" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">CONTAINER PORT</label>
+                  <input type="number" id="editContainerPort" value="80" min="1" max="65535" style="width:100%; background:var(--bg-card); border:1px solid var(--border); color:#fff; padding:10px 12px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:12px;">
+                </div>
+                <div>
+                  <label for="editHealthCheckPath" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">HEALTH PROBE PATH</label>
+                  <input type="text" id="editHealthCheckPath" value="/" placeholder="/" style="width:100%; background:var(--bg-card); border:1px solid var(--border); color:#fff; padding:10px 12px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:12px;">
+                </div>
+              </div>
+              <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:16px;">
+                <div>
+                  <label for="editInstanceDuration" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">DURATION (MINUTES)</label>
+                  <input type="number" id="editInstanceDuration" value="30" min="5" max="180" style="width:100%; background:var(--bg-card); border:1px solid var(--border); color:#fff; padding:10px 12px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:12px;">
+                </div>
+                <div>
+                  <label for="editCpuLimit" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">CPU LIMIT (CORES)</label>
+                  <input type="number" id="editCpuLimit" value="0.5" step="0.1" min="0.1" max="2.0" style="width:100%; background:var(--bg-card); border:1px solid var(--border); color:#fff; padding:10px 12px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:12px;">
+                </div>
+                <div>
+                  <label for="editMemoryLimit" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">MEMORY LIMIT</label>
+                  <input type="text" id="editMemoryLimit" value="256m" placeholder="256m" style="width:100%; background:var(--bg-card); border:1px solid var(--border); color:#fff; padding:10px 12px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:12px;">
+                </div>
+                <div>
+                  <label for="editPidLimit" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">PID LIMIT</label>
+                  <input type="number" id="editPidLimit" value="128" min="32" max="512" style="width:100%; background:var(--bg-card); border:1px solid var(--border); color:#fff; padding:10px 12px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:12px;">
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Pane 8: PREVIEW -->

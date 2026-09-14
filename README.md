@@ -214,10 +214,8 @@ Access the interfaces:
 
 Deploy the complete hardened stack (PostgreSQL, Redis, Core Backend, Dedicated Instance Server, and Nginx):
 
-```bash
-# Configure production secrets
-cp .env.example .env
-nano .env
+# Configure production secrets in backend/.env
+nano backend/.env
 
 # Launch entire production stack
 docker-compose up -d --build

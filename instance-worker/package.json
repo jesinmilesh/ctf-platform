@@ -1,0 +1,18 @@
+{
+  "name": "xploitx-instance-worker",
+  "version": "2.0.0",
+  "description": "XPLOITX // Dedicated Linux Docker Host Instance Worker Microservice",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^4.19.2",
+    "helmet": "^8.3.0"
+  },
+  "author": "XploitX Operations Command",
+  "license": "MIT"
+}

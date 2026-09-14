@@ -53,11 +53,12 @@ class AuthService {
   login(usernameOrEmail, password) {
     const term = (usernameOrEmail || '').trim().toLowerCase();
     const user = db.getUsers().find(u =>
-      (u.username.toLowerCase() === term || u.email.toLowerCase() === term)
+      (u && u.username && u.username.toLowerCase() === term) ||
+      (u && u.email && u.email.toLowerCase() === term)
     );
 
     if (!user) {
-      throw new Error('Operative callsign or email not recognized.');
+      throw new Error('Invalid operative callsign or passphrase.');
     }
 
     if (user.is_banned) {
@@ -66,7 +67,7 @@ class AuthService {
 
     // Cryptographic Password Validation
     if (!this.verifyPassword(password, user.password_hash)) {
-      throw new Error('Access denied: Invalid biometric/cryptographic passphrase.');
+      throw new Error('Invalid operative callsign or passphrase.');
     }
 
     const token = this.generateToken(user.id, user.username);
@@ -109,7 +110,8 @@ class AuthService {
     }
 
     const exists = db.getUsers().find(u =>
-      u.username.toLowerCase() === cleanUsername.toLowerCase() || u.email.toLowerCase() === cleanEmail
+      (u && u.username && u.username.toLowerCase() === cleanUsername.toLowerCase()) ||
+      (u && u.email && u.email.toLowerCase() === cleanEmail)
     );
     if (exists) {
       throw new Error('Operative with this username or email already registered in system registry.');

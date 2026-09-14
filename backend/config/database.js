@@ -124,7 +124,7 @@ class DatabaseEngine {
 
     arr.push = function(...items) {
       const result = originalPush.apply(this, items);
-      if (self.isMongo && self.mongoDb) {
+      if (self.isMongo && self.mongoDb && !self._hydrating) {
         self._persistInsertMany(collectionKey, items).catch(err => {
           console.error(`[MONGO_REPLICATION_ERROR] ${collectionKey}.push:`, err.message);
         });
@@ -135,7 +135,7 @@ class DatabaseEngine {
     arr.splice = function(start, deleteCount, ...items) {
       const removed = this.slice(start, start + deleteCount);
       const result = originalSplice.apply(this, [start, deleteCount, ...items]);
-      if (self.isMongo && self.mongoDb) {
+      if (self.isMongo && self.mongoDb && !self._hydrating) {
         if (removed.length > 0) {
           self._persistDeleteMany(collectionKey, removed).catch(err => {
             console.error(`[MONGO_REPLICATION_ERROR] ${collectionKey}.delete:`, err.message);
@@ -317,6 +317,19 @@ class DatabaseEngine {
 
       const sessColl = this.mongoDb.collection('sessions');
       await sessColl.createIndex({ token: 1 }, { unique: true });
+
+      const instColl = this.mongoDb.collection('instances');
+      await instColl.createIndex({ instanceId: 1 }, { unique: true });
+      await instColl.createIndex({ teamId: 1, challengeId: 1, status: 1 });
+      await instColl.createIndex({ port: 1 }, {
+        unique: true,
+        partialFilterExpression: {
+          status: { $in: ['ALLOCATING', 'PORT_RESERVED', 'CONTAINER_CREATING', 'STARTING', 'HEALTH_CHECKING', 'RUNNING', 'STOPPING'] }
+        }
+      }).catch(() => {});
+
+      const portColl = this.mongoDb.collection('port_allocations');
+      await portColl.createIndex({ port: 1 }, { unique: true }).catch(() => {});
     } catch (e) {
       // Non-fatal if index already exists
     }
@@ -327,7 +340,7 @@ class DatabaseEngine {
    */
   async syncFromMongo() {
     if (!this.mongoDb) return;
-
+    this._hydrating = true;
     try {
       // 1. Check if users collection exists in Atlas
       const usersInMongo = await this.mongoDb.collection('users').countDocuments();
@@ -363,6 +376,8 @@ class DatabaseEngine {
       console.log('[DATABASE] Successfully synchronized all data from MongoDB Atlas into memory.');
     } catch (err) {
       console.error('[DATABASE] syncFromMongo error:', err.message);
+    } finally {
+      this._hydrating = false;
     }
   }
 
@@ -407,9 +422,10 @@ class DatabaseEngine {
       const coll = this.mongoDb.collection(colName);
       const toSave = { ...doc };
       delete toSave._id;
-      const docId = doc.id || doc._id;
+      const docId = doc.id || doc._id || doc.instanceId;
       if (docId) {
-        await coll.updateOne({ id: docId }, { $set: toSave }, { upsert: true });
+        if (!toSave.id) toSave.id = String(docId);
+        await coll.updateOne({ id: toSave.id }, { $set: toSave }, { upsert: true });
       } else {
         await coll.insertOne(toSave);
       }
@@ -438,9 +454,10 @@ class DatabaseEngine {
     for (const item of items) {
       const toSave = { ...item };
       delete toSave._id;
-      const docId = item.id || item._id;
+      const docId = item.id || item._id || item.instanceId;
       if (docId) {
-        await coll.updateOne({ id: docId }, { $set: toSave }, { upsert: true });
+        if (!toSave.id) toSave.id = String(docId);
+        await coll.updateOne({ id: toSave.id }, { $set: toSave }, { upsert: true });
       } else {
         await coll.insertOne(toSave);
       }
@@ -525,23 +542,44 @@ class DatabaseEngine {
    * Ensures every active Docker instance receives a strictly unique port in 41000-41999
    */
   async allocatePort(rangeStart = 41000, rangeEnd = 41999, instanceId) {
-    const activeAllocations = new Set(this.data.portAllocations.map(a => a.port));
-    for (let port = rangeStart; port <= rangeEnd; port++) {
-      if (!activeAllocations.has(port)) {
-        const allocation = {
-          port,
-          instance_id: instanceId,
-          allocated_at: new Date().toISOString()
-        };
-        this.data.portAllocations.push(allocation);
-        return port;
-      }
+    while (this._portMutex) {
+      await this._portMutex;
     }
-    throw new Error(`PORT_EXHAUSTION: All ports in range ${rangeStart}-${rangeEnd} currently allocated.`);
+    let releaseMutex;
+    this._portMutex = new Promise(resolve => { releaseMutex = resolve; });
+
+    try {
+      const activeAllocations = new Set([
+        ...this.data.portAllocations.map(a => Number(a.port)),
+        ...this.data.instances
+          .filter(i => ['REQUESTED', 'ALLOCATING', 'PORT_RESERVED', 'CONTAINER_CREATING', 'STARTING', 'HEALTH_CHECKING', 'RUNNING'].includes(i.status))
+          .map(i => Number(i.port))
+          .filter(Boolean)
+      ]);
+
+      for (let port = rangeStart; port <= rangeEnd; port++) {
+        if (!activeAllocations.has(port)) {
+          const allocation = {
+            port,
+            instance_id: instanceId,
+            instanceId,
+            allocated_at: new Date().toISOString()
+          };
+          this.data.portAllocations.push(allocation);
+          return port;
+        }
+      }
+      throw new Error(`PORT_EXHAUSTION: All ports in range ${rangeStart}-${rangeEnd} currently allocated.`);
+    } finally {
+      const release = releaseMutex;
+      this._portMutex = null;
+      if (release) release();
+    }
   }
 
   releasePort(port) {
-    const idx = this.data.portAllocations.findIndex(a => a.port === port);
+    const numPort = Number(port);
+    const idx = this.data.portAllocations.findIndex(a => Number(a.port) === numPort);
     if (idx !== -1) {
       this.data.portAllocations.splice(idx, 1);
       return true;

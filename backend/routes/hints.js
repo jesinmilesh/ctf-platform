@@ -6,6 +6,11 @@
 const express = require('express');
 const router = express.Router();
 const challengeService = require('../services/challengeService');
+const db = require('../config/database');
+
+router.get('/', (req, res) => {
+  res.json({ hints: db.getHints() });
+});
 
 router.post('/:hintId/reveal', (req, res) => {
   if (!req.user) {

@@ -7,6 +7,17 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 
+router.get('/', (req, res) => {
+  const users = db.getUsers().map(u => ({
+    id: u.id,
+    username: u.username,
+    callsign: u.callsign,
+    role: u.role,
+    affiliation: u.affiliation
+  }));
+  res.json({ users });
+});
+
 router.get('/:id', (req, res) => {
   const user = db.getUsers().find(u => u.id === req.params.id || u.username === req.params.id);
   if (!user) return res.status(404).json({ error: 'Operative not found' });

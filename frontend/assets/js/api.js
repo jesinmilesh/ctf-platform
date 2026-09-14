@@ -125,11 +125,24 @@ const api = {
     list: () => apiRequest('/notifications')
   },
 
-  // 7. Dynamic Instances
+  // 7. Dynamic Instances (Sections 10, 11, 12)
   instances: {
-    create: (challengeId) => apiRequest(`/challenges/${challengeId}/instance`, { method: 'POST' }),
-    stop: (challengeId) => apiRequest(`/challenges/${challengeId}/instance`, { method: 'DELETE' }),
-    status: (instanceId) => apiRequest(`/instances/${instanceId}`)
+    create: (challengeId) => apiRequest('/instances', {
+      method: 'POST',
+      body: JSON.stringify({ challengeId })
+    }),
+    spawn: (challengeId) => apiRequest('/instances', {
+      method: 'POST',
+      body: JSON.stringify({ challengeId })
+    }),
+    stop: (instanceId) => apiRequest(`/instances/${instanceId}`, {
+      method: 'DELETE'
+    }),
+    terminate: (instanceId) => apiRequest(`/instances/${instanceId}`, {
+      method: 'DELETE'
+    }),
+    status: (instanceId) => apiRequest(`/instances/${instanceId}`),
+    list: () => apiRequest('/instances')
   },
 
   // 8. Health & System

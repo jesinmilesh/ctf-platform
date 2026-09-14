@@ -49,6 +49,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadExistingChallenge(editingId);
   }
 
+  // Runtime Panel toggle
+  const hasInstanceCheckbox = document.getElementById('editHasInstance');
+  const runtimePanel = document.getElementById('sandboxRuntimeConfigPanel');
+  if (hasInstanceCheckbox && runtimePanel) {
+    hasInstanceCheckbox.addEventListener('change', () => {
+      runtimePanel.style.display = hasInstanceCheckbox.checked ? 'block' : 'none';
+    });
+  }
+
   async function loadExistingChallenge(id) {
     try {
       const c = await window.api.getChallenge(id);
@@ -60,7 +69,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('editPoints').value = c.points || 500;
       document.getElementById('editMinPoints').value = c.minimum_points || 100;
       document.getElementById('editDecay').value = c.decay_threshold || 30;
-      document.getElementById('editHasInstance').checked = !!c.has_instance;
+      
+      const hasInst = !!(c.runtime?.enabled || c.has_instance);
+      document.getElementById('editHasInstance').checked = hasInst;
+      if (runtimePanel) runtimePanel.style.display = hasInst ? 'block' : 'none';
+
+      if (hasInst) {
+        const rt = c.runtime || {};
+        document.getElementById('editDockerImage').value = rt.image || c.docker_image || '';
+        document.getElementById('editContainerPort').value = rt.containerPort || c.container_port || 80;
+        document.getElementById('editHealthCheckPath').value = rt.healthCheck?.path || c.health_check_path || '/';
+        document.getElementById('editInstanceDuration').value = rt.durationMinutes || c.instance_ttl_minutes || 30;
+        document.getElementById('editCpuLimit').value = rt.resources?.cpus || c.cpu_limit || 0.5;
+        document.getElementById('editMemoryLimit').value = rt.resources?.memory || c.memory_limit || '256m';
+        document.getElementById('editPidLimit').value = rt.resources?.pidsLimit || 128;
+      }
     } catch (err) {
       console.error('Failed to prefill challenge:', err);
     }
@@ -166,6 +189,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function getFormPayload() {
+    const hasInstance = document.getElementById('editHasInstance').checked;
+    const dockerImage = document.getElementById('editDockerImage') ? document.getElementById('editDockerImage').value.trim() : '';
+    const containerPort = parseInt(document.getElementById('editContainerPort')?.value || 80, 10);
+    const healthPath = document.getElementById('editHealthCheckPath')?.value.trim() || '/';
+    const durationMinutes = parseInt(document.getElementById('editInstanceDuration')?.value || 30, 10);
+    const cpuLimit = parseFloat(document.getElementById('editCpuLimit')?.value || 0.5);
+    const memoryLimit = document.getElementById('editMemoryLimit')?.value.trim() || '256m';
+    const pidLimit = parseInt(document.getElementById('editPidLimit')?.value || 128, 10);
+
     return {
       title: document.getElementById('editTitle').value.trim(),
       mission_id: document.getElementById('editMissionId').value.trim(),
@@ -178,7 +210,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       decay_threshold: parseInt(document.getElementById('editDecay').value, 10),
       hint: document.getElementById('editHint').value.trim(),
       hint_cost: parseInt(document.getElementById('editHintCost').value || 50, 10),
-      has_instance: document.getElementById('editHasInstance').checked,
+      has_instance: hasInstance,
+      docker_image: hasInstance ? (dockerImage || 'xploitx/vault:latest') : null,
+      container_port: containerPort,
+      health_check_path: healthPath,
+      instance_ttl_minutes: durationMinutes,
+      cpu_limit: cpuLimit,
+      memory_limit: memoryLimit,
+      runtime: hasInstance ? {
+        enabled: true,
+        image: dockerImage || 'xploitx/vault:latest',
+        containerPort,
+        protocol: 'http',
+        healthCheck: { type: 'http', path: healthPath },
+        resources: { cpus: cpuLimit, memory: memoryLimit, pidsLimit: pidLimit },
+        durationMinutes
+      } : { enabled: false },
       status: 'PUBLISHED'
     };
   }
