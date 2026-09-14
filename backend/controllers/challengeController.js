@@ -3,17 +3,54 @@
  * Challenge Controller (backend/controllers/challengeController.js)
  */
 
+const db = require('../config/database');
 const challengeService = require('../services/challengeService');
 const submissionService = require('../services/submissionService');
 const instanceManager = require('../instances/instanceManager');
 
-exports.getAll = (req, res) => {
+exports.getAll = async (req, res) => {
+  if (db.isMongo && db.mongoDb && db.getChallenges().length === 0) {
+    await db.syncFromMongo().catch(() => {});
+  }
   const challenges = challengeService.getAllPublicChallenges(req.user);
   res.json({ challenges });
 };
 
-exports.getOne = (req, res) => {
-  const challenge = challengeService.getChallengeDetails(req.params.id, req.user);
+exports.getOne = async (req, res) => {
+  const challengeId = req.params.id;
+  let challenge = challengeService.getChallengeDetails(challengeId, req.user);
+
+  // Fallback direct Atlas lookup if not found in memory cache
+  if (!challenge && db.isMongo && db.mongoDb && challengeId) {
+    try {
+      const cleanId = String(challengeId).trim();
+      const rawDoc = await db.collection('challenges').findOne({
+        $or: [
+          { id: cleanId },
+          { mission_id: cleanId },
+          { slug: cleanId },
+          { title: cleanId },
+          { id: { $regex: new RegExp(`^${cleanId}$`, 'i') } },
+          { mission_id: { $regex: new RegExp(`^${cleanId}$`, 'i') } },
+          { slug: { $regex: new RegExp(`^${cleanId}$`, 'i') } }
+        ]
+      });
+
+      if (rawDoc) {
+        const item = { ...rawDoc };
+        delete item._id;
+        if (!item.id && rawDoc._id) item.id = rawDoc._id.toString();
+        const existing = db.getChallenges().find(c => c.id === item.id);
+        if (!existing) {
+          db.getChallenges().push(item);
+        }
+        challenge = challengeService.getChallengeDetails(item.id, req.user);
+      }
+    } catch (e) {
+      console.warn('[CHALLENGE CONTROLLER] Fallback Atlas lookup warning:', e.message);
+    }
+  }
+
   if (!challenge) {
     return res.status(404).json({ error: 'NOT_FOUND', message: 'Mission dossier classified or nonexistent' });
   }

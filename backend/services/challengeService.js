@@ -37,10 +37,44 @@ class ChallengeService {
   }
 
   getChallengeDetails(challengeId, user) {
-    const c = db.getChallenges().find(item => item.id === challengeId || item.slug === challengeId || item.mission_id === challengeId);
+    if (!challengeId) return null;
+    const cleanId = String(challengeId).trim();
+    const cleanIdLower = cleanId.toLowerCase();
+
+    // 1. Search in-memory cache first (by id, mission_id, slug, or title - case-insensitive)
+    const c = db.getChallenges().find(item => {
+      if (!item) return false;
+      const itemId = item.id ? String(item.id).trim() : '';
+      const itemMissionId = item.mission_id ? String(item.mission_id).trim() : '';
+      const itemSlug = item.slug ? String(item.slug).trim() : '';
+      const itemTitle = item.title ? String(item.title).trim() : '';
+
+      return itemId === cleanId ||
+        itemMissionId === cleanId ||
+        itemSlug === cleanId ||
+        itemId.toLowerCase() === cleanIdLower ||
+        itemMissionId.toLowerCase() === cleanIdLower ||
+        itemSlug.toLowerCase() === cleanIdLower ||
+        itemTitle.toLowerCase() === cleanIdLower;
+    });
+
     if (!c) return null;
 
-    const category = db.getCategories().find(cat => cat.id === c.category_id);
+    // Check if mission is draft and operative is not admin
+    if (c.status === 'DRAFT' && (!user || user.role !== 'ADMIN')) {
+      return null;
+    }
+
+    const categories = db.getCategories();
+    let category = categories.find(cat => cat.id === c.category_id);
+    if (!category && c.category_name) {
+      const catLower = c.category_name.toLowerCase();
+      category = categories.find(cat =>
+        (cat.name && cat.name.toLowerCase() === catLower) ||
+        (cat.slug && cat.slug.toLowerCase() === catLower)
+      );
+    }
+
     const files = db.getFiles().filter(f => f.challenge_id === c.id).map(f => ({
       id: f.id,
       filename: f.filename,
@@ -185,26 +219,73 @@ class ChallengeService {
     const crypto = require('crypto');
     const id = data.id || `ch-${crypto.randomBytes(4).toString('hex')}`;
     const slug = (data.title || 'mission').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const count = db.getChallenges().length + 1;
-    const mission_id = data.mission_id || `OP-${data.category ? data.category.slice(0,3).toUpperCase() : 'SEC'}-${String(count).padStart(2, '0')}`;
+    
+    // Resolve matching category entity from db
+    const categories = db.getCategories();
+    let category = null;
+    if (data.category_id) {
+      category = categories.find(cat => cat.id === data.category_id);
+    }
+    if (!category && data.category) {
+      const catLower = String(data.category).toLowerCase();
+      category = categories.find(cat =>
+        (cat.name && cat.name.toLowerCase() === catLower) ||
+        (cat.slug && cat.slug.toLowerCase() === catLower) ||
+        (cat.id && cat.id.toLowerCase() === catLower)
+      );
+    }
+    const category_id = category ? category.id : (categories[0]?.id || 'cat-01');
+    const category_name = category ? category.name : (data.category || 'MISC');
+
+    // Generate unique non-colliding mission_id
+    let mission_id = (data.mission_id || '').trim();
+    if (!mission_id) {
+      const catPrefix = (data.category ? data.category.slice(0, 3) : (category ? category.name.slice(0, 3) : 'SEC')).toUpperCase();
+      const randHex = crypto.randomBytes(2).toString('hex').toUpperCase();
+      mission_id = `OP-${catPrefix}-${randHex}`;
+    }
+
+    const hasInstance = !!(data.has_instance || data.runtime?.enabled);
+    const dockerImage = data.docker_image || data.runtime?.image || (hasInstance ? 'xploitx/vault:latest' : null);
+    const containerPort = parseInt(data.container_port || data.runtime?.containerPort || 80, 10);
+    const healthCheckPath = data.health_check_path || data.runtime?.healthCheck?.path || '/';
+    const instanceTtlMinutes = parseInt(data.instance_ttl_minutes || data.runtime?.durationMinutes || 30, 10);
+    const cpuLimit = parseFloat(data.cpu_limit || data.runtime?.resources?.cpus || 0.5);
+    const memoryLimit = data.memory_limit || data.runtime?.resources?.memory || '256m';
+    const pidsLimit = parseInt(data.pids_limit || data.runtime?.resources?.pidsLimit || 128, 10);
 
     const newChallenge = {
       id,
-      competition_id: db.getCompetitions()[0]?.id,
-      category_id: data.category_id || db.getCategories()[0]?.id,
-      category_name: data.category || 'MISC',
+      competition_id: db.getCompetitions()[0]?.id || 'c0000000-0000-0000-0000-000000000001',
+      category_id,
+      category_name,
       mission_id,
       slug,
       title: data.title,
       description: data.description || '',
-      difficulty: data.difficulty || 'MEDIUM',
-      base_points: parseInt(data.points || 500, 10),
+      difficulty: (data.difficulty || 'MEDIUM').toUpperCase(),
+      base_points: parseInt(data.points || data.base_points || 500, 10),
       minimum_points: parseInt(data.minimum_points || 100, 10),
       decay_threshold: parseInt(data.decay_threshold || 30, 10),
-      current_points: parseInt(data.points || 500, 10),
+      current_points: parseInt(data.points || data.current_points || data.base_points || 500, 10),
       solve_count: 0,
-      status: data.status || 'PUBLISHED',
-      has_instance: !!data.has_instance,
+      status: (data.status || 'PUBLISHED').toUpperCase(),
+      has_instance: hasInstance,
+      docker_image: dockerImage,
+      container_port: containerPort,
+      health_check_path: healthCheckPath,
+      instance_ttl_minutes: instanceTtlMinutes,
+      cpu_limit: cpuLimit,
+      memory_limit: memoryLimit,
+      runtime: hasInstance ? {
+        enabled: true,
+        image: dockerImage,
+        containerPort,
+        protocol: 'http',
+        healthCheck: { type: 'http', path: healthCheckPath },
+        resources: { cpus: cpuLimit, memory: memoryLimit, pidsLimit },
+        durationMinutes: instanceTtlMinutes
+      } : { enabled: false },
       instance_host: data.instance_host || null,
       instance_port: data.instance_port || null,
       created_at: new Date().toISOString()
@@ -252,34 +333,73 @@ class ChallengeService {
   }
 
   updateChallenge(id, data) {
-    const c = db.getChallenges().find(item => item.id === id);
+    const cleanId = String(id).trim();
+    const cleanIdLower = cleanId.toLowerCase();
+    const c = db.getChallenges().find(item =>
+      item.id === cleanId ||
+      item.slug === cleanId ||
+      item.mission_id === cleanId ||
+      (item.id && item.id.toLowerCase() === cleanIdLower) ||
+      (item.slug && item.slug.toLowerCase() === cleanIdLower) ||
+      (item.mission_id && item.mission_id.toLowerCase() === cleanIdLower)
+    );
     if (!c) throw new Error('Challenge not found');
 
-    if (data.title) c.title = data.title;
+    if (data.title) {
+      c.title = data.title;
+      c.slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    }
     if (data.description) c.description = data.description;
-    if (data.difficulty) c.difficulty = data.difficulty;
-    if (data.category) c.category_name = data.category;
+    if (data.difficulty) c.difficulty = data.difficulty.toUpperCase();
+    if (data.category) {
+      c.category_name = data.category;
+      const categories = db.getCategories();
+      const catLower = String(data.category).toLowerCase();
+      const matched = categories.find(cat =>
+        (cat.name && cat.name.toLowerCase() === catLower) ||
+        (cat.slug && cat.slug.toLowerCase() === catLower)
+      );
+      if (matched) c.category_id = matched.id;
+    }
     if (data.points) c.current_points = parseInt(data.points, 10);
+    if (data.minimum_points) c.minimum_points = parseInt(data.minimum_points, 10);
+    if (data.decay_threshold) c.decay_threshold = parseInt(data.decay_threshold, 10);
+    
+    if (data.has_instance !== undefined) c.has_instance = !!data.has_instance;
+    if (data.docker_image !== undefined) c.docker_image = data.docker_image;
+    if (data.container_port !== undefined) c.container_port = parseInt(data.container_port, 10);
+    if (data.health_check_path !== undefined) c.health_check_path = data.health_check_path;
+    if (data.instance_ttl_minutes !== undefined) c.instance_ttl_minutes = parseInt(data.instance_ttl_minutes, 10);
+    if (data.cpu_limit !== undefined) c.cpu_limit = parseFloat(data.cpu_limit);
+    if (data.memory_limit !== undefined) c.memory_limit = data.memory_limit;
+    if (data.runtime) {
+      c.runtime = data.runtime;
+      if (data.runtime.enabled !== undefined) c.has_instance = !!data.runtime.enabled;
+      if (data.runtime.image) c.docker_image = data.runtime.image;
+      if (data.runtime.containerPort) c.container_port = data.runtime.containerPort;
+    }
+
     if (data.status) {
-      if (data.status === 'PUBLISHED' || data.status === 'LIVE') {
+      const targetStatus = data.status.toUpperCase();
+      if (targetStatus === 'PUBLISHED' || targetStatus === 'LIVE') {
         const check = this.validateChallengeForPublish(c);
         if (!check.valid) {
           throw new Error(`PRE_PUBLISH_VALIDATION_FAILED: ${check.errors.join('; ')}`);
         }
       }
-      c.status = data.status;
+      c.status = targetStatus;
     }
 
     if (data.flag) {
-      const fl = db.getFlags().find(f => f.challenge_id === id);
+      const fl = db.getFlags().find(f => f.challenge_id === c.id);
       if (fl) {
-        fl.flag_value = data.flag;
+        fl.flag_value = data.flag.trim();
       } else {
         db.getFlags().push({
           id: `f-${Date.now()}`,
-          challenge_id: id,
+          challenge_id: c.id,
           flag_type: 'STATIC',
-          flag_value: data.flag,
+          flag_value: data.flag.trim(),
           case_sensitive: true
         });
       }

@@ -10,7 +10,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   Navbar.render('navbar-container', 'challenges');
 
   const params = new URLSearchParams(location.search);
-  const challengeId = params.get('id');
+  const rawId = params.get('id') || params.get('challengeId') || params.get('mission_id') || params.get('slug');
+  const challengeId = rawId ? decodeURIComponent(rawId).trim() : null;
 
   if (!challengeId) {
     window.location.href = '/challenges.html';
@@ -114,8 +115,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     } catch (err) {
       document.getElementById('missionContentArea').innerHTML = `
-        <div style="color:var(--danger); font-family:var(--font-mono); padding:40px; text-align:center;">
-          CLASSIFIED MISSION UNAVAILABLE: ${err.message}
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:50px 20px; text-align:center; max-width:640px; margin:40px auto; grid-column:1 / -1;">
+          <div style="font-size:36px; margin-bottom:12px;">🛡️</div>
+          <h2 style="font-family:var(--font-heading); color:var(--danger); font-size:20px; font-weight:800; margin-bottom:12px;">
+            CLASSIFIED MISSION UNAVAILABLE
+          </h2>
+          <p style="color:var(--text-secondary); font-family:var(--font-mono); font-size:13px; line-height:1.6; margin-bottom:24px;">
+            ${err.message || 'Mission dossier classified or nonexistent.'}
+          </p>
+          <a href="/challenges.html" class="btn btn-primary" style="text-decoration:none; display:inline-block; padding:12px 24px;">
+            ← RETURN TO ALL MISSIONS
+          </a>
         </div>
       `;
     }
