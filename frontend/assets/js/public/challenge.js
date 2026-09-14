@@ -36,26 +36,67 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function loadChallenge() {
     try {
-      const data = await window.api.getChallenge(challengeId);
+      let data = null;
+
+      // Check if preview mode requested
+      if (challengeId === 'preview' || challengeId === 'draft') {
+        const previewStr = sessionStorage.getItem('xploitx_challenge_preview');
+        if (previewStr) {
+          try { data = JSON.parse(previewStr); } catch (e) {}
+        }
+      }
+
+      if (!data) {
+        try {
+          data = await window.api.getChallenge(challengeId);
+        } catch (apiErr) {
+          // If API returns 404, check if there's a cached preview draft
+          const previewStr = sessionStorage.getItem('xploitx_challenge_preview');
+          if (previewStr) {
+            try {
+              const cached = JSON.parse(previewStr);
+              if (cached.id === challengeId || challengeId === 'preview') {
+                data = cached;
+              }
+            } catch (e) {}
+          }
+          if (!data) throw apiErr;
+        }
+      }
+
       currentChallenge = data;
 
       document.title = `${data.title} // XPLOITX CYBER BATTLEFIELD`;
       document.getElementById('missionIdBadge').textContent = data.mission_id || 'OP-CLASSIFIED';
-      document.getElementById('missionCategoryBadge').textContent = `[ ${data.category} ]`;
+      document.getElementById('missionCategoryBadge').textContent = `[ ${data.category || 'MISC'} ]`;
       document.getElementById('missionCategoryBadge').style.color = data.category_color || 'var(--accent)';
       document.getElementById('missionDifficultyBadge').innerHTML = window.Utils.getDifficultyBadge(data.difficulty);
       document.getElementById('missionPoints').textContent = window.Utils.formatXP(data.points);
       document.getElementById('missionSolves').textContent = `${data.solve_count || 0} Solves`;
       document.getElementById('missionTitle').textContent = data.title;
-      document.getElementById('missionDescription').textContent = data.description;
+      document.getElementById('missionDescription').textContent = data.description || 'No briefing details provided.';
 
-      // Status indicator
+      // Status indicator / Preview notification
       const solvedBanner = document.getElementById('missionSolvedBanner');
-      if (data.is_solved) {
-        solvedBanner.style.display = 'block';
-        document.getElementById('flagSubmitBtn').textContent = 'MISSION SECURED';
-        document.getElementById('flagSubmitBtn').classList.remove('btn-primary');
-        document.getElementById('flagSubmitBtn').classList.add('btn-outline');
+      if (challengeId === 'preview' || data.is_preview) {
+        if (solvedBanner) {
+          solvedBanner.style.display = 'block';
+          solvedBanner.style.background = 'rgba(0, 216, 246, 0.1)';
+          solvedBanner.style.borderColor = 'var(--cyan)';
+          solvedBanner.style.color = 'var(--cyan)';
+          solvedBanner.textContent = '👁️ LIVE DOSSIER PREVIEW // DRAFT TRANSMISSION SIMULATION';
+        }
+      } else if (data.is_solved) {
+        if (solvedBanner) {
+          solvedBanner.style.display = 'block';
+          solvedBanner.style.background = 'var(--accent-muted)';
+          solvedBanner.style.borderColor = 'var(--accent)';
+          solvedBanner.style.color = 'var(--accent)';
+          solvedBanner.textContent = '✓ MISSION SECURED // FLAG SUCCESSFULLY RECOVERED BY YOUR SQUAD';
+          document.getElementById('flagSubmitBtn').textContent = 'MISSION SECURED';
+          document.getElementById('flagSubmitBtn').classList.remove('btn-primary');
+          document.getElementById('flagSubmitBtn').classList.add('btn-outline');
+        }
       }
 
       // Render Files

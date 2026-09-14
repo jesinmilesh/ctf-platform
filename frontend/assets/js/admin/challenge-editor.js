@@ -94,18 +94,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     const title = document.getElementById('editTitle').value || 'Untitled Mission';
     const category = document.getElementById('editCategory').value || 'PWN';
     const difficulty = document.getElementById('editDifficulty').value || 'MEDIUM';
-    const points = document.getElementById('editPoints').value || 500;
+    const points = parseInt(document.getElementById('editPoints').value || 500, 10);
     const desc = document.getElementById('editDescription').value || 'No briefing details entered yet.';
+    const missionId = document.getElementById('editMissionId')?.value || 'OP-PREVIEW';
+    const hasInst = document.getElementById('editHasInstance')?.checked;
 
     const previewChallenge = {
-      id: 'preview',
+      id: editingId || 'preview',
+      mission_id: missionId,
       title,
       category,
+      category_color: '#00ff9c',
       difficulty,
       points,
       solve_count: 0,
-      is_solved: false
+      description: desc,
+      has_instance: !!hasInst,
+      is_solved: false,
+      files: [],
+      hints: []
     };
+
+    try {
+      sessionStorage.setItem('xploitx_challenge_preview', JSON.stringify(previewChallenge));
+    } catch (e) {}
 
     document.getElementById('previewCardSlot').innerHTML = ChallengeCard.render(previewChallenge);
     document.getElementById('previewBriefingSlot').textContent = desc;

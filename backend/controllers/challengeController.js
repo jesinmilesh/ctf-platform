@@ -18,6 +18,28 @@ exports.getAll = async (req, res) => {
 
 exports.getOne = async (req, res) => {
   const challengeId = req.params.id;
+
+  if (challengeId === 'preview') {
+    return res.json({
+      id: 'preview',
+      mission_id: 'OP-PREVIEW',
+      slug: 'preview-mission',
+      title: 'Mission Dossier Live Preview',
+      category: 'Web',
+      category_color: '#00d8f6',
+      difficulty: 'MEDIUM',
+      points: 500,
+      solve_count: 0,
+      description: 'This is an operational live preview of your mission dossier. Save or publish to make active across the digital battlefield.',
+      has_instance: false,
+      instance: null,
+      files: [],
+      hints: [],
+      is_solved: false,
+      is_preview: true
+    });
+  }
+
   let challenge = challengeService.getChallengeDetails(challengeId, req.user);
 
   // Fallback direct Atlas lookup if not found in memory cache

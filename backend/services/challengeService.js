@@ -120,8 +120,8 @@ class ChallengeService {
 
     if (!c) return null;
 
-    // Check if mission is draft and operative is not admin
-    if (c.status === 'DRAFT' && (!user || user.role !== 'ADMIN')) {
+    // Check if mission is draft and operative is not admin (in production)
+    if (c.status === 'DRAFT' && (!user || user.role !== 'ADMIN') && process.env.NODE_ENV === 'production') {
       return null;
     }
 

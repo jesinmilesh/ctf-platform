@@ -396,7 +396,11 @@ class DatabaseEngine {
         for (const item of items) {
           const doc = { ...item };
           delete doc._id;
-          const filter = doc.id ? { id: doc.id } : { _id: item._id };
+          const itemId = doc.id || doc._id || doc.instanceId;
+          if (itemId && !doc.id) doc.id = String(itemId);
+          const filter = doc.instanceId
+            ? { $or: [{ instanceId: doc.instanceId }, { id: String(itemId) }] }
+            : (itemId ? { id: String(itemId) } : { _id: item._id });
           await coll.updateOne(filter, { $set: doc }, { upsert: true });
         }
       }
@@ -457,7 +461,10 @@ class DatabaseEngine {
       const docId = item.id || item._id || item.instanceId;
       if (docId) {
         if (!toSave.id) toSave.id = String(docId);
-        await coll.updateOne({ id: toSave.id }, { $set: toSave }, { upsert: true });
+        const filter = toSave.instanceId
+          ? { $or: [{ instanceId: toSave.instanceId }, { id: toSave.id }] }
+          : { id: toSave.id };
+        await coll.updateOne(filter, { $set: toSave }, { upsert: true });
       } else {
         await coll.insertOne(toSave);
       }
@@ -468,7 +475,7 @@ class DatabaseEngine {
     if (!this.isMongo || !this.mongoDb || !items || items.length === 0) return;
     const colName = COLLECTION_MAP[collectionKey] || collectionKey;
     const coll = this.mongoDb.collection(colName);
-    const ids = items.map(i => i.id).filter(Boolean);
+    const ids = items.map(i => i.id || i.instanceId).filter(Boolean);
     if (ids.length > 0) {
       await coll.deleteMany({ id: { $in: ids } });
     }

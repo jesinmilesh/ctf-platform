@@ -19,6 +19,9 @@ const ChallengeCard = {
     else if (difficulty === 'HARD') diffColor = 'var(--warning)';
     else if (difficulty === 'INSANE') diffColor = 'var(--danger)';
 
+    const targetId = challenge.id || challenge._id || challenge.mission_id || challenge.slug || 'preview';
+    const isPreview = targetId === 'preview';
+
     return `
       <article class="mission-card ${isSolved ? 'solved' : ''}" style="${isSolved ? 'border-color: rgba(0, 255, 156, 0.4);' : ''}">
         <div class="mission-card-top" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -26,7 +29,7 @@ const ChallengeCard = {
             [ ${esc(categoryName.toUpperCase())} ]
           </span>
           <span class="mission-status" style="font-family:var(--font-mono); font-size:11px; color:${isSolved ? 'var(--accent)' : 'var(--text-secondary)'}; font-weight:600;">
-            ${isSolved ? '✓ CAPTURED' : '● ACTIVE'}
+            ${isSolved ? '✓ CAPTURED' : (isPreview ? '👁 PREVIEW' : '● ACTIVE')}
           </span>
         </div>
 
@@ -46,8 +49,8 @@ const ChallengeCard = {
           <span>${challenge.solve_count || 0} SOLVES</span>
         </div>
 
-        <a href="/challenge.html?id=${encodeURIComponent(challenge.id)}" class="btn ${isSolved ? 'btn-outline' : 'btn-primary'}" style="width:100%; text-decoration:none;">
-          ${isSolved ? 'REVIEW MISSION' : 'OPEN MISSION'}
+        <a href="/challenge.html?id=${encodeURIComponent(targetId)}" class="btn ${isSolved ? 'btn-outline' : 'btn-primary'}" style="width:100%; text-decoration:none;">
+          ${isSolved ? 'REVIEW MISSION' : (isPreview ? 'PREVIEW DOSSIER ↗' : 'OPEN MISSION')}
         </a>
       </article>
     `;
