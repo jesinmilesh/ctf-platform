@@ -1,0 +1,25 @@
+{
+  "name": "xploitx-docker-agent",
+  "version": "1.0.0",
+  "description": "Autonomous, secure, and isolated Docker challenge orchestration agent for XploitX CTF platform",
+  "main": "src/agent.js",
+  "scripts": {
+    "start": "node src/agent.js",
+    "pair": "node src/agent.js pair",
+    "test": "node test/test-docker-agent-pipeline.js",
+    "test:pipeline": "node test/test-docker-agent-pipeline.js --backend http://localhost:4000"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "keywords": [
+    "xploitx",
+    "ctf",
+    "docker",
+    "agent",
+    "cybersecurity",
+    "orchestrator"
+  ],
+  "author": "XploitX Engineering Team",
+  "license": "UNLICENSED"
+}

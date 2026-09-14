@@ -15,9 +15,15 @@ const db = require('../config/database');
 const env = require('../config/environment');
 const portAllocator = require('./portAllocator');
 const dockerManager = require('./dockerManager');
+const dockerClient = require('./dockerClient');
 const instanceRouter = require('./instanceRouter');
 const realtimeService = require('../services/realtimeService');
 const Events = require('../realtime/events');
+
+// Lazy-load agentManager to avoid circular dependencies at startup
+function getAgentManager() {
+  try { return require('../agents/agentManager'); } catch { return null; }
+}
 
 class InstanceManager {
   /**
@@ -154,43 +160,103 @@ class InstanceManager {
     });
 
     let containerInfo;
-    try {
-      containerInfo = await dockerManager.spawnContainer({
-        instanceId,
-        challenge,
-        hostPort: allocatedPort,
-        teamId,
-        userId
-      });
-    } catch (err) {
-      // Failure rollback: stop & remove container, release port
-      console.error(`[SPAWN ROLLBACK] Rolling back instance ${instanceId}:`, err.message);
-      await portAllocator.release(allocatedPort).catch(() => {});
+    let routedViaAgent = false;
+    let assignedAgentId = null;
 
-      const failedRecord = {
-        id: instanceId,
-        instanceId,
-        challengeId: challenge.id,
-        competitionId: challenge.competition_id || null,
-        teamId,
-        ownerUserId: userId,
-        port: allocatedPort,
-        status: 'FAILED',
-        failureReason: err.message,
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date().toISOString()
-      };
-      if (db.getInstances) db.getInstances().push(failedRecord);
-      await db.persistDoc('instances', failedRecord).catch(() => {});
+    // ── Routing decision: Local Docker vs. Remote Agent ───────────────────
+    const localDockerAvailable = await dockerClient.isAvailable().catch(() => false);
 
-      await realtimeService.broadcastInstanceEvent(Events.INSTANCE_FAILED || 'instance.failed', {
-        instanceId,
-        challengeId: challenge.id,
-        teamId,
-        status: 'FAILED',
-        error: err.message
-      });
-      throw err;
+    if (localDockerAvailable) {
+      // Direct local Docker Engine path
+      try {
+        containerInfo = await dockerManager.spawnContainer({
+          instanceId,
+          challenge,
+          hostPort: allocatedPort,
+          teamId,
+          userId
+        });
+      } catch (err) {
+        // Failure rollback
+        console.error(`[SPAWN ROLLBACK] Rolling back instance ${instanceId}:`, err.message);
+        await portAllocator.release(allocatedPort).catch(() => {});
+        const failedRecord = {
+          id: instanceId, instanceId,
+          challengeId: challenge.id, competitionId: challenge.competition_id || null,
+          teamId, ownerUserId: userId, port: allocatedPort,
+          status: 'FAILED', failureReason: err.message,
+          createdAt: new Date().toISOString(), expiresAt: new Date().toISOString()
+        };
+        if (db.getInstances) db.getInstances().push(failedRecord);
+        await db.persistDoc('instances', failedRecord).catch(() => {});
+        await realtimeService.broadcastInstanceEvent(Events.INSTANCE_FAILED || 'instance.failed', {
+          instanceId, challengeId: challenge.id, teamId, status: 'FAILED', error: err.message
+        });
+        throw err;
+      }
+    } else {
+      // ── Remote Docker Agent path ─────────────────────────────────────────
+      const agentManager = getAgentManager();
+      assignedAgentId = agentManager ? agentManager.getBestAgent() : null;
+
+      if (!assignedAgentId) {
+        await portAllocator.release(allocatedPort).catch(() => {});
+        const offlineErr = Object.assign(
+          new Error('AGENT_OFFLINE: No Docker Agent is currently connected. Please start the XploitX Docker Agent on the host machine.'),
+          { code: 'AGENT_OFFLINE', statusCode: 503 }
+        );
+        await realtimeService.broadcastInstanceEvent(Events.INSTANCE_FAILED || 'instance.failed', {
+          instanceId, challengeId: challenge.id, teamId, status: 'FAILED',
+          error: offlineErr.message, code: 'AGENT_OFFLINE'
+        });
+        throw offlineErr;
+      }
+
+      routedViaAgent = true;
+      console.log(`[INSTANCE MANAGER] Routing instance ${instanceId} to agent ${assignedAgentId}`);
+
+      try {
+        // Send START_INSTANCE command to agent; agent responds with container info
+        const agentResponse = await agentManager.sendCommand(assignedAgentId, 'START_INSTANCE', {
+          instanceId,
+          image: challenge.runtime?.image || challenge.docker_image,
+          containerPort: challenge.runtime?.port || challenge.container_port || 80,
+          hostPort: allocatedPort,
+          protocol: challenge.protocol || 'http',
+          ttlMinutes: challenge.runtime?.durationMinutes || challenge.instance_ttl_minutes || 30,
+          resourceLimits: {
+            memoryMb: challenge.runtime?.memoryMb || 256,
+            cpuPercent: challenge.runtime?.cpuPercent || 50,
+            pids: challenge.runtime?.pids || 64
+          },
+          labels: { challengeId: challenge.id, teamId: teamId || '', instanceId }
+        }, 60_000);
+
+        containerInfo = {
+          containerId: agentResponse.containerId || instanceId,
+          containerName: agentResponse.containerName || `xploitx-${instanceId}`,
+          host: agentResponse.host || '127.0.0.1',
+          port: agentResponse.port || allocatedPort,
+          protocol: agentResponse.protocol || challenge.protocol || 'http',
+          url: agentResponse.url || null,
+          connectionCommand: agentResponse.connectionCommand || null
+        };
+      } catch (err) {
+        await portAllocator.release(allocatedPort).catch(() => {});
+        const failedRecord = {
+          id: instanceId, instanceId,
+          challengeId: challenge.id, competitionId: challenge.competition_id || null,
+          teamId, ownerUserId: userId, port: allocatedPort,
+          status: 'FAILED', failureReason: err.message,
+          createdAt: new Date().toISOString(), expiresAt: new Date().toISOString()
+        };
+        if (db.getInstances) db.getInstances().push(failedRecord);
+        await db.persistDoc('instances', failedRecord).catch(() => {});
+        await realtimeService.broadcastInstanceEvent(Events.INSTANCE_FAILED || 'instance.failed', {
+          instanceId, challengeId: challenge.id, teamId, status: 'FAILED', error: err.message
+        });
+        throw err;
+      }
     }
 
     // 6. Record RUNNING Instance in MongoDB Atlas (Section 8)
@@ -230,7 +296,14 @@ class InstanceManager {
       container_id: containerInfo.containerId,
       created_at: new Date().toISOString(),
       expires_at: expiresAt,
-      lastHealthCheck: new Date().toISOString()
+      lastHealthCheck: new Date().toISOString(),
+
+      // Agent routing metadata
+      metadata: {
+        agentId: assignedAgentId || null,
+        routedViaAgent,
+        connectionCommand: containerInfo.connectionCommand || null
+      }
     };
 
     if (db.getInstances) db.getInstances().push(instanceRecord);

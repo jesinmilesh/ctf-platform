@@ -81,24 +81,36 @@ const InstancePanel = {
 
     // Failed State
     if (instance.status === 'FAILED') {
+      const isAgentOffline = instance.code === 'AGENT_OFFLINE' || (instance.error || '').includes('AGENT_OFFLINE');
+      const isAgentTimeout = instance.code === 'AGENT_TIMEOUT';
+
+      const icon = isAgentOffline ? '🔌' : '⚠';
+      const headline = isAgentOffline ? 'AGENT OFFLINE' : isAgentTimeout ? 'AGENT TIMEOUT' : 'PROVISIONING FAILED';
+      const detail = instance.errorDetail || instance.error || 'Container failed to initialize. Resource limits or image error.';
+      const borderColor = isAgentOffline ? '#ff9500' : 'var(--danger)';
+      const textColor = isAgentOffline ? '#ff9500' : 'var(--danger)';
+
       container.innerHTML = `
-        <div style="background:var(--bg-secondary); border:1px solid var(--border); border-left:3px solid var(--danger); padding:16px; border-radius:var(--radius-sm);">
+        <div style="background:var(--bg-secondary); border:1px solid var(--border); border-left:3px solid ${borderColor}; padding:16px; border-radius:var(--radius-sm);">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <div style="display:flex; align-items:center; gap:8px;">
-              <span class="telemetry-status-dot" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--danger);"></span>
-              <span style="font-family:var(--font-mono); font-size:12px; color:var(--danger); font-weight:700;">PROVISIONING FAILED</span>
+              <span style="font-size:16px;">${icon}</span>
+              <span style="font-family:var(--font-mono); font-size:12px; color:${textColor}; font-weight:700;">${headline}</span>
             </div>
-            <button type="button" id="retrySpawnBtn" class="btn btn-sm btn-primary">RETRY</button>
+            ${!isAgentOffline ? `<button type="button" id="retrySpawnBtn" class="btn btn-sm btn-primary">RETRY</button>` : ''}
           </div>
-          <div style="font-size:12px; font-family:var(--font-mono); color:var(--text-secondary); margin-top:6px;">
-            ${instance.error || 'Container failed to initialize. Resource limits or image error.'}
+          <div style="font-size:12px; font-family:var(--font-mono); color:var(--text-secondary); margin-top:8px; line-height:1.6;">
+            ${detail}
           </div>
         </div>
       `;
-      const retryBtn = container.querySelector('#retrySpawnBtn');
-      if (retryBtn) retryBtn.addEventListener('click', onSpawn);
+      if (!isAgentOffline) {
+        const retryBtn = container.querySelector('#retrySpawnBtn');
+        if (retryBtn) retryBtn.addEventListener('click', onSpawn);
+      }
       return;
     }
+
 
     // Active RUNNING state
     const expiresAtMs = new Date(instance.expiresAt || instance.expires_at).getTime();

@@ -24,6 +24,7 @@ const { errorHandler } = require('./middleware/errorHandler');
 // Real-Time EventBus & WebSocket Server
 const eventBus = require('./realtime/eventBus');
 const wsServer = require('./realtime/websocketServer');
+const agentWss = require('./agents/agentWebSocketServer');
 const cleanupWorker = require('./instances/cleanupWorker');
 
 // Services & Controllers
@@ -44,6 +45,7 @@ const fileRoutes = require('./routes/files');
 const instanceRoutes = require('./routes/instances');
 const syncRoutes = require('./routes/sync');
 const adminRoutes = require('./routes/admin');
+const agentRoutes = require('./routes/agents');
 const healthRoutes = require('./routes/health.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
 const notificationsRoutes = require('./routes/notifications.routes');
@@ -135,6 +137,11 @@ app.use(authMiddleware);
 // --------------------------------------------------------------------------
 wsServer.attach(server);
 
+// --------------------------------------------------------------------------
+// Agent WebSocket Channel (Dedicated agent authentication gateway)
+// --------------------------------------------------------------------------
+agentWss.attach(server);
+
 function broadcastEvent(type, payload) {
   wsServer.broadcast({
     type,
@@ -147,6 +154,7 @@ function broadcastEvent(type, payload) {
 // Wire broadcasting into services
 submissionService.setBroadcaster(broadcastEvent);
 adminController.setBroadcaster(broadcastEvent);
+agentWss.setBroadcaster(broadcastEvent);
 
 // --------------------------------------------------------------------------
 // Canonical API Route Router & Mounting (Section 9 & 10)
@@ -182,6 +190,7 @@ apiRouter.use('/notifications', notificationsRoutes);
 apiRouter.use('/analytics', analyticsRoutes);
 apiRouter.use('/sync', syncRoutes);
 apiRouter.use('/admin', adminRoutes);
+apiRouter.use('/agents', agentRoutes);
 
 // 1. Canonical API Contract: /api/v1/*
 app.use('/api/v1', apiRouter);

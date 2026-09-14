@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SANDBOX DAEMONS // XPLOITX C2</title>
-  <meta name="description" content="Containerized challenge target lifecycle and port allocation manager.">
+  <title>INFRASTRUCTURE // XPLOITX C2</title>
+  <meta name="description" content="Docker Agent management and active container sandbox lifecycle control.">
 
   <link rel="stylesheet" href="/assets/css/variables.css">
   <link rel="stylesheet" href="/assets/css/reset.css">
@@ -13,6 +13,263 @@
   <link rel="stylesheet" href="/assets/css/animations.css">
   <link rel="stylesheet" href="/assets/css/responsive.css">
   <link rel="stylesheet" href="/assets/css/admin.css">
+
+  <style>
+    /* ── Tab System ──────────────────────────────────────────── */
+    .infra-tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 4px;
+      margin-bottom: 24px;
+      width: fit-content;
+    }
+    .infra-tab {
+      padding: 8px 20px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      background: transparent;
+      border: none;
+      border-radius: calc(var(--radius-md) - 4px);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .infra-tab.active {
+      background: var(--cyan);
+      color: #000;
+    }
+    .infra-tab:hover:not(.active) { background: var(--bg-card); color: var(--text-primary); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Agent Cards ──────────────────────────────────────────── */
+    .agents-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .agent-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .agent-card.online { border-color: rgba(0, 255, 136, 0.35); }
+    .agent-card.offline { border-color: rgba(255, 82, 82, 0.25); opacity: 0.8; }
+    .agent-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+    }
+    .agent-card.online::before { background: linear-gradient(90deg, var(--cyan), #00ff88); }
+    .agent-card.offline::before { background: var(--danger); }
+
+    .agent-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .agent-status-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .agent-status-dot.online {
+      background: #00ff88;
+      box-shadow: 0 0 8px #00ff88;
+      animation: pulse-online 2s ease-in-out infinite;
+    }
+    .agent-status-dot.offline { background: var(--danger); }
+    @keyframes pulse-online {
+      0%, 100% { opacity: 1; box-shadow: 0 0 8px #00ff88; }
+      50% { opacity: 0.7; box-shadow: 0 0 16px #00ff88; }
+    }
+
+    .agent-name {
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text-primary);
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .agent-version {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+      background: var(--bg-secondary);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .agent-telemetry {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .telemetry-item {
+      background: var(--bg-secondary);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+    .telemetry-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 2px;
+    }
+    .telemetry-value {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--cyan);
+    }
+
+    .agent-meta {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      line-height: 1.6;
+    }
+    .agent-meta span { color: var(--text-secondary); }
+
+    .agent-actions { display: flex; gap: 8px; }
+    .btn-danger-ghost {
+      padding: 6px 12px;
+      font-size: 11px;
+      background: transparent;
+      border: 1px solid var(--danger);
+      color: var(--danger);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      transition: all 0.2s;
+    }
+    .btn-danger-ghost:hover { background: var(--danger); color: #fff; }
+
+    /* ── Pairing Modal ────────────────────────────────────────── */
+    .pairing-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .pairing-modal-overlay.open { display: flex; }
+    .pairing-modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      max-width: 520px;
+      width: 90%;
+      position: relative;
+    }
+    .pairing-code-display {
+      background: var(--bg-secondary);
+      border: 1px solid var(--cyan);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      text-align: center;
+      margin: 20px 0;
+      font-family: var(--font-mono);
+      font-size: 28px;
+      font-weight: 900;
+      color: var(--cyan);
+      letter-spacing: 0.15em;
+      cursor: pointer;
+      position: relative;
+      transition: background 0.2s;
+    }
+    .pairing-code-display:hover { background: rgba(0, 200, 255, 0.08); }
+    .pairing-code-display .copy-hint {
+      font-size: 10px;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+      margin-top: 4px;
+      display: block;
+      font-weight: 400;
+    }
+    .pairing-countdown {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--warning);
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    .pairing-instructions {
+      background: var(--bg-secondary);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.8;
+    }
+    .pairing-instructions .cmd {
+      color: var(--cyan);
+      background: rgba(0,200,255,0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      display: inline-block;
+      word-break: break-all;
+    }
+    .modal-close-btn {
+      position: absolute;
+      top: 16px; right: 16px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      border-radius: 6px;
+      padding: 4px 10px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+
+    /* ── Empty / Skeleton states ──────────────────────────────── */
+    .empty-infra {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    .empty-infra .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.4; }
+    .empty-infra .empty-title { font-size: 14px; color: var(--text-secondary); margin-bottom: 6px; font-weight: 700; }
+    .empty-infra .empty-desc { font-size: 12px; }
+
+    /* ── Status badges ────────────────────────────────────────── */
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; }
+    .badge-running { background: rgba(0,255,136,0.12); color: #00ff88; border: 1px solid rgba(0,255,136,0.25); }
+    .badge-failed  { background: rgba(255,82,82,0.12); color: var(--danger); border: 1px solid rgba(255,82,82,0.25); }
+    .badge-starting{ background: rgba(255,190,0,0.12); color: var(--warning); border: 1px solid rgba(255,190,0,0.25); }
+    .badge-stopped { background: rgba(120,120,120,0.12); color: #888; border: 1px solid rgba(120,120,120,0.25); }
+    .badge-online  { background: rgba(0,255,136,0.12); color: #00ff88; border: 1px solid rgba(0,255,136,0.3); }
+    .badge-offline { background: rgba(255,82,82,0.10); color: var(--danger); border: 1px solid rgba(255,82,82,0.25); }
+  </style>
 </head>
 <body>
 
@@ -30,40 +287,102 @@
       <div id="admin-sidebar-container"></div>
 
       <main>
-        <div style="margin-bottom:24px;">
-          <span style="font-family:var(--font-mono); font-size:11px; color:var(--cyan); font-weight:700; letter-spacing:0.1em;">
-            CONTAINER ORCHESTRATION // DOCKER DAEMONS
-          </span>
-          <h1 style="font-family:var(--font-heading); font-size:26px; font-weight:800; color:#fff; margin:2px 0 0 0;">
-            Active Sandboxes & Targets
-          </h1>
+        <!-- Page Header -->
+        <div style="display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+          <div>
+            <span style="font-family:var(--font-mono); font-size:11px; color:var(--cyan); font-weight:700; letter-spacing:0.1em;">
+              INFRASTRUCTURE CONTROL // DOCKER AGENTS &amp; SANDBOXES
+            </span>
+            <h1 style="font-family:var(--font-heading); font-size:26px; font-weight:800; color:#fff; margin:2px 0 0 0;">
+              Infrastructure C2
+            </h1>
+          </div>
+          <button id="btnPairAgent" class="btn btn-primary" style="font-family:var(--font-mono); font-size:12px; font-weight:700;">
+            ⚡ PAIR NEW AGENT
+          </button>
         </div>
 
-        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden;">
-          <table style="width:100%; border-collapse:collapse; text-align:left;">
-            <thead>
-              <tr style="background:var(--bg-secondary); border-bottom:1px solid var(--border); font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); text-transform:uppercase;">
-                <th style="padding:12px 16px;">Instance ID</th>
-                <th style="padding:12px 16px;">Mission</th>
-                <th style="padding:12px 16px;">Squad</th>
-                <th style="padding:12px 16px;">Container ID</th>
-                <th style="padding:12px 16px;">Port</th>
-                <th style="padding:12px 16px;">Status</th>
-                <th style="padding:12px 16px;">Health</th>
-                <th style="padding:12px 16px;">Expires</th>
-                <th style="padding:12px 16px; text-align:right;">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="adminInstancesTableBody">
-              <tr>
-                <td colspan="9" style="text-align:center; padding:30px; color:var(--text-secondary); font-family:var(--font-mono);">
-                  POLLING CONTAINER RUNTIME...
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <!-- Tab Switcher -->
+        <div class="infra-tabs" role="tablist">
+          <button class="infra-tab active" id="tab-agents" role="tab" aria-selected="true" onclick="switchTab('agents')">
+            🖥 DOCKER AGENTS
+          </button>
+          <button class="infra-tab" id="tab-sandboxes" role="tab" aria-selected="false" onclick="switchTab('sandboxes')">
+            📦 ACTIVE SANDBOXES
+          </button>
+        </div>
+
+        <!-- ── Tab: Docker Agents ───────────────────────── -->
+        <div id="panel-agents" class="tab-panel active">
+          <div id="agentsGrid" class="agents-grid">
+            <div class="empty-infra">
+              <div class="empty-icon">🔌</div>
+              <div class="empty-title">POLLING AGENT REGISTRY...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Tab: Active Sandboxes ───────────────────── -->
+        <div id="panel-sandboxes" class="tab-panel">
+          <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse; text-align:left;">
+              <thead>
+                <tr style="background:var(--bg-secondary); border-bottom:1px solid var(--border); font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); text-transform:uppercase;">
+                  <th style="padding:12px 16px;">Instance ID</th>
+                  <th style="padding:12px 16px;">Mission</th>
+                  <th style="padding:12px 16px;">Agent</th>
+                  <th style="padding:12px 16px;">Port</th>
+                  <th style="padding:12px 16px;">Status</th>
+                  <th style="padding:12px 16px;">Health</th>
+                  <th style="padding:12px 16px;">Expires</th>
+                  <th style="padding:12px 16px; text-align:right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="adminInstancesTableBody">
+                <tr>
+                  <td colspan="8" style="text-align:center; padding:30px; color:var(--text-secondary); font-family:var(--font-mono);">
+                    POLLING CONTAINER RUNTIME...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </main>
+    </div>
+  </div>
+
+  <!-- ── Pairing Modal ─────────────────────────────────────── -->
+  <div id="pairingModalOverlay" class="pairing-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="pairingModalTitle">
+    <div class="pairing-modal">
+      <button class="modal-close-btn" onclick="closePairingModal()">✕ CLOSE</button>
+      <span style="font-family:var(--font-mono); font-size:11px; color:var(--cyan); font-weight:700; letter-spacing:0.1em;">
+        AGENT PAIRING PROTOCOL
+      </span>
+      <h2 id="pairingModalTitle" style="font-family:var(--font-heading); font-size:20px; font-weight:800; color:#fff; margin:4px 0 16px 0;">
+        Register Docker Agent
+      </h2>
+
+      <div id="pairingCodeDisplay" class="pairing-code-display" onclick="copyPairingCode()" title="Click to copy">
+        <span id="pairingCodeText">GENERATING...</span>
+        <span class="copy-hint">⊕ CLICK TO COPY</span>
+      </div>
+
+      <div id="pairingCountdown" class="pairing-countdown">Expires in: --:--</div>
+
+      <div class="pairing-instructions">
+        <strong style="color:var(--text-primary);">▶ Setup Instructions:</strong><br>
+        1. Download and extract the <span style="color:var(--cyan);">xploitx-docker-agent</span> package.<br>
+        2. Run on your Windows PC:<br>
+        <span id="pairingCmdText" class="cmd">cd xploitx-docker-agent &amp;&amp; npm run pair &lt;CODE&gt;</span><br>
+        3. After pairing, start the daemon:<br>
+        <span class="cmd">npm start</span><br>
+        4. The agent status will turn <span style="color:#00ff88;">● ONLINE</span> in this panel.
+      </div>
+
+      <p style="font-family:var(--font-mono); font-size:10px; color:var(--text-muted); margin-top:14px;">
+        ⚠ Pairing code is single-use and expires in 15 minutes.
+      </p>
     </div>
   </div>
 

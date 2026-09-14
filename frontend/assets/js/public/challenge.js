@@ -121,11 +121,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         await loadChallenge();
       }
     } catch (err) {
+      const errCode = err.error?.code || err.code || '';
       const errMsg = err.error?.message || err.message || 'Failed to spawn challenge instance';
-      if (window.showError) window.showError(errMsg);
-      renderInstanceUI({ status: 'FAILED', error: errMsg });
+
+      if (errCode === 'AGENT_OFFLINE' || errMsg.includes('AGENT_OFFLINE')) {
+        // Docker agent is not connected — show actionable error
+        renderInstanceUI({
+          status: 'FAILED',
+          error: 'DOCKER AGENT OFFLINE',
+          errorDetail: 'The challenge host agent is not connected. Please contact the CTF organizers — the infrastructure agent needs to be started.',
+          code: 'AGENT_OFFLINE'
+        });
+        if (window.showError) window.showError('⚠ AGENT OFFLINE: The Docker host agent is not connected. Challenge instances are temporarily unavailable.');
+      } else if (errCode === 'AGENT_TIMEOUT' || errMsg.includes('AGENT_TIMEOUT')) {
+        renderInstanceUI({
+          status: 'FAILED',
+          error: 'AGENT TIMEOUT',
+          errorDetail: 'The challenge container did not start in time. Please try again.',
+          code: 'AGENT_TIMEOUT'
+        });
+        if (window.showError) window.showError('TIMEOUT: Agent did not respond. Please try again.');
+      } else {
+        if (window.showError) window.showError(errMsg);
+        renderInstanceUI({ status: 'FAILED', error: errMsg });
+      }
     }
   };
+
 
   window.terminateSandbox = () => {
     if (window.Dialog) {
