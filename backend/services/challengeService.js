@@ -8,6 +8,63 @@ const scoringService = require('./scoringService');
 const realtimeService = require('./realtimeService');
 
 class ChallengeService {
+  _resolveCategory(identifier, explicitId) {
+    const categories = db.getCategories();
+    if (explicitId) {
+      const found = categories.find(cat => cat.id === explicitId);
+      if (found) return found;
+    }
+    if (!identifier) return categories[0] || null;
+
+    const raw = String(identifier).trim();
+    // Direct exact match
+    let found = categories.find(cat => cat.id === raw || cat.name === raw || cat.slug === raw);
+    if (found) return found;
+
+    // Normalized alphanumeric match
+    const clean = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
+    found = categories.find(cat => {
+      const nClean = (cat.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const sClean = (cat.slug || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const iClean = (cat.id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      return nClean === clean || sClean === clean || iClean === clean;
+    });
+    if (found) return found;
+
+    // Fuzzy keyword matching for the 8 sectors
+    if (clean.includes('forensic') || clean === 'df' || clean === 'dfir') {
+      return categories.find(c => c.slug === 'forensic') || categories.find(c => c.name.toLowerCase().includes('forensic'));
+    }
+    if (clean.includes('steg')) {
+      return categories.find(c => c.slug === 'stegano') || categories.find(c => c.name.toLowerCase().includes('stegan'));
+    }
+    if (clean.includes('crypt') || clean === 'cipher') {
+      return categories.find(c => c.slug === 'crypto') || categories.find(c => c.name.toLowerCase().includes('crypto'));
+    }
+    if (clean.includes('network') || clean === 'net' || clean === 'pcap') {
+      return categories.find(c => c.slug === 'network') || categories.find(c => c.name.toLowerCase().includes('network'));
+    }
+    if (clean.includes('pwn') || clean.includes('binary') || clean === 'binex') {
+      return categories.find(c => c.slug === 'pwn') || categories.find(c => c.name.toLowerCase().includes('pwn'));
+    }
+    if (clean.includes('web') || clean.includes('http') || clean === 'websec') {
+      return categories.find(c => c.slug === 'web') || categories.find(c => c.name.toLowerCase().includes('web'));
+    }
+    if (clean.includes('osint') || clean.includes('intel') || clean === 'recon') {
+      return categories.find(c => c.slug === 'osint') || categories.find(c => c.name.toLowerCase().includes('osint'));
+    }
+    if (clean.includes('misc') || clean.includes('trivia')) {
+      return categories.find(c => c.slug === 'misc') || categories.find(c => c.name.toLowerCase().includes('misc'));
+    }
+
+    // Partial substring fallback
+    found = categories.find(cat => {
+      const nClean = (cat.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      return nClean.includes(clean) || clean.includes(nClean);
+    });
+    return found || categories.find(c => c.slug === 'misc') || categories[0] || null;
+  }
+
   getAllPublicChallenges(user) {
     const challenges = db.getChallenges().filter(c => c.status === 'PUBLISHED' || c.status === 'LIVE');
     const categories = db.getCategories();
@@ -16,7 +73,10 @@ class ChallengeService {
     const userId = user ? user.id : null;
 
     return challenges.map(c => {
-      const category = categories.find(cat => cat.id === c.category_id);
+      let category = categories.find(cat => cat.id === c.category_id);
+      if (!category && (c.category_name || c.category)) {
+        category = this._resolveCategory(c.category_name || c.category, c.category_id);
+      }
       const isSolved = solves.some(s => s.challenge_id === c.id && ((teamId && s.team_id === teamId) || (userId && s.user_id === userId)));
 
       return {
@@ -24,7 +84,7 @@ class ChallengeService {
         mission_id: c.mission_id,
         slug: c.slug,
         title: c.title,
-        category: category ? category.name : (c.category_name || 'MISC'),
+        category: category ? category.name : (c.category_name || c.category || 'Misc'),
         category_slug: category ? category.slug : 'misc',
         category_color: category ? category.color_accent : '#00ff9c',
         difficulty: c.difficulty,
@@ -67,12 +127,8 @@ class ChallengeService {
 
     const categories = db.getCategories();
     let category = categories.find(cat => cat.id === c.category_id);
-    if (!category && c.category_name) {
-      const catLower = c.category_name.toLowerCase();
-      category = categories.find(cat =>
-        (cat.name && cat.name.toLowerCase() === catLower) ||
-        (cat.slug && cat.slug.toLowerCase() === catLower)
-      );
+    if (!category && (c.category_name || c.category)) {
+      category = this._resolveCategory(c.category_name || c.category, c.category_id);
     }
 
     const files = db.getFiles().filter(f => f.challenge_id === c.id).map(f => ({
@@ -113,7 +169,7 @@ class ChallengeService {
       mission_id: c.mission_id,
       slug: c.slug,
       title: c.title,
-      category: category ? category.name : (c.category_name || 'MISC'),
+      category: category ? category.name : (c.category_name || c.category || 'Misc'),
       category_color: category ? category.color_accent : '#00ff9c',
       difficulty: c.difficulty,
       points: c.current_points || c.base_points,
@@ -221,26 +277,14 @@ class ChallengeService {
     const slug = (data.title || 'mission').toLowerCase().replace(/[^a-z0-9]+/g, '-');
     
     // Resolve matching category entity from db
-    const categories = db.getCategories();
-    let category = null;
-    if (data.category_id) {
-      category = categories.find(cat => cat.id === data.category_id);
-    }
-    if (!category && data.category) {
-      const catLower = String(data.category).toLowerCase();
-      category = categories.find(cat =>
-        (cat.name && cat.name.toLowerCase() === catLower) ||
-        (cat.slug && cat.slug.toLowerCase() === catLower) ||
-        (cat.id && cat.id.toLowerCase() === catLower)
-      );
-    }
-    const category_id = category ? category.id : (categories[0]?.id || 'cat-01');
-    const category_name = category ? category.name : (data.category || 'MISC');
+    const category = this._resolveCategory(data.category || data.category_name, data.category_id);
+    const category_id = category ? category.id : (db.getCategories()[0]?.id || 'cat-01');
+    const category_name = category ? category.name : (data.category || data.category_name || 'Misc');
 
     // Generate unique non-colliding mission_id
     let mission_id = (data.mission_id || '').trim();
     if (!mission_id) {
-      const catPrefix = (data.category ? data.category.slice(0, 3) : (category ? category.name.slice(0, 3) : 'SEC')).toUpperCase();
+      const catPrefix = (category ? category.name.replace(/[^A-Za-z]/g, '').slice(0, 4) : 'SEC').toUpperCase();
       const randHex = crypto.randomBytes(2).toString('hex').toUpperCase();
       mission_id = `OP-${catPrefix}-${randHex}`;
     }
@@ -351,15 +395,15 @@ class ChallengeService {
     }
     if (data.description) c.description = data.description;
     if (data.difficulty) c.difficulty = data.difficulty.toUpperCase();
-    if (data.category) {
-      c.category_name = data.category;
-      const categories = db.getCategories();
-      const catLower = String(data.category).toLowerCase();
-      const matched = categories.find(cat =>
-        (cat.name && cat.name.toLowerCase() === catLower) ||
-        (cat.slug && cat.slug.toLowerCase() === catLower)
-      );
-      if (matched) c.category_id = matched.id;
+    if (data.category || data.category_name || data.category_id) {
+      const catVal = data.category || data.category_name;
+      const matched = this._resolveCategory(catVal, data.category_id);
+      if (matched) {
+        c.category_id = matched.id;
+        c.category_name = matched.name;
+      } else if (catVal) {
+        c.category_name = catVal;
+      }
     }
     if (data.points) c.current_points = parseInt(data.points, 10);
     if (data.minimum_points) c.minimum_points = parseInt(data.minimum_points, 10);

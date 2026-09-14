@@ -39,10 +39,15 @@ class AdminController {
   }
 
   getChallenges(req, res) {
+    const categories = db.getCategories();
     const challenges = db.getChallenges().map(c => {
       const fl = db.getFlags().find(f => f.challenge_id === c.id);
+      const cat = categories.find(k => k.id === c.category_id);
+      const catName = cat ? cat.name : (c.category_name || c.category || 'Misc');
       return {
         ...c,
+        category: catName,
+        category_name: catName,
         flag: fl ? fl.flag_value : '***'
       };
     });

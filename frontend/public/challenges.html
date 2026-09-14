@@ -25,48 +25,22 @@
       
       <!-- Event Track Graph -->
       <div style="width: 100%;">
-        <h2 class="event-track-header">Event Track</h2>
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom: 12px;">
+          <div>
+            <h2 class="event-track-header" style="margin-bottom:4px;">Operational Sectors // Event Tracks</h2>
+            <p style="color:var(--text-secondary); font-size:12px; font-family:var(--font-mono); margin:0;">
+              Select a tactical sector to isolate target missions or engage all operational vectors.
+            </p>
+          </div>
+          <button type="button" id="resetTrackBtn" class="btn btn-sm btn-outline" style="font-size:11px; padding:6px 12px; display:none;" onclick="window.selectTrack && window.selectTrack('all')">
+            VIEW ALL TRACKS
+          </button>
+        </div>
         
-        <div class="event-track-timeline">
+        <div class="event-track-timeline" id="eventTrackTimeline">
           <!-- Connecting Line -->
           <div class="event-track-line"></div>
-          
-          <!-- Track Nodes -->
-          <div class="track-node-wrapper" onclick="selectTrack(1, 'PWN')">
-            <div class="track-node active completed" id="node-1">
-              <div class="track-node-inner">
-                <span class="track-node-icon">PWN</span>
-              </div>
-              <div class="track-badge-completed">✓</div>
-              <div class="track-badge-active" id="active-dot-1"></div>
-            </div>
-            <div class="track-label">
-              <p class="track-title">Track 1 (PWN)</p>
-              <p class="track-status">COMPLETED</p>
-            </div>
-          </div>
-
-          <div class="track-node-wrapper" onclick="selectTrack(2, 'WEB')">
-            <div class="track-node" id="node-2">
-              <div class="track-node-inner">
-                <span class="track-node-icon">WEB</span>
-              </div>
-            </div>
-            <div class="track-label">
-              <p class="track-title">Track 2 (Web)</p>
-            </div>
-          </div>
-          
-          <div class="track-node-wrapper" onclick="selectTrack(3, 'REV')">
-            <div class="track-node" id="node-3">
-              <div class="track-node-inner">
-                <span class="track-node-icon">REV</span>
-              </div>
-            </div>
-            <div class="track-label">
-              <p class="track-title">Track 3 (Reverse)</p>
-            </div>
-          </div>
+          <!-- Track Nodes dynamically injected by challenges.js -->
         </div>
       </div>
 
@@ -77,19 +51,19 @@
         <!-- Banner -->
         <div class="track-details-banner">
           <div class="track-details-left">
-            <h2 id="trackTitle">Track 1 (PWN)</h2>
-            <p>Complete the available challenge path for this track.</p>
+            <h2 id="trackTitle">All Operations</h2>
+            <p id="trackDescription">Complete available mission objectives across active sectors.</p>
           </div>
           
           <div class="track-details-stats">
             <div class="track-stat-block">
-              <span class="track-stat-label" style="color: var(--accent);">Challenges Solved</span>
-              <span class="track-stat-value">0 / 0</span>
+              <span class="track-stat-label" style="color: var(--accent);">Missions Solved</span>
+              <span class="track-stat-value" id="trackSolvedStat">0 / 0</span>
             </div>
             <div class="track-stat-divider"></div>
             <div class="track-stat-block">
-              <span class="track-stat-label" style="color: var(--danger);">Track Ended</span>
-              <span class="track-stat-value" style="color: var(--text-secondary);">00:00:00</span>
+              <span class="track-stat-label" style="color: var(--cyan);">Available XP</span>
+              <span class="track-stat-value" id="trackPointsStat" style="color: var(--cyan);">0 XP</span>
             </div>
           </div>
         </div>
@@ -105,6 +79,14 @@
           >
           <select id="categoryFilter" style="background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:10px 14px; border-radius:var(--radius-sm); font-family:var(--font-heading); font-size:13px; cursor:pointer;">
             <option value="">All Categories</option>
+            <option value="PWN">PWN</option>
+            <option value="Misc">Misc</option>
+            <option value="Web">Web</option>
+            <option value="Network">Network</option>
+            <option value="Digital Forensic">Digital Forensic</option>
+            <option value="OSINT">OSINT</option>
+            <option value="Cryptography">Cryptography</option>
+            <option value="Steganograhy">Steganograhy</option>
           </select>
           <select id="difficultyFilter" style="background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:10px 14px; border-radius:var(--radius-sm); font-family:var(--font-heading); font-size:13px; cursor:pointer;">
             <option value="">All Difficulties</option>
@@ -118,39 +100,11 @@
         <!-- Challenge Grid / Empty State -->
         <div id="challengeGrid" class="challenge-grid" style="margin-top: 16px; text-align: center; padding: 60px 0;">
           <p style="font-family: var(--font-heading); font-size: 15px; font-weight: 700; color: var(--accent);">
-            Challenges are being prepared
+            Initializing tactical grid...
           </p>
         </div>
       </div>
     </div>
-  </main>
-
-  <script>
-    function selectTrack(id, title) {
-      // Reset all nodes
-      for(let i=1; i<=3; i++) {
-        const node = document.getElementById('node-' + i);
-        if(node) {
-          node.classList.remove('active');
-          const dot = document.getElementById('active-dot-' + i);
-          if(dot) dot.remove();
-        }
-      }
-      
-      // Activate clicked
-      const activeNode = document.getElementById('node-' + id);
-      if(activeNode) {
-        activeNode.classList.add('active');
-        const dot = document.createElement('div');
-        dot.className = 'track-badge-active';
-        dot.id = 'active-dot-' + id;
-        activeNode.appendChild(dot);
-      }
-      
-      // Update title
-      document.getElementById('trackTitle').innerText = 'Track ' + id + ' (' + title + ')';
-    }
-  </script>
 
   <script src="/assets/js/utils.js"></script>
   <script src="/assets/js/storage.js"></script>

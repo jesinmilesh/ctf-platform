@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const c = await window.api.getChallenge(id);
       document.getElementById('editTitle').value = c.title || '';
       document.getElementById('editMissionId').value = c.mission_id || '';
-      document.getElementById('editCategory').value = c.category || 'CRYPTO';
+      document.getElementById('editCategory').value = c.category || c.category_name || 'PWN';
       document.getElementById('editDifficulty').value = c.difficulty || 'MEDIUM';
       document.getElementById('editDescription').value = c.description || '';
       document.getElementById('editPoints').value = c.points || 500;
@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Update Live Preview Tab
   function updatePreview() {
     const title = document.getElementById('editTitle').value || 'Untitled Mission';
-    const category = document.getElementById('editCategory').value || 'CRYPTO';
+    const category = document.getElementById('editCategory').value || 'PWN';
     const difficulty = document.getElementById('editDifficulty').value || 'MEDIUM';
     const points = document.getElementById('editPoints').value || 500;
     const desc = document.getElementById('editDescription').value || 'No briefing details entered yet.';
