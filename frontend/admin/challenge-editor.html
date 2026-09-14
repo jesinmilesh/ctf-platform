@@ -103,10 +103,41 @@
 
           <!-- Pane 3: FILES -->
           <div class="studio-pane" id="pane-files" style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
-            <div style="margin-bottom:16px;">
-              <span style="font-family:var(--font-mono); font-size:11px; color:var(--accent);">SECURE ASSET ATTACHMENTS (RULE 29 ENFORCED)</span>
-              <p style="color:var(--text-secondary); font-size:13px; margin:4px 0 16px 0;">Files uploaded here are stored in isolated storage outside the public web root.</p>
-              <input type="file" id="challengeFiles" multiple style="background:var(--bg-secondary); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm); color:#fff; width:100%;">
+            <div style="margin-bottom:20px;">
+              <div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--accent); letter-spacing:0.08em; margin-bottom:4px;">
+                SECURE ASSET ATTACHMENTS (ISOLATED PERSISTENT STORAGE)
+              </div>
+              <p style="color:var(--text-secondary); font-size:13px; margin:0 0 16px 0;">
+                Challenge files are stored in isolated storage outside public web roots with SHA-256 integrity verification.
+              </p>
+
+              <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                <input type="file" id="challengeFiles" multiple style="display:none;">
+                <button type="button" id="chooseFilesBtn" class="btn btn-sm btn-outline" style="padding:10px 18px; font-weight:700;">
+                  📁 SELECT CHALLENGE ASSETS
+                </button>
+                <button type="button" id="uploadFilesBtn" class="btn btn-sm btn-primary" style="padding:10px 18px; font-weight:700; display:none;">
+                  ⬆ UPLOAD SELECTED (<span id="selectedFileCount">0</span>)
+                </button>
+              </div>
+
+              <div id="selectedFilesPreview" style="margin-top:12px; font-family:var(--font-mono); font-size:12px; color:var(--cyan); display:none; background:var(--bg-secondary); padding:10px 14px; border-radius:var(--radius-sm); border:1px solid var(--border);"></div>
+            </div>
+
+            <div style="border-top:1px solid var(--border); padding-top:20px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); font-weight:700; letter-spacing:0.06em;">
+                  STORED MISSION PAYLOADS & ARTIFACTS
+                </div>
+                <button type="button" id="refreshFilesBtn" class="btn btn-sm btn-outline" style="font-size:11px; padding:4px 10px;">
+                  ↻ REFRESH
+                </button>
+              </div>
+              <div id="uploadedFilesTableContainer">
+                <div style="font-family:var(--font-mono); font-size:12px; color:var(--text-muted); padding:12px 0;">
+                  Loading challenge assets...
+                </div>
+              </div>
             </div>
           </div>
 

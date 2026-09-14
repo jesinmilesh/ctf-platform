@@ -78,9 +78,12 @@ class ChallengeService {
         category = this._resolveCategory(c.category_name || c.category, c.category_id);
       }
       const isSolved = solves.some(s => s.challenge_id === c.id && ((teamId && s.team_id === teamId) || (userId && s.user_id === userId)));
+      const hasInst = !!(c.requiresInstance || c.has_instance || c.runtime?.enabled);
 
+      const canonicalId = c.id || (c._id ? String(c._id) : c.slug);
       return {
-        id: c.id,
+        id: canonicalId,
+        _id: c._id ? String(c._id) : canonicalId,
         mission_id: c.mission_id,
         slug: c.slug,
         title: c.title,
@@ -90,7 +93,8 @@ class ChallengeService {
         difficulty: c.difficulty,
         points: c.current_points || c.base_points,
         solve_count: c.solve_count || 0,
-        has_instance: !!c.has_instance,
+        has_instance: hasInst,
+        requiresInstance: hasInst,
         is_solved: isSolved
       };
     });
@@ -101,18 +105,21 @@ class ChallengeService {
     const cleanId = String(challengeId).trim();
     const cleanIdLower = cleanId.toLowerCase();
 
-    // 1. Search in-memory cache first (by id, mission_id, slug, or title - case-insensitive)
+    // 1. Search in-memory cache first (by id, _id, mission_id, slug, or title - case-insensitive)
     const c = db.getChallenges().find(item => {
       if (!item) return false;
       const itemId = item.id ? String(item.id).trim() : '';
+      const itemMongoId = item._id ? String(item._id).trim() : '';
       const itemMissionId = item.mission_id ? String(item.mission_id).trim() : '';
       const itemSlug = item.slug ? String(item.slug).trim() : '';
       const itemTitle = item.title ? String(item.title).trim() : '';
 
       return itemId === cleanId ||
+        itemMongoId === cleanId ||
         itemMissionId === cleanId ||
         itemSlug === cleanId ||
         itemId.toLowerCase() === cleanIdLower ||
+        itemMongoId.toLowerCase() === cleanIdLower ||
         itemMissionId.toLowerCase() === cleanIdLower ||
         itemSlug.toLowerCase() === cleanIdLower ||
         itemTitle.toLowerCase() === cleanIdLower;
@@ -131,11 +138,19 @@ class ChallengeService {
       category = this._resolveCategory(c.category_name || c.category, c.category_id);
     }
 
-    const files = db.getFiles().filter(f => f.challenge_id === c.id).map(f => ({
+    const altIds = [c.id, c._id ? String(c._id) : null, c.mission_id].filter(Boolean);
+    const files = db.getFiles().filter(f =>
+      altIds.includes(f.challenge_id) || altIds.includes(f.challengeId)
+    ).map(f => ({
       id: f.id,
+      name: f.filename,
       filename: f.filename,
-      sizeBytes: f.file_size_bytes,
-      sha256: f.sha256
+      size: f.file_size_bytes || f.size,
+      sizeBytes: f.file_size_bytes || f.size,
+      mimeType: f.mime_type || f.mimeType || 'application/octet-stream',
+      sha256: f.sha256,
+      downloadUrl: `/api/v1/challenges/${c.id || c._id}/files/${f.id}/download`,
+      uploadedAt: f.uploaded_at || f.uploadedAt
     }));
 
     const teamId = user ? (user.team_id || (user.team && user.team.id)) : null;
@@ -145,7 +160,7 @@ class ChallengeService {
     const hintReveals = db.getHintReveals().filter(r => (teamId && r.team_id === teamId) || (userId && r.user_id === userId));
     const unlockedHintIds = new Set(hintReveals.map(r => r.hint_id));
 
-    const hints = db.getHints().filter(h => h.challenge_id === c.id && h.enabled).map((h, index) => {
+    const hints = db.getHints().filter(h => altIds.includes(h.challenge_id) && h.enabled).map((h, index) => {
       const isUnlocked = unlockedHintIds.has(h.id) || h.cost === 0;
       return {
         id: h.id,
@@ -156,13 +171,17 @@ class ChallengeService {
       };
     });
 
-    const isSolved = db.getSolves().some(s => s.challenge_id === c.id && ((teamId && s.team_id === teamId) || (userId && s.user_id === userId)));
+    const isSolved = db.getSolves().some(s =>
+      altIds.includes(s.challenge_id) && ((teamId && s.team_id === teamId) || (userId && s.user_id === userId))
+    );
 
     const instance = db.getInstances().find(i =>
-      (i.challengeId === c.id || i.challenge_id === c.id) &&
+      (altIds.includes(i.challengeId) || altIds.includes(i.challenge_id)) &&
       ((teamId && (i.teamId === teamId || i.team_id === teamId)) || (userId && (i.ownerUserId === userId || i.userId === userId || i.user_id === userId))) &&
       i.status === 'RUNNING'
     );
+
+    const requiresInstance = !!(c.requiresInstance || c.has_instance || c.runtime?.enabled);
 
     return {
       id: c.id,
@@ -175,7 +194,15 @@ class ChallengeService {
       points: c.current_points || c.base_points,
       solve_count: c.solve_count || 0,
       description: c.description,
-      has_instance: !!(c.runtime?.enabled || c.has_instance),
+      has_instance: requiresInstance,
+      requiresInstance: requiresInstance,
+      runtime: requiresInstance ? {
+        enabled: true,
+        protocol: c.runtime?.protocol || c.protocol || 'http',
+        containerPort: c.runtime?.containerPort || c.container_port || 80,
+        durationMinutes: c.runtime?.durationMinutes || c.instance_ttl_minutes || 30,
+        healthCheck: c.runtime?.healthCheck || { type: 'http', path: c.health_check_path || '/' }
+      } : { enabled: false },
       instance: instance ? {
         instanceId: instance.instanceId || instance.id,
         host: instance.host,
@@ -289,7 +316,7 @@ class ChallengeService {
       mission_id = `OP-${catPrefix}-${randHex}`;
     }
 
-    const hasInstance = !!(data.has_instance || data.runtime?.enabled);
+    const hasInstance = !!(data.requiresInstance !== undefined ? data.requiresInstance : (data.has_instance || data.runtime?.enabled));
     const dockerImage = data.docker_image || data.runtime?.image || (hasInstance ? 'xploitx/vault:latest' : null);
     const containerPort = parseInt(data.container_port || data.runtime?.containerPort || 80, 10);
     const healthCheckPath = data.health_check_path || data.runtime?.healthCheck?.path || '/';
@@ -315,6 +342,7 @@ class ChallengeService {
       solve_count: 0,
       status: (data.status || 'PUBLISHED').toUpperCase(),
       has_instance: hasInstance,
+      requiresInstance: hasInstance,
       docker_image: dockerImage,
       container_port: containerPort,
       health_check_path: healthCheckPath,
@@ -325,7 +353,7 @@ class ChallengeService {
         enabled: true,
         image: dockerImage,
         containerPort,
-        protocol: 'http',
+        protocol: data.runtime?.protocol || data.protocol || 'http',
         healthCheck: { type: 'http', path: healthCheckPath },
         resources: { cpus: cpuLimit, memory: memoryLimit, pidsLimit },
         durationMinutes: instanceTtlMinutes
@@ -409,7 +437,14 @@ class ChallengeService {
     if (data.minimum_points) c.minimum_points = parseInt(data.minimum_points, 10);
     if (data.decay_threshold) c.decay_threshold = parseInt(data.decay_threshold, 10);
     
-    if (data.has_instance !== undefined) c.has_instance = !!data.has_instance;
+    if (data.requiresInstance !== undefined) {
+      c.requiresInstance = !!data.requiresInstance;
+      c.has_instance = !!data.requiresInstance;
+    }
+    if (data.has_instance !== undefined) {
+      c.has_instance = !!data.has_instance;
+      c.requiresInstance = !!data.has_instance;
+    }
     if (data.docker_image !== undefined) c.docker_image = data.docker_image;
     if (data.container_port !== undefined) c.container_port = parseInt(data.container_port, 10);
     if (data.health_check_path !== undefined) c.health_check_path = data.health_check_path;
@@ -418,7 +453,10 @@ class ChallengeService {
     if (data.memory_limit !== undefined) c.memory_limit = data.memory_limit;
     if (data.runtime) {
       c.runtime = data.runtime;
-      if (data.runtime.enabled !== undefined) c.has_instance = !!data.runtime.enabled;
+      if (data.runtime.enabled !== undefined) {
+        c.has_instance = !!data.runtime.enabled;
+        c.requiresInstance = !!data.runtime.enabled;
+      }
       if (data.runtime.image) c.docker_image = data.runtime.image;
       if (data.runtime.containerPort) c.container_port = data.runtime.containerPort;
     }

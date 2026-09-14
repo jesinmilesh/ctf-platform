@@ -356,7 +356,8 @@ class DatabaseEngine {
         const docs = await this.mongoDb.collection(colName).find({}).toArray();
         const cleanDocs = docs.map(d => {
           const item = { ...d };
-          delete item._id;
+          if (d._id) item._id = d._id.toString();
+          if (!item.id && d._id) item.id = d._id.toString();
           return item;
         });
 

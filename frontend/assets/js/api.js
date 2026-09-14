@@ -90,7 +90,9 @@ const api = {
     }),
     terminateInstance: (challengeId) => apiRequest(`/challenges/${challengeId}/instance`, {
       method: 'DELETE'
-    })
+    }),
+    getFiles: (challengeId) => apiRequest(`/challenges/${challengeId}/files`),
+    getFileDownloadUrl: (challengeId, fileId) => `${API_BASE}/challenges/${challengeId}/files/${fileId}/download`
   },
 
   // 3. Submissions
@@ -159,6 +161,21 @@ const api = {
     createChallenge: (data) => apiRequest('/admin/challenges', { method: 'POST', body: JSON.stringify(data) }),
     updateChallenge: (id, data) => apiRequest(`/admin/challenges/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     deleteChallenge: (id) => apiRequest(`/admin/challenges/${id}`, { method: 'DELETE' }),
+    getChallengeFiles: (id) => apiRequest(`/admin/challenges/${id}/files`),
+    uploadChallengeFiles: async (id, formData) => {
+      const token = localStorage.getItem('xploitx_token');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`${API_BASE}/admin/challenges/${id}/files`, {
+        method: 'POST',
+        headers,
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || data.message || 'Asset upload failed');
+      return data;
+    },
+    deleteChallengeFile: (challengeId, fileId) => apiRequest(`/admin/challenges/${challengeId}/files/${fileId}`, { method: 'DELETE' }),
     testFlag: (data) => apiRequest('/admin/challenges/test-flag', { method: 'POST', body: JSON.stringify(data) }),
     getCategories: () => apiRequest('/admin/categories'),
     getChallengeValidation: (id) => apiRequest(`/admin/challenges/${id}/validate`),

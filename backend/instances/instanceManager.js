@@ -26,8 +26,15 @@ class InstanceManager {
   async spawnInstance(challengeId, user) {
     if (!user) throw new Error('AUTH_REQUIRED: Authentication required.');
 
+    const cleanId = String(challengeId).trim();
     const challenges = db.getChallenges ? db.getChallenges() : [];
-    const challenge = challenges.find(c => c.id === challengeId || c.slug === challengeId);
+    const challenge = challenges.find(c =>
+      c.id === cleanId ||
+      c.slug === cleanId ||
+      c.mission_id === cleanId ||
+      (c._id && String(c._id) === cleanId) ||
+      (c.title && c.title.toLowerCase() === cleanId.toLowerCase())
+    );
     if (!challenge) throw new Error('NOT_FOUND: Challenge not found.');
 
     const hasInstance = challenge.runtime?.enabled || challenge.has_instance;
@@ -40,8 +47,9 @@ class InstanceManager {
 
     // Check active or in-progress instance for this team/user (Section 33: Duplicate Protection)
     const allInstances = db.getInstances ? db.getInstances() : [];
+    const altIds = [challenge.id, challenge._id ? String(challenge._id) : null, challenge.mission_id, cleanId].filter(Boolean);
     let existing = allInstances.find(i =>
-      (i.challengeId === challenge.id || i.challenge_id === challenge.id) &&
+      (altIds.includes(i.challengeId) || altIds.includes(i.challenge_id)) &&
       ((teamId && (i.teamId === teamId || i.team_id === teamId)) || (i.ownerUserId === userId || i.userId === userId || i.user_id === userId)) &&
       ['RUNNING', 'HEALTH_CHECKING', 'STARTING', 'ALLOCATING', 'REQUESTED'].includes(i.status)
     );
@@ -277,10 +285,21 @@ class InstanceManager {
     const teamId = user.team_id || user.teamId || null;
     const userId = user.id;
 
+    const cleanId = String(challengeId).trim();
+    const allChallenges = db.getChallenges ? db.getChallenges() : [];
+    const challenge = allChallenges.find(c =>
+      c.id === cleanId ||
+      c.slug === cleanId ||
+      c.mission_id === cleanId ||
+      (c._id && String(c._id) === cleanId) ||
+      (c.title && c.title.toLowerCase() === cleanId.toLowerCase())
+    );
+    const altIds = challenge ? [challenge.id, challenge._id ? String(challenge._id) : null, challenge.mission_id, cleanId].filter(Boolean) : [cleanId];
+
     // Find active instance for this challenge + team/user
     const allInstances = db.getInstances ? db.getInstances() : [];
     const activeInstance = allInstances.find(i =>
-      (i.challengeId === challengeId || i.challenge_id === challengeId) &&
+      (altIds.includes(i.challengeId) || altIds.includes(i.challenge_id)) &&
       (teamId ? (i.teamId === teamId || i.team_id === teamId) : (i.ownerUserId === userId || i.userId === userId || i.user_id === userId)) &&
       ['RUNNING', 'HEALTH_CHECKING', 'STARTING'].includes(i.status)
     );
@@ -289,8 +308,6 @@ class InstanceManager {
       return this.spawnInstance(challengeId, user);
     }
 
-    const allChallenges = db.getChallenges ? db.getChallenges() : [];
-    const challenge = allChallenges.find(c => c.id === challengeId || c.slug === challengeId);
     const healthPath = challenge?.runtime?.healthCheck?.path || challenge?.health_check_path || '/health';
     const ttlMinutes = challenge?.runtime?.durationMinutes || challenge?.instance_ttl_minutes || env.INSTANCE_DEFAULT_TTL_MINUTES || 30;
 
@@ -355,9 +372,21 @@ class InstanceManager {
     const userId = user.id;
     const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
 
+    const cleanTargetId = String(targetId).trim();
+    const allChallenges = db.getChallenges ? db.getChallenges() : [];
+    const matchedChallenge = allChallenges.find(c =>
+      c.id === cleanTargetId ||
+      c.slug === cleanTargetId ||
+      c.mission_id === cleanTargetId ||
+      (c._id && String(c._id) === cleanTargetId)
+    );
+    const targetIds = matchedChallenge
+      ? [cleanTargetId, matchedChallenge.id, matchedChallenge._id ? String(matchedChallenge._id) : null, matchedChallenge.mission_id].filter(Boolean)
+      : [cleanTargetId];
+
     const allInstances = db.getInstances ? db.getInstances() : [];
     const instance = allInstances.find(i =>
-      (i.instanceId === targetId || i.id === targetId || i.challengeId === targetId || i.challenge_id === targetId) &&
+      (targetIds.includes(i.instanceId) || targetIds.includes(i.id) || targetIds.includes(i.challengeId) || targetIds.includes(i.challenge_id)) &&
       (isAdmin || (teamId && (i.teamId === teamId || i.team_id === teamId)) || (i.ownerUserId === userId || i.userId === userId || i.user_id === userId)) &&
       ['RUNNING', 'HEALTH_CHECKING', 'STARTING', 'ALLOCATING', 'PORT_RESERVED', 'REQUESTED', 'FAILED'].includes(i.status)
     );

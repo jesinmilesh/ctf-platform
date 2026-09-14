@@ -9,6 +9,7 @@
     "instance-server": "node instance-server/index.js",
     "worker": "node instance-worker/server.js",
     "test": "node test/verify.js",
+    "test:pipeline": "node test/test-challenge-pipeline.js",
     "test:runtime": "node test/docker-runtime-test.js",
     "test:master": "node test/production-master-test.js"
   },

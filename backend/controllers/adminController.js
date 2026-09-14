@@ -6,6 +6,7 @@
 const db = require('../config/database');
 const challengeService = require('../services/challengeService');
 const instanceService = require('../services/instanceService');
+const fileService = require('../services/fileService');
 const realtimeService = require('../services/realtimeService');
 
 class AdminController {
@@ -89,6 +90,86 @@ class AdminController {
     }
     const result = challengeService.validateChallengeForPublish(challenge);
     res.json(result);
+  }
+
+  async getChallengeFiles(req, res) {
+    const challengeId = req.params.id;
+    const challenge = db.getChallenges().find(c => c.id === challengeId || c.slug === challengeId);
+    if (!challenge) {
+      return res.status(404).json({ success: false, error: 'Challenge not found' });
+    }
+    const files = fileService.getChallengeFiles(challenge.id).map(f => ({
+      id: f.id,
+      filename: f.filename,
+      name: f.filename,
+      size: f.file_size_bytes || f.size,
+      file_size_bytes: f.file_size_bytes || f.size,
+      mimeType: f.mime_type || f.mimeType,
+      sha256: f.sha256,
+      uploadedAt: f.uploaded_at || f.uploadedAt,
+      downloadUrl: `/api/v1/challenges/${challenge.id}/files/${f.id}/download`
+    }));
+    res.json({ success: true, files });
+  }
+
+  async uploadChallengeFiles(req, res) {
+    const challengeId = req.params.id;
+    const challenge = db.getChallenges().find(c => c.id === challengeId || c.slug === challengeId);
+    if (!challenge) {
+      return res.status(404).json({ success: false, error: 'Challenge not found' });
+    }
+
+    const uploadedFiles = req.files || (req.file ? [req.file] : []);
+    if (!uploadedFiles || uploadedFiles.length === 0) {
+      return res.status(400).json({ success: false, error: 'No files provided in multipart request' });
+    }
+
+    try {
+      const savedRecords = [];
+      for (const file of uploadedFiles) {
+        const record = await fileService.saveChallengeFile({
+          challengeId: challenge.id,
+          filename: file.originalname || file.name,
+          buffer: file.buffer,
+          mimeType: file.mimetype,
+          user: req.user
+        });
+        savedRecords.push({
+          id: record.id,
+          filename: record.filename,
+          name: record.filename,
+          size: record.file_size_bytes,
+          file_size_bytes: record.file_size_bytes,
+          mimeType: record.mime_type,
+          sha256: record.sha256,
+          uploadedAt: record.uploaded_at,
+          downloadUrl: `/api/v1/challenges/${challenge.id}/files/${record.id}/download`
+        });
+      }
+      res.status(201).json({ success: true, files: savedRecords });
+    } catch (err) {
+      res.status(400).json({ success: false, error: err.message });
+    }
+  }
+
+  async deleteChallengeFile(req, res) {
+    const { id: challengeId, fileId } = req.params;
+    const challenge = db.getChallenges().find(c => c.id === challengeId || c.slug === challengeId);
+    if (!challenge) {
+      return res.status(404).json({ success: false, error: 'Challenge not found' });
+    }
+
+    const fileRec = fileService.getFileRecord(fileId);
+    if (!fileRec || (fileRec.challenge_id !== challenge.id && fileRec.challengeId !== challenge.id)) {
+      return res.status(404).json({ success: false, error: 'File not found or does not belong to this challenge' });
+    }
+
+    try {
+      await fileService.deleteFile(fileId);
+      res.json({ success: true, message: 'Challenge file neutralized successfully' });
+    } catch (err) {
+      res.status(400).json({ success: false, error: err.message });
+    }
   }
 
   testFlag(req, res) {

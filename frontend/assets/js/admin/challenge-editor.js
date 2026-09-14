@@ -1,7 +1,10 @@
 /**
  * XPLOITX // CYBER BATTLEFIELD
  * Mission Studio / Challenge Editor (assets/js/admin/challenge-editor.js)
- * Implements Sections 14, 15, 16 of Architectural Blueprint
+ * Implements Sections 3, 4, 5, 14, 15, 16 of Master Specification:
+ * - Full authoring pipeline with authoritative persistence to MongoDB Atlas
+ * - Real asset attachments with isolated storage, SHA-256 integrity, and delete controls
+ * - Dynamic Docker runtime configuration with requiresInstance synchronization
  */
 
 let editingId = null;
@@ -47,6 +50,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (editingId) {
     document.getElementById('editorTitleHeader').textContent = 'EDIT MISSION DOSSIER';
     loadExistingChallenge(editingId);
+  } else {
+    renderEmptyFilesTable('Save or publish the mission to activate live asset uploads, or select assets below to upload upon creation.');
   }
 
   // Runtime Panel toggle
@@ -57,6 +62,191 @@ document.addEventListener('DOMContentLoaded', async () => {
       runtimePanel.style.display = hasInstanceCheckbox.checked ? 'block' : 'none';
     });
   }
+
+  // File Upload Controls (Section 4 & 16)
+  const chooseFilesBtn = document.getElementById('chooseFilesBtn');
+  const fileInput = document.getElementById('challengeFiles');
+  const uploadFilesBtn = document.getElementById('uploadFilesBtn');
+  const selectedCountEl = document.getElementById('selectedFileCount');
+  const previewBox = document.getElementById('selectedFilesPreview');
+  const refreshFilesBtn = document.getElementById('refreshFilesBtn');
+
+  if (chooseFilesBtn && fileInput) {
+    chooseFilesBtn.addEventListener('click', () => fileInput.click());
+  }
+
+  if (fileInput) {
+    fileInput.addEventListener('change', () => {
+      const files = Array.from(fileInput.files || []);
+      if (files.length > 0) {
+        if (selectedCountEl) selectedCountEl.textContent = files.length;
+        if (previewBox) {
+          previewBox.style.display = 'block';
+          previewBox.innerHTML = `
+            <strong>Selected for transmission (${files.length}):</strong><br>
+            ${files.map(f => `• ${window.Utils.escapeHTML(f.name)} (${formatFileSize(f.size)})`).join('<br>')}
+          `;
+        }
+        if (uploadFilesBtn && editingId) {
+          uploadFilesBtn.style.display = 'inline-block';
+        }
+      } else {
+        if (previewBox) previewBox.style.display = 'none';
+        if (uploadFilesBtn) uploadFilesBtn.style.display = 'none';
+      }
+    });
+  }
+
+  if (uploadFilesBtn) {
+    uploadFilesBtn.addEventListener('click', async () => {
+      if (!editingId) return;
+      const files = fileInput.files;
+      if (!files || files.length === 0) {
+        window.showWarning('Please select assets to upload.');
+        return;
+      }
+
+      const formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+      }
+
+      uploadFilesBtn.disabled = true;
+      uploadFilesBtn.textContent = 'TRANSMITTING ASSETS...';
+
+      try {
+        await window.api.admin.uploadChallengeFiles(editingId, formData);
+        window.showSuccess(`✓ ${files.length} asset(s) successfully secured in storage.`);
+        fileInput.value = '';
+        if (previewBox) previewBox.style.display = 'none';
+        uploadFilesBtn.style.display = 'none';
+        await loadChallengeFiles(editingId);
+      } catch (err) {
+        window.showError(`UPLOAD FAILED: ${err.message}`);
+      } finally {
+        uploadFilesBtn.disabled = false;
+        uploadFilesBtn.innerHTML = `⬆ UPLOAD SELECTED (<span id="selectedFileCount">0</span>)`;
+      }
+    });
+  }
+
+  if (refreshFilesBtn) {
+    refreshFilesBtn.addEventListener('click', () => {
+      if (editingId) loadChallengeFiles(editingId);
+    });
+  }
+
+  function formatFileSize(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  function renderEmptyFilesTable(message = 'No downloadable files uploaded for this mission yet.') {
+    const container = document.getElementById('uploadedFilesTableContainer');
+    if (container) {
+      container.innerHTML = `
+        <div style="font-family:var(--font-mono); font-size:12px; color:var(--text-muted); padding:12px 0;">
+          ℹ ${message}
+        </div>
+      `;
+    }
+  }
+
+  async function loadChallengeFiles(id) {
+    const container = document.getElementById('uploadedFilesTableContainer');
+    if (!container) return;
+
+    try {
+      const res = await window.api.admin.getChallengeFiles(id);
+      const files = (res && res.files) ? res.files : [];
+
+      if (files.length === 0) {
+        renderEmptyFilesTable();
+        return;
+      }
+
+      container.innerHTML = `
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; font-family:var(--font-mono); font-size:12px; text-align:left;">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border); color:var(--text-secondary);">
+                <th style="padding:10px 8px;">FILE NAME</th>
+                <th style="padding:10px 8px;">SIZE</th>
+                <th style="padding:10px 8px;">SHA-256 INTEGRITY</th>
+                <th style="padding:10px 8px;">UPLOADED</th>
+                <th style="padding:10px 8px; text-align:right;">ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${files.map(f => `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                  <td style="padding:12px 8px; color:#fff; font-weight:700;">
+                    📁 ${window.Utils.escapeHTML(f.filename || f.name)}
+                  </td>
+                  <td style="padding:12px 8px; color:var(--cyan);">
+                    ${formatFileSize(f.size || f.file_size_bytes)}
+                  </td>
+                  <td style="padding:12px 8px;">
+                    <span title="${f.sha256}" style="color:var(--text-muted); cursor:pointer;" onclick="navigator.clipboard.writeText('${f.sha256}'); window.showSuccess('SHA-256 copied');">
+                      ${f.sha256 ? f.sha256.substring(0, 10) + '...' : 'N/A'} 📋
+                    </span>
+                  </td>
+                  <td style="padding:12px 8px; color:var(--text-secondary);">
+                    ${f.uploadedAt ? new Date(f.uploadedAt).toLocaleString() : '---'}
+                  </td>
+                  <td style="padding:12px 8px; text-align:right;">
+                    <a href="${f.downloadUrl || `/api/v1/challenges/${id}/files/${f.id}/download`}" class="btn btn-sm btn-outline" style="font-size:11px; padding:4px 10px; margin-right:6px; text-decoration:none;" download>
+                      VERIFY
+                    </a>
+                    <button type="button" class="btn btn-sm btn-outline" style="color:var(--danger); border-color:var(--danger); font-size:11px; padding:4px 10px;" onclick="window.deleteUploadedFile('${f.id}')">
+                      DELETE
+                    </button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } catch (err) {
+      container.innerHTML = `
+        <div style="color:var(--danger); font-family:var(--font-mono); font-size:12px; padding:12px 0;">
+          ⚠ Failed to retrieve mission files: ${err.message}
+        </div>
+      `;
+    }
+  }
+
+  window.deleteUploadedFile = (fileId) => {
+    if (!editingId) return;
+    if (window.Dialog) {
+      window.Dialog.confirm({
+        title: 'DELETE MISSION ASSET',
+        message: 'Are you sure you want to delete this challenge file from storage? Participants will no longer be able to download it.',
+        confirmText: 'DELETE FILE',
+        cancelText: 'ABORT',
+        severity: 'danger',
+        onConfirm: async () => {
+          try {
+            await window.api.admin.deleteChallengeFile(editingId, fileId);
+            window.showSuccess('Asset neutralized from storage.');
+            await loadChallengeFiles(editingId);
+          } catch (err) {
+            window.showError(`Delete failed: ${err.message}`);
+          }
+        }
+      });
+    } else {
+      if (confirm('Delete this file from storage?')) {
+        window.api.admin.deleteChallengeFile(editingId, fileId)
+          .then(() => loadChallengeFiles(editingId))
+          .catch(e => window.showError(e.message));
+      }
+    }
+  };
 
   async function loadExistingChallenge(id) {
     try {
@@ -70,7 +260,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('editMinPoints').value = c.minimum_points || 100;
       document.getElementById('editDecay').value = c.decay_threshold || 30;
       
-      const hasInst = !!(c.runtime?.enabled || c.has_instance);
+      const hasInst = !!(c.requiresInstance || c.runtime?.enabled || c.has_instance);
       document.getElementById('editHasInstance').checked = hasInst;
       if (runtimePanel) runtimePanel.style.display = hasInst ? 'block' : 'none';
 
@@ -84,6 +274,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('editMemoryLimit').value = rt.resources?.memory || c.memory_limit || '256m';
         document.getElementById('editPidLimit').value = rt.resources?.pidsLimit || 128;
       }
+
+      // Load attached files
+      await loadChallengeFiles(id);
     } catch (err) {
       console.error('Failed to prefill challenge:', err);
     }
@@ -110,6 +303,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       solve_count: 0,
       description: desc,
       has_instance: !!hasInst,
+      requiresInstance: !!hasInst,
       is_solved: false,
       files: [],
       hints: []
@@ -152,6 +346,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!payload.points || isNaN(payload.points) || payload.points <= 0) errors.push('Base reward XP must be a positive integer.');
     if (payload.minimum_points && payload.minimum_points > payload.points) errors.push('Floor XP cannot exceed base XP.');
     if (!payload.flag && !editingId) errors.push('Cryptographic flag configuration is required.');
+    if (payload.requiresInstance && !payload.docker_image) errors.push('Docker image is required when sandbox is enabled.');
     return errors;
   }
 
@@ -223,6 +418,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       hint: document.getElementById('editHint').value.trim(),
       hint_cost: parseInt(document.getElementById('editHintCost').value || 50, 10),
       has_instance: hasInstance,
+      requiresInstance: hasInstance,
       docker_image: hasInstance ? (dockerImage || 'xploitx/vault:latest') : null,
       container_port: containerPort,
       health_check_path: healthPath,
@@ -259,13 +455,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     submitBtn.textContent = 'TRANSMITTING DOSSIER...';
 
     try {
+      let targetChallengeId = editingId;
+
       if (editingId) {
         await window.api.admin.updateChallenge(editingId, payload);
         window.showSuccess('MISSION UPDATED SUCCESSFULLY');
       } else {
         const res = await window.api.admin.createChallenge(payload);
+        targetChallengeId = res.challenge?.id;
         window.showSuccess('NEW MISSION COMMISSIONED');
       }
+
+      // If files were selected in input, upload them to the target challenge
+      const stagedFiles = fileInput ? fileInput.files : null;
+      if (stagedFiles && stagedFiles.length > 0 && targetChallengeId) {
+        submitBtn.textContent = 'TRANSMITTING ASSETS...';
+        const formData = new FormData();
+        for (let i = 0; i < stagedFiles.length; i++) {
+          formData.append('files', stagedFiles[i]);
+        }
+        try {
+          await window.api.admin.uploadChallengeFiles(targetChallengeId, formData);
+          window.showSuccess('✓ Staged assets attached and saved.');
+        } catch (uploadErr) {
+          window.showWarning(`Mission saved, but asset upload had warning: ${uploadErr.message}`);
+        }
+      }
+
       setTimeout(() => {
         window.location.href = '/admin/challenges.html';
       }, 700);

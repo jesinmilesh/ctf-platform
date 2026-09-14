@@ -19,7 +19,7 @@ const ChallengeCard = {
     else if (difficulty === 'HARD') diffColor = 'var(--warning)';
     else if (difficulty === 'INSANE') diffColor = 'var(--danger)';
 
-    const targetId = challenge.id || challenge._id || challenge.mission_id || challenge.slug || 'preview';
+    const targetId = challenge.id || (challenge._id ? String(challenge._id) : '') || challenge.mission_id || challenge.slug || 'preview';
     const isPreview = targetId === 'preview';
 
     return `

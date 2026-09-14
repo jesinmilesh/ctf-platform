@@ -7,7 +7,8 @@ const authService = require('../services/authService');
 
 exports.login = async (req, res, next) => {
   try {
-    const { username, password } = req.body;
+    const username = req.body.username || req.body.identifier;
+    const password = req.body.password;
     if (!username || !password) {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'Callsign and password required.' });
     }

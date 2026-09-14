@@ -5,8 +5,17 @@
 
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const adminController = require('../controllers/adminController');
 const { requireAdmin } = require('../middleware/roles');
+
+// Configure multer memory storage with 100MB limit for secure challenge asset uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 100 * 1024 * 1024 // 100MB per file
+  }
+});
 
 // Apply admin clearance check across C2 routes
 router.use(requireAdmin);
@@ -18,6 +27,11 @@ router.put('/challenges/:id', (req, res) => adminController.updateChallenge(req,
 router.delete('/challenges/:id', (req, res) => adminController.deleteChallenge(req, res));
 router.get('/challenges/:id/validate', (req, res) => adminController.validateChallenge(req, res));
 router.post('/challenges/test-flag', (req, res) => adminController.testFlag(req, res));
+
+// Admin Challenge Asset Management (Section 4, 5, 16, 30)
+router.get('/challenges/:id/files', (req, res) => adminController.getChallengeFiles(req, res));
+router.post('/challenges/:id/files', upload.array('files', 10), (req, res) => adminController.uploadChallengeFiles(req, res));
+router.delete('/challenges/:id/files/:fileId', (req, res) => adminController.deleteChallengeFile(req, res));
 
 router.get('/categories', (req, res) => adminController.getCategories(req, res));
 router.get('/users', (req, res) => adminController.getUsers(req, res));

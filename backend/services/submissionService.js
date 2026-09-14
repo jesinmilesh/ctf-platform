@@ -38,13 +38,16 @@ class SubmissionService {
       };
     }
 
-    // 1. Find challenge with flexible normalization (ch-01 <-> ch-001)
+    // 1. Find challenge with flexible normalization (ch-01 <-> ch-001, id, _id, slug, mission_id)
+    const cleanChallengeId = String(challengeId || '').trim();
     const challenge = db.getChallenges().find(c =>
-      c.id === challengeId ||
-      c.slug === challengeId ||
-      c.mission_id === challengeId ||
-      c.id === challengeId.replace(/^ch-0*(\d+)$/, (m, p) => 'ch-' + (parseInt(p, 10) < 10 ? '0' + parseInt(p, 10) : p)) ||
-      c.id.replace(/^ch-0*(\d+)$/, 'ch-$1') === challengeId
+      c.id === cleanChallengeId ||
+      c.slug === cleanChallengeId ||
+      c.mission_id === cleanChallengeId ||
+      (c._id && String(c._id) === cleanChallengeId) ||
+      (c.title && c.title.toLowerCase() === cleanChallengeId.toLowerCase()) ||
+      c.id === cleanChallengeId.replace(/^ch-0*(\d+)$/, (m, p) => 'ch-' + (parseInt(p, 10) < 10 ? '0' + parseInt(p, 10) : p)) ||
+      c.id.replace(/^ch-0*(\d+)$/, 'ch-$1') === cleanChallengeId
     );
 
     if (!challenge) {

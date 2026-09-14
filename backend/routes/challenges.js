@@ -10,6 +10,8 @@ const { submissionLimiter } = require('../middleware/rateLimit');
 
 router.get('/', challengeController.getAll);
 router.get('/:id', challengeController.getOne);
+router.get('/:id/files', challengeController.getChallengeFiles);
+router.get('/:id/files/:fileId/download', challengeController.downloadChallengeFile);
 router.post('/:id/submit', submissionLimiter, challengeController.submitFlag);
 router.post('/:id/hints/:hintId/reveal', challengeController.unlockHint);
 router.post('/:id/instance', challengeController.deployInstance);
