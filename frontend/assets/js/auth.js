@@ -56,11 +56,19 @@ class AuthManager {
 
     if (this.user) {
       const callsign = this.user.callsign || this.user.username;
+      const teamId = this.user.team?.id || this.user.team?.teamId || '';
+      const safe = window.Utils ? window.Utils.escapeHTML : (s) => s;
+
+      const teamBadge = teamId
+        ? `<span style="font-family:var(--font-mono); font-size:10px; color:var(--accent); background:rgba(0,255,136,0.1); border:1px solid rgba(0,255,136,0.3); padding:2px 6px; border-radius:3px; margin-left:4px;">${safe(teamId)}</span>`
+        : '';
+
       userContainer.innerHTML = `
-        <div class="nav-user-badge">
-          <a href="/profile.html" class="nav-user-link">
+        <div class="nav-user-badge" style="display:flex; align-items:center; gap:8px;">
+          <a href="/team.html" class="nav-user-link" style="display:flex; align-items:center; gap:6px; text-decoration:none;">
             <span class="status-indicator"></span>
-            <span class="user-callsign">${window.Utils ? window.Utils.escapeHTML(callsign) : callsign}</span>
+            <span class="user-callsign">${safe(callsign)}</span>
+            ${teamBadge}
           </a>
           <button class="btn btn-sm btn-outline" id="navLogoutBtn" title="Sign Out">LOGOUT</button>
         </div>

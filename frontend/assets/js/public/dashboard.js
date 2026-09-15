@@ -1,13 +1,18 @@
 /**
  * XPLOITX // CYBER BATTLEFIELD
  * Participant Command Center HUD (assets/js/public/dashboard.js)
+ *
+ * Data flow: GET /auth/me → activeUser → populate HUD
+ * No-team guard: users without a squad are redirected to /team.html for onboarding.
+ * Source of truth: backend + MongoDB — never localStorage.
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
   Navbar.render('navbar-container', 'dashboard');
 
-  await window.authManager.requireAuth('/login.html');
+  await window.authManager.requireAuth('/login.html?redirect=/dashboard.html');
   const user = window.authManager.getUser();
+  if (!user) return; // requireAuth redirected
 
   try {
     const [meRes, challengesRes, lbRes] = await Promise.all([
@@ -18,53 +23,71 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const activeUser = meRes.user || user;
 
-    // Header Callsign & Status
+    // ── Squad Onboarding Guard ──────────────────────────────────────────────
+    // If user has no squad, redirect to team onboarding page.
+    // This is enforced here (frontend) and the team.html page handles the forms.
+    // Authoritative check: team_id from /auth/me, not localStorage.
+    if (!activeUser.team_id) {
+      window.location.href = '/team.html?onboarding=1';
+      return;
+    }
+
+    // ── Header: Callsign & Affiliation ──────────────────────────────────────
     const callsignEl = document.getElementById('hudCallsign');
     if (callsignEl) callsignEl.textContent = activeUser.callsign || activeUser.username;
 
     const affiliationEl = document.getElementById('hudAffiliation');
     if (affiliationEl) affiliationEl.textContent = activeUser.affiliation || 'Independent Operative';
 
-    // Squad & Rank Detection
-    let squadName = 'SOLO OPERATIVE';
+    // ── Squad Info ──────────────────────────────────────────────────────────
+    let squadDisplay = 'SOLO OPERATIVE';
     let rankDisplay = '#--';
     let teamScore = activeUser.totalPoints || 0;
     let solvesCount = activeUser.solvesCount || 0;
+    let firstBloods = 0;
 
     if (activeUser.team) {
-      squadName = activeUser.team.name;
-      teamScore = activeUser.team.score || 0;
-      solvesCount = activeUser.team.solvesCount || solvesCount;
+      const team = activeUser.team;
+      // Display: "CYBER WARRIORS · XPX-TEAM-000001"
+      const teamId = team.id || team.teamId || '';
+      squadDisplay = teamId ? `${team.name} · ${teamId}` : team.name;
+      teamScore = team.score || 0;
+      solvesCount = team.solvesCount || solvesCount;
+      firstBloods = team.firstBloods || 0;
 
-      const teamRankIdx = lbRes.teams.findIndex(t => t.id === activeUser.team.id);
+      const teamRankIdx = (lbRes.teams || []).findIndex(t => t.id === team.id);
       if (teamRankIdx !== -1) {
         rankDisplay = `#${String(teamRankIdx + 1).padStart(2, '0')}`;
       }
     }
 
     const squadEl = document.getElementById('hudSquad');
-    if (squadEl) squadEl.textContent = squadName;
+    if (squadEl) squadEl.textContent = squadDisplay;
 
-    // Metric Cards
+    // ── Metric Cards ────────────────────────────────────────────────────────
     const metricsSlot = document.getElementById('hudMetricsSlot');
     if (metricsSlot) {
       metricsSlot.innerHTML = [
-        ScoreCard.render({ label: 'CURRENT RANK', value: rankDisplay, subtext: 'TACTICAL STANDINGS', accentColor: 'var(--gold)', icon: '🏆' }),
+        ScoreCard.render({ label: 'CURRENT RANK',  value: rankDisplay,                       subtext: 'TACTICAL STANDINGS',    accentColor: 'var(--gold)',   icon: '🏆' }),
         ScoreCard.render({ label: 'TOTAL XP SCORE', value: window.Utils.formatXP(teamScore), subtext: 'ACCUMULATED TELEMETRY', accentColor: 'var(--accent)', icon: '⚡' }),
-        ScoreCard.render({ label: 'FLAGS CAPTURED', value: solvesCount, subtext: 'VERIFIED SOLVES', accentColor: 'var(--cyan)', icon: '🚩' }),
-        ScoreCard.render({ label: 'FIRST BLOODS', value: activeUser.team ? (activeUser.team.firstBloods || 0) : 0, subtext: 'APEX CAPTURES', accentColor: 'var(--danger)', icon: '🩸' })
+        ScoreCard.render({ label: 'FLAGS CAPTURED', value: solvesCount,                      subtext: 'VERIFIED SOLVES',       accentColor: 'var(--cyan)',   icon: '🚩' }),
+        ScoreCard.render({ label: 'FIRST BLOODS',   value: firstBloods,                      subtext: 'APEX CAPTURES',         accentColor: 'var(--danger)', icon: '🩸' })
       ].join('');
     }
 
-    // Active Target Operations
+    // ── Active Missions ─────────────────────────────────────────────────────
     const missionsGrid = document.getElementById('hudMissionsSlot');
     if (missionsGrid && challengesRes.challenges) {
       const unsolved = challengesRes.challenges.filter(c => !c.is_solved);
       const toShow = unsolved.length > 0 ? unsolved.slice(0, 3) : challengesRes.challenges.slice(0, 3);
-      missionsGrid.innerHTML = toShow.map(c => ChallengeCard.render(c)).join('');
+      if (toShow.length > 0) {
+        missionsGrid.innerHTML = toShow.map(c => ChallengeCard.render(c)).join('');
+      } else {
+        missionsGrid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--text-secondary); font-family:var(--font-mono); font-size:13px;">NO ACTIVE MISSIONS DEPLOYED YET.</div>`;
+      }
     }
 
   } catch (err) {
-    console.error('Dashboard init error:', err);
+    console.error('[DASHBOARD] Init error:', err);
   }
 });

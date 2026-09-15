@@ -304,6 +304,13 @@ class AuthService {
     const team = db.getTeams().find(t => t.id === user.team_id);
     const userSolves = db.getSolves().filter(s => s.user_id === user.id);
 
+    // Derive member role from team_members collection
+    let teamRole = null;
+    if (team) {
+      const memberRecord = db.getTeamMembers().find(m => m.user_id === user.id && m.team_id === team.id);
+      teamRole = memberRecord?.role || (team.captain_id === user.id ? 'CAPTAIN' : 'MEMBER');
+    }
+
     return {
       id: user.id,
       username: user.username,
@@ -313,13 +320,16 @@ class AuthService {
       affiliation: user.affiliation,
       team_id: user.team_id,
       team: team ? {
-        id: team.id,
+        id: team.id,            // XPX-TEAM-000001 (the public display ID)
+        teamId: team.id,        // alias for clarity in frontend
         name: team.name,
         slug: team.slug,
         score: team.total_score,
         solvesCount: team.solves_count,
         firstBloods: team.first_bloods,
-        accessCode: team.access_code
+        memberCount: team.member_count,
+        role: teamRole,
+        accessCode: teamRole === 'CAPTAIN' ? team.access_code : undefined
       } : null,
       solvesCount: userSolves.length,
       totalPoints: userSolves.reduce((acc, s) => acc + s.points_awarded, 0)

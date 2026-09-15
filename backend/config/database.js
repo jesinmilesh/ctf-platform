@@ -311,8 +311,28 @@ class DatabaseEngine {
 
       const tColl = this.mongoDb.collection('teams');
       await tColl.createIndex({ id: 1 }, { unique: true, sparse: true });
-      await tColl.createIndex({ name: 1 }, { unique: true });
-      await tColl.createIndex({ access_code: 1 });
+      // Case-insensitive unique team name per competition (the real race-safe constraint)
+      await tColl.createIndex(
+        { normalizedName: 1, competition_id: 1 },
+        { unique: true, sparse: true, name: 'unique_team_name_per_competition' }
+      ).catch(() => {});
+      // Keep legacy name index for backward compat but non-unique now (competition scoped is the real constraint)
+      await tColl.createIndex({ access_code: 1 }, { unique: true, sparse: true }).catch(() => {});
+      await tColl.createIndex({ competition_id: 1 });
+      await tColl.createIndex({ captain_id: 1 });
+
+      // team_members: prevent any user from joining multiple squads in same competition
+      const tmColl = this.mongoDb.collection('team_members');
+      await tmColl.createIndex({ id: 1 }, { unique: true, sparse: true }).catch(() => {});
+      await tmColl.createIndex(
+        { user_id: 1, competition_id: 1 },
+        { unique: true, sparse: true, name: 'unique_member_per_competition' }
+      ).catch(() => {});
+      await tmColl.createIndex({ team_id: 1 });
+
+      // counters: for XPX-TEAM-XXXXXX sequential ID generation
+      const counterColl = this.mongoDb.collection('counters');
+      await counterColl.createIndex({ _id: 1 }).catch(() => {});
 
       const cColl = this.mongoDb.collection('challenges');
       // CANONICAL PUBLIC ID: id is unique across all challenges.

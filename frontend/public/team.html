@@ -18,31 +18,40 @@
   <div id="navbar-container"></div>
 
   <main class="container" style="padding: 40px 20px;">
-    <!-- View 1: When user has no squad yet -->
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- View 1: Onboarding — when user has no squad yet                    -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
     <div id="noSquadView" style="display:none; max-width:860px; margin:0 auto;">
       <header style="margin-bottom:32px; text-align:center;">
         <span style="font-family:var(--font-mono); font-size:12px; color:var(--accent); font-weight:700; letter-spacing:0.12em;">
           SQUAD DEPLOYMENT PROTOCOL
         </span>
         <h1 style="font-family:var(--font-heading); font-size:32px; font-weight:800; color:#fff; margin:6px 0 8px 0;">
-          Deploy as an Operative Squad
+          Choose Your Squad
         </h1>
         <p style="color:var(--text-secondary); font-size:14px; margin:0;">
           Form a new strike team or enter an existing squad using a verified access code.
+          You must join or create a squad before accessing the battlefield.
         </p>
       </header>
 
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:24px;">
-        <!-- Create Squad -->
-        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:28px;">
+
+        <!-- Create Squad Card -->
+        <div style="background:var(--bg-card); border:1px solid var(--accent); border-top:3px solid var(--accent); border-radius:var(--radius-md); padding:28px;">
           <h2 style="font-family:var(--font-heading); font-size:20px; font-weight:700; color:var(--accent); margin:0 0 10px 0;">
-            CREATE NEW SQUAD
+            ⚡ CREATE NEW SQUAD
           </h2>
           <p style="color:var(--text-secondary); font-size:13px; line-height:1.6; margin-bottom:20px;">
-            Commission a new tactical squad. You will become squad captain and receive a secret access code to invite teammates.
+            Commission a new tactical squad. You become captain and receive a secure access code to invite teammates.
+            A unique Squad ID (<code style="color:var(--accent);">XPX-TEAM-XXXXXX</code>) will be assigned by the server.
           </p>
 
-          <form id="createSquadForm" style="display:flex; flex-direction:column; gap:16px;">
+          <!-- Error box for create -->
+          <div id="createSquadError" style="display:none; background:rgba(255,59,92,0.1); border:1px solid var(--danger); color:var(--danger); padding:10px 14px; border-radius:var(--radius-sm); font-size:12px; font-family:var(--font-mono); margin-bottom:14px; line-height:1.5;"></div>
+
+          <form id="createSquadForm" style="display:flex; flex-direction:column; gap:16px;" autocomplete="off">
             <div>
               <label for="newSquadName" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">
                 SQUAD DESIGNATION
@@ -50,27 +59,34 @@
               <input
                 type="text"
                 id="newSquadName"
+                name="squadName"
                 required
+                minlength="3"
+                maxlength="50"
                 placeholder="e.g. CYBER_SHADOWS"
+                autocomplete="off"
                 style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;"
               >
             </div>
-            <button type="submit" class="btn btn-primary" style="padding:12px;">
+            <button type="submit" id="createSquadBtn" class="btn btn-primary" style="padding:12px; font-size:13px;">
               COMMISSION SQUAD
             </button>
           </form>
         </div>
 
-        <!-- Join Squad -->
-        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:28px;">
+        <!-- Join Squad Card -->
+        <div style="background:var(--bg-card); border:1px solid var(--cyan); border-top:3px solid var(--cyan); border-radius:var(--radius-md); padding:28px;">
           <h2 style="font-family:var(--font-heading); font-size:20px; font-weight:700; color:var(--cyan); margin:0 0 10px 0;">
-            JOIN EXISTING SQUAD
+            🔗 JOIN EXISTING SQUAD
           </h2>
           <p style="color:var(--text-secondary); font-size:13px; line-height:1.6; margin-bottom:20px;">
-            Have an access code from your squad captain? Input it below to synchronize your clearance.
+            Have an access code from your squad captain? Enter it below to synchronize your clearance and join their team.
           </p>
 
-          <form id="joinSquadForm" style="display:flex; flex-direction:column; gap:16px;">
+          <!-- Error box for join -->
+          <div id="joinSquadError" style="display:none; background:rgba(255,59,92,0.1); border:1px solid var(--danger); color:var(--danger); padding:10px 14px; border-radius:var(--radius-sm); font-size:12px; font-family:var(--font-mono); margin-bottom:14px; line-height:1.5;"></div>
+
+          <form id="joinSquadForm" style="display:flex; flex-direction:column; gap:16px;" autocomplete="off">
             <div>
               <label for="joinAccessCode" style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">
                 SECURITY ACCESS CODE
@@ -78,39 +94,46 @@
               <input
                 type="text"
                 id="joinAccessCode"
+                name="accessCode"
                 required
-                placeholder="e.g. NEXUS-8921-CLASSIFIED"
+                placeholder="e.g. XPL-7K9P4Q"
+                autocomplete="off"
                 style="width:100%; background:var(--bg-secondary); border:1px solid var(--border); color:#fff; padding:12px 14px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;"
               >
             </div>
-            <button type="submit" class="btn btn-outline" style="padding:12px;">
+            <button type="submit" id="joinSquadBtn" class="btn btn-outline" style="padding:12px; font-size:13px; border-color:var(--cyan); color:var(--cyan);">
               LINK WITH SQUAD
             </button>
           </form>
         </div>
+
       </div>
     </div>
 
-    <!-- View 2: When user has squad -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- View 2: Squad Dashboard — when user belongs to a squad             -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
     <div id="hasSquadView" style="display:none; max-width:960px; margin:0 auto;">
+
       <!-- Squad Header -->
-      <header style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:28px; margin-bottom:28px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:20px;">
+      <header style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:28px; margin-bottom:28px; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:20px;">
         <div>
           <span style="font-family:var(--font-mono); font-size:11px; color:var(--accent); font-weight:700;">
             TACTICAL SQUAD COMMAND
           </span>
-          <h1 id="squadName" style="font-family:var(--font-heading); font-size:32px; font-weight:800; color:#fff; margin:4px 0 8px 0;">
+          <h1 id="squadName" style="font-family:var(--font-heading); font-size:32px; font-weight:800; color:#fff; margin:4px 0 4px 0;">
             SQUAD LOADING...
           </h1>
-          <div style="font-family:var(--font-mono); font-size:12px; color:var(--text-secondary);">
-            STATUS: ACTIVE ON LIVE BATTLEFIELD GRID
+          <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); display:flex; gap:12px; flex-wrap:wrap;">
+            <span>SQUAD ID: <span id="squadTeamId" style="color:var(--accent); font-weight:700;">—</span></span>
+            <span>STATUS: <span style="color:var(--accent);">ACTIVE</span></span>
           </div>
         </div>
 
-        <div style="background:var(--bg-secondary); border:1px solid var(--border); padding:14px 20px; border-radius:var(--radius-sm); text-align:right;">
+        <div style="background:var(--bg-secondary); border:1px solid var(--border); padding:14px 20px; border-radius:var(--radius-sm); text-align:right; min-width:200px;">
           <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:4px;">INVITE ACCESS CODE</div>
           <div style="display:flex; align-items:center; gap:10px;">
-            <code id="squadAccessCode" style="font-family:var(--font-mono); font-size:14px; font-weight:700; color:var(--cyan);">CODE</code>
+            <code id="squadAccessCode" style="font-family:var(--font-mono); font-size:14px; font-weight:700; color:var(--cyan);">—</code>
             <button id="copyAccessCodeBtn" class="btn btn-sm btn-outline" style="padding:4px 8px;">COPY</button>
           </div>
         </div>
@@ -149,6 +172,7 @@
           <div id="squadSolvesSlot"></div>
         </div>
       </div>
+
     </div>
   </main>
 
