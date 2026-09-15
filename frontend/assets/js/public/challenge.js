@@ -269,7 +269,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (files.length > 0) {
         filesContainer.innerHTML = files.map(f => {
           const sizeStr = formatBytes(f.size || f.sizeBytes || f.file_size_bytes);
-          const downloadUrl = f.downloadUrl || `/api/v1/challenges/${data.id}/files/${f.id}/download`;
+          const targetChallengeId = data.id || data._id || challengeId;
+          const targetFileId = f.id || f.fileId;
+          const downloadUrl = f.downloadUrl || `/api/v1/challenges/${targetChallengeId}/files/${targetFileId}/download`;
           const fileName = f.name || f.filename || 'asset.bin';
           const shaHash = f.sha256 ? `${f.sha256.substring(0, 8)}...` : null;
 

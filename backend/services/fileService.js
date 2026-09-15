@@ -147,16 +147,39 @@ class FileService {
   }
 
   /**
-   * Get all files belonging to a specific challenge (supports multiple alternate IDs e.g. id and _id)
+   * Get all files belonging to a specific challenge.
+   * Accepts the canonical challenge ID plus any number of alternate IDs (old UUIDs, slugs, etc.)
+   * to handle files uploaded before the canonical ID fix.
    */
   getChallengeFiles(challengeId, ...altIds) {
     if (!challengeId) return [];
-    const ids = [challengeId, ...altIds].filter(Boolean).map(id => String(id).trim());
+    // Build a comprehensive set of all possible IDs for this challenge
+    const ids = new Set([challengeId, ...altIds].filter(Boolean).map(id => String(id).trim()));
+
+    // Auto-discover legacy_id or alternate keys from the challenge in memory
+    try {
+      const chs = db.getChallenges ? db.getChallenges() : [];
+      const ch = chs.find(c =>
+        ids.has(String(c.id)) ||
+        (c._id && ids.has(String(c._id))) ||
+        (c.legacy_id && ids.has(String(c.legacy_id))) ||
+        (c.mission_id && ids.has(String(c.mission_id))) ||
+        (c.slug && ids.has(String(c.slug)))
+      );
+      if (ch) {
+        if (ch.id) ids.add(String(ch.id).trim());
+        if (ch._id) ids.add(String(ch._id).trim());
+        if (ch.legacy_id) ids.add(String(ch.legacy_id).trim());
+        if (ch.mission_id) ids.add(String(ch.mission_id).trim());
+        if (ch.slug) ids.add(String(ch.slug).trim());
+      }
+    } catch (_) {}
+
     const files = db.getFiles ? db.getFiles() : [];
     return files.filter(f => {
       const fCId = f.challenge_id ? String(f.challenge_id).trim() : '';
       const fAltCId = f.challengeId ? String(f.challengeId).trim() : '';
-      return ids.includes(fCId) || ids.includes(fAltCId);
+      return ids.has(fCId) || ids.has(fAltCId);
     });
   }
 

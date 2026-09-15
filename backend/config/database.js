@@ -154,15 +154,28 @@ class DatabaseEngine {
   }
 
   /**
-   * Production Clean Initialization: Schema defaults and Initial Administrator.
-   * ZERO fake teams, ZERO fake challenges, ZERO demo scores.
+   * Production Initialization: Schema defaults ONLY.
+   * NEVER wipes production data arrays — MongoDB Atlas is the authoritative source.
+   * syncFromMongo() loads real data from Atlas after connection.
+   *
+   * In pure in-memory mode (no MongoDB), this populates default competition/category
+   * structures so the platform has a functional skeleton for local development.
    */
   initDefaultSeed() {
     const compId = 'c0000000-0000-0000-0000-000000000001';
-    
-    // 1. Initial Competition Entity
-    this.data.competitions.length = 0;
-    this.data.competitions.push({
+
+    const defaultCategories = [
+      { id: 'cat-01', competition_id: compId, name: 'PWN', slug: 'pwn', description: 'Binary exploitation, ROP chains, and heap overflow', color_accent: '#ff3b5c', display_order: 1 },
+      { id: 'cat-02', competition_id: compId, name: 'Misc', slug: 'misc', description: 'Miscellaneous tactical missions', color_accent: '#a3a3a3', display_order: 2 },
+      { id: 'cat-03', competition_id: compId, name: 'Web', slug: 'web', description: 'Web application exploitation and API bypasses', color_accent: '#00d8f6', display_order: 3 },
+      { id: 'cat-04', competition_id: compId, name: 'Network', slug: 'network', description: 'Packet inspection and routing protocols', color_accent: '#f9c74f', display_order: 4 },
+      { id: 'cat-05', competition_id: compId, name: 'Digital Forensic', slug: 'forensic', description: 'Memory dump analysis and artifact extraction', color_accent: '#00ff9c', display_order: 5 },
+      { id: 'cat-06', competition_id: compId, name: 'OSINT', slug: 'osint', description: 'Open source intelligence and asset tracing', color_accent: '#4cc9f0', display_order: 6 },
+      { id: 'cat-07', competition_id: compId, name: 'Cryptography', slug: 'crypto', description: 'Ciphers, discrete logarithms, and cryptanalysis', color_accent: '#c77dff', display_order: 7 },
+      { id: 'cat-08', competition_id: compId, name: 'Steganograhy', slug: 'stegano', description: 'Covert data channels and hidden payloads', color_accent: '#ffb020', display_order: 8 }
+    ];
+
+    const defaultCompetition = {
       id: compId,
       slug: 'xploitx-2026',
       name: 'XPLOITX 2.0 BETA',
@@ -178,23 +191,35 @@ class DatabaseEngine {
       dynamic_scoring: true,
       scoring_decay: 30,
       created_at: new Date().toISOString()
-    });
+    };
+
+    // Store defaults reference for MongoDB first-boot seeding
+    this.defaultCompetitionTemplate = defaultCompetition;
+    this.defaultCategoriesTemplate = defaultCategories;
+
+    // IMPORTANT: Only populate if running in pure in-memory mode (no MongoDB configured).
+    // When MongoDB is configured, syncFromMongo() will hydrate real data from Atlas.
+    // Do NOT wipe or overwrite any production data arrays.
+    if (this.isMongo) {
+      if (this.data.competitions.length === 0) {
+        Array.prototype.push.call(this.data.competitions, defaultCompetition);
+      }
+      if (this.data.categories.length === 0) {
+        defaultCategories.forEach(cat => Array.prototype.push.call(this.data.categories, cat));
+      }
+      // All other arrays remain intact until syncFromMongo() runs.
+      return;
+    }
+
+    // Pure in-memory mode (no MongoDB): populate full default skeleton.
+    this.data.competitions.length = 0;
+    this.data.competitions.push(defaultCompetition);
 
     // 2. Default Sector Taxonomy (8 Core Cybersecurity Categories)
     this.data.categories.length = 0;
-    this.data.categories.push(
-      { id: 'cat-01', competition_id: compId, name: 'PWN', slug: 'pwn', description: 'Binary exploitation, ROP chains, and heap overflow', color_accent: '#ff3b5c', display_order: 1 },
-      { id: 'cat-02', competition_id: compId, name: 'Misc', slug: 'misc', description: 'Miscellaneous tactical missions', color_accent: '#a3a3a3', display_order: 2 },
-      { id: 'cat-03', competition_id: compId, name: 'Web', slug: 'web', description: 'Web application exploitation and API bypasses', color_accent: '#00d8f6', display_order: 3 },
-      { id: 'cat-04', competition_id: compId, name: 'Network', slug: 'network', description: 'Packet inspection and routing protocols', color_accent: '#f9c74f', display_order: 4 },
-      { id: 'cat-05', competition_id: compId, name: 'Digital Forensic', slug: 'forensic', description: 'Memory dump analysis and artifact extraction', color_accent: '#00ff9c', display_order: 5 },
-      { id: 'cat-06', competition_id: compId, name: 'OSINT', slug: 'osint', description: 'Open source intelligence and asset tracing', color_accent: '#4cc9f0', display_order: 6 },
-      { id: 'cat-07', competition_id: compId, name: 'Cryptography', slug: 'crypto', description: 'Ciphers, discrete logarithms, and cryptanalysis', color_accent: '#c77dff', display_order: 7 },
-      { id: 'cat-08', competition_id: compId, name: 'Steganograhy', slug: 'stegano', description: 'Covert data channels and hidden payloads', color_accent: '#ffb020', display_order: 8 }
-    );
+    defaultCategories.forEach(cat => this.data.categories.push(cat));
 
-    // 3. Administrator Policy: ZERO hardcoded credentials.
-    // Clean initial state: 0 users unless securely configured via BOOTSTRAP_ADMIN_EMAIL & BOOTSTRAP_ADMIN_PASSWORD
+    // 3. Administrator bootstrap in memory-only mode
     this.data.users.length = 0;
     if (process.env.BOOTSTRAP_ADMIN_EMAIL && process.env.BOOTSTRAP_ADMIN_PASSWORD) {
       const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL.trim().toLowerCase();
@@ -214,25 +239,6 @@ class DatabaseEngine {
         created_at: new Date().toISOString()
       });
     }
-
-    // Clean initial state
-    this.data.teams.length = 0;
-    this.data.teamMembers.length = 0;
-    this.data.challenges.length = 0;
-    this.data.flags.length = 0;
-    this.data.challengeFiles.length = 0;
-    this.data.challengeHints.length = 0;
-    this.data.hintReveals.length = 0;
-    this.data.submissions.length = 0;
-    this.data.solves.length = 0;
-    this.data.firstBloods.length = 0;
-    this.data.scoreEvents.length = 0;
-    this.data.announcements.length = 0;
-    this.data.notifications.length = 0;
-    this.data.instances.length = 0;
-    this.data.portAllocations.length = 0;
-    this.data.auditLogs.length = 0;
-    this.data.sessions.length = 0;
   }
 
   /**
@@ -300,26 +306,41 @@ class DatabaseEngine {
     if (!this.mongoDb) return;
     try {
       const uColl = this.mongoDb.collection('users');
-      await uColl.createIndex({ id: 1 }, { unique: true });
+      await uColl.createIndex({ id: 1 }, { unique: true, sparse: true });
       await uColl.createIndex({ username: 1 }, { unique: true });
       await uColl.createIndex({ email: 1 }, { unique: true });
 
       const tColl = this.mongoDb.collection('teams');
-      await tColl.createIndex({ id: 1 }, { unique: true });
+      await tColl.createIndex({ id: 1 }, { unique: true, sparse: true });
       await tColl.createIndex({ name: 1 }, { unique: true });
       await tColl.createIndex({ access_code: 1 });
 
       const cColl = this.mongoDb.collection('challenges');
-      await cColl.createIndex({ id: 1 }, { unique: true });
-      await cColl.createIndex({ slug: 1 });
+      // NOTE: id is now always equal to _id.toString(). We drop any legacy unique
+      // index on id to prevent silent E11000 conflicts during document updates/upserts.
+      try {
+        const existingIndexes = await cColl.indexes().catch(() => []);
+        const legacyIdIndex = existingIndexes.find(idx => idx.name === 'id_1' && idx.unique);
+        if (legacyIdIndex) {
+          await cColl.dropIndex('id_1').catch(() => {});
+          console.log('[DATABASE] Dropped legacy unique index id_1 on challenges collection');
+        }
+      } catch (_) {}
+      await cColl.createIndex({ id: 1 }, { sparse: true }); // non-unique, sparse
+      await cColl.createIndex({ slug: 1 }, { sparse: true });
+
+      const cfColl = this.mongoDb.collection('challenge_files');
+      await cfColl.createIndex({ id: 1 }, { unique: true, sparse: true });
+      await cfColl.createIndex({ challenge_id: 1 });
+      await cfColl.createIndex({ challengeId: 1 });
 
       const sColl = this.mongoDb.collection('submissions');
-      await sColl.createIndex({ id: 1 }, { unique: true });
+      await sColl.createIndex({ id: 1 }, { unique: true, sparse: true });
       await sColl.createIndex({ challenge_id: 1, team_id: 1 });
       await sColl.createIndex({ created_at: -1 });
 
       const slvColl = this.mongoDb.collection('solves');
-      await slvColl.createIndex({ id: 1 }, { unique: true });
+      await slvColl.createIndex({ id: 1 }, { unique: true, sparse: true });
       await slvColl.createIndex({ challenge_id: 1, team_id: 1 });
 
       const sessColl = this.mongoDb.collection('sessions');
@@ -392,16 +413,30 @@ class DatabaseEngine {
       // 2. Hydrate each collection from Atlas
       // Use raw Array.prototype.push during hydration to avoid triggering
       // the tracked push() which would replicate data back to MongoDB (infinite loop).
+      //
+      // CANONICAL ID CONTRACT:
+      // - challenges: ALWAYS set id = String(_id). This ensures challenge.id === MongoDB _id string,
+      //   fixing the "Mission Not Found" bug caused by the dual-ID system.
+      // - ALL OTHER collections: preserve existing id field if present.
+      //   Foreign key references (competition_id, category_id, challenge_id) rely on these original IDs.
+      //   Only set id = String(_id) as a FALLBACK when id is absent.
       for (const [key, colName] of Object.entries(COLLECTION_MAP)) {
         const docs = await this.mongoDb.collection(colName).find({}).toArray();
         const cleanDocs = docs.map(d => {
           const item = { ...d };
-          // CRITICAL: Always override item.id with the MongoDB _id string.
-          // This ensures challenge.id === String(challenge._id) everywhere,
-          // eliminating the dual-ID mismatch that caused "Mission Not Found".
           if (d._id) {
             item._id = d._id.toString();
-            item.id = d._id.toString();
+            if (key === 'challenges') {
+              // Retain original custom UUID if present so old file associations can be migrated
+              if (d.id && String(d.id) !== d._id.toString()) {
+                item.legacy_id = String(d.id);
+              }
+              // Challenges: ALWAYS override id with _id string (canonical ID contract).
+              item.id = d._id.toString();
+            } else {
+              // All other collections: preserve existing id; fall back to _id string only if absent.
+              if (!item.id) item.id = d._id.toString();
+            }
           }
           return item;
         });
@@ -412,6 +447,11 @@ class DatabaseEngine {
         cleanDocs.forEach(d => Array.prototype.push.call(target, d));
       }
 
+      // After hydrating challenge_files, reconcile any file records whose challenge_id
+      // still contains an old custom UUID (pre-canonical-ID-fix). Update them to the
+      // canonical _id string so file lookups work correctly.
+      this._reconcileFileChallengeIds();
+
       // 3. Hydrate Settings
       const savedSettings = await this.mongoDb.collection('settings').findOne({ id: 'global_settings' });
       if (savedSettings) {
@@ -420,10 +460,66 @@ class DatabaseEngine {
         this.data.settings = { ...this.data.settings, ...savedSettings };
       }
       console.log('[DATABASE] Successfully synchronized all data from MongoDB Atlas into memory.');
+      console.log(`[DATABASE] Loaded: ${this.data.challenges.length} challenges, ${this.data.challengeFiles.length} files, ${this.data.users.length} users, ${this.data.teams.length} teams`);
     } catch (err) {
       console.error('[DATABASE] syncFromMongo error:', err.message);
     } finally {
       this._hydrating = false;
+    }
+  }
+
+  /**
+   * After hydration, repair any challenge_file records whose challenge_id
+   * still contains an old custom UUID from before the canonical ID fix.
+   * Matches files to challenges by attempting both the stored challenge_id
+   * AND the challenge's _id string. Updates in-memory records and persists
+   * corrections back to MongoDB Atlas.
+   *
+   * This is safe to run repeatedly — it only updates stale records.
+   * It NEVER deletes any data.
+   */
+  _reconcileFileChallengeIds() {
+    if (!this.data.challengeFiles || this.data.challengeFiles.length === 0) return;
+    if (!this.data.challenges || this.data.challenges.length === 0) return;
+
+    let repaired = 0;
+    for (const file of this.data.challengeFiles) {
+      const storedChallengeId = file.challenge_id || file.challengeId;
+      if (!storedChallengeId) continue;
+
+      // Check if the stored challenge_id already matches a known challenge canonical id
+      const matchDirect = this.data.challenges.find(c => c.id === storedChallengeId);
+      if (matchDirect) continue; // Already correct — no repair needed
+
+      // Try to find the owning challenge by old UUID or other identifiers
+      const matchAlt = this.data.challenges.find(c =>
+        (c._id && c._id.toString() === storedChallengeId) ||
+        c.legacy_id === storedChallengeId ||
+        c.mission_id === storedChallengeId ||
+        c.slug === storedChallengeId
+      );
+
+      if (matchAlt) {
+        const canonicalId = matchAlt.id; // always = _id.toString() after hydration
+        console.log(`[DATABASE] Repairing file ${file.id}: challenge_id ${storedChallengeId} -> ${canonicalId}`);
+        file.challenge_id = canonicalId;
+        file.challengeId = canonicalId;
+        repaired++;
+
+        // Persist the corrected relationship back to Atlas
+        if (this.isMongo && this.mongoDb) {
+          const fileFilter = file._id
+            ? { _id: file._id }
+            : { id: file.id };
+          this.mongoDb.collection('challenge_files')
+            .updateOne(fileFilter, { $set: { challenge_id: canonicalId, challengeId: canonicalId } })
+            .catch(err => console.warn('[DATABASE] File reconciliation persist error:', err.message));
+        }
+      }
+    }
+
+    if (repaired > 0) {
+      console.log(`[DATABASE] Reconciled ${repaired} file-challenge relationship(s).`);
     }
   }
 

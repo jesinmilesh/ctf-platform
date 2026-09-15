@@ -283,6 +283,12 @@ exports.getChallengeFiles = async (req, res) => {
 exports.downloadChallengeFile = async (req, res) => {
   const { id: challengeId, fileId } = req.params;
   const cleanId = challengeId ? String(challengeId).trim() : '';
+
+  // Hydrate cache from Atlas if empty (important after restart)
+  if (db.isMongo && db.mongoDb && db.getChallenges().length === 0) {
+    await db.syncFromMongo().catch(() => {});
+  }
+
   const challenge = db.getChallenges().find(c =>
     c.id === cleanId ||
     c.slug === cleanId ||
@@ -300,7 +306,7 @@ exports.downloadChallengeFile = async (req, res) => {
 
   const fileRecord = fileService.getFileRecord(fileId);
   const targetChallengeId = challenge._id ? String(challenge._id) : challenge.id;
-  const altChallengeIds = [challenge.id, String(challenge._id || ''), challenge.slug, challenge.mission_id, targetChallengeId].filter(Boolean);
+  const altChallengeIds = [challenge.id, String(challenge._id || ''), challenge.slug, challenge.mission_id, challenge.legacy_id, targetChallengeId].filter(Boolean);
   const fileBelongsToChallenge = fileRecord && (
     altChallengeIds.includes(String(fileRecord.challenge_id || '').trim()) ||
     altChallengeIds.includes(String(fileRecord.challengeId || '').trim())
@@ -358,7 +364,11 @@ exports.downloadChallengeFile = async (req, res) => {
     stream.on('error', (streamErr) => {
       console.error('[STREAM ERROR]:', streamErr);
       if (!res.headersSent) {
-        res.status(500).json({ error: 'STREAM_FAILED', message: 'Failed to stream challenge asset' });
+        const isMissing = streamErr.code === 'ENOENT' || (streamErr.message && streamErr.message.includes('not found'));
+        res.status(isMissing ? 404 : 500).json({
+          error: isMissing ? 'FILE_PAYLOAD_NOT_FOUND' : 'STREAM_FAILED',
+          message: isMissing ? 'Challenge asset payload missing from server storage' : 'Failed to stream challenge asset'
+        });
       }
     });
 
@@ -377,6 +387,12 @@ exports.downloadChallengeFile = async (req, res) => {
       metadata: { challengeId: targetChallengeId, fileId, error: err.message }
     }).catch(() => {});
 
-    res.status(500).json({ error: 'DOWNLOAD_FAILED', message: err.message });
+    const isNotFound = err.code === 'ENOENT' ||
+      (err.message && (err.message.includes('not found') || err.message.includes('STORAGE_ERROR')));
+    const statusCode = isNotFound ? 404 : 500;
+    const errorCode = isNotFound ? 'FILE_PAYLOAD_NOT_FOUND' : 'DOWNLOAD_FAILED';
+    const errorMessage = isNotFound ? 'Challenge asset payload file is missing from server storage' : err.message;
+
+    res.status(statusCode).json({ error: errorCode, message: errorMessage });
   }
 };
