@@ -62,7 +62,7 @@ class AuthService {
         return false;
       }
     }
-    return password === storedHash;
+    return false;
   }
 
   async comparePassword(password, storedHash) {
@@ -80,41 +80,138 @@ class AuthService {
       username = userIdOrUser.username;
     }
     const timestamp = Date.now();
-    const payload = `${userId}:${username}:${timestamp}`;
+    const nonce = crypto.randomBytes(8).toString('hex');
+    const payload = `${userId}:${username}:${timestamp}:${nonce}`;
     const secret = process.env.JWT_SECRET || 'c2_command_jwt_super_secret_key_change_in_production';
     const signature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
     return `${payload}:${signature}`;
   }
 
-  async login(usernameOrEmail, password) {
-    const rawTerm = String(usernameOrEmail || '').trim();
-    const term = rawTerm.toLowerCase();
-    const rawPw = String(password || '');
-    const trimmedPw = rawPw.trim();
+  /**
+   * Strict Administrator Authentication:
+   * 1. Exact username lookup (no lowercasing, no trimming)
+   * 2. Exact password comparison via Argon2id (no alteration)
+   * 3. Account active status check
+   * 4. Strict role check (ADMIN or SUPER_ADMIN required)
+   * 5. Participant credentials return 403 CLEARANCE_DENIED (no session created)
+   */
+  async adminLogin(usernameOrEmail, password) {
+    const rawUsername = String(usernameOrEmail || '');
+    const rawPassword = String(password || '');
 
-    // Exact-case match first, then case-insensitive fallback
+    if (!rawUsername || !rawPassword) {
+      const err = new Error('INVALID ADMIN CREDENTIALS');
+      err.code = 'INVALID_CREDENTIALS';
+      throw err;
+    }
+
+    // Exact username match (case-sensitive)
+    let user = db.getUsers().find(u =>
+      (u && u.username && u.username === rawUsername) ||
+      (u && u.email && u.email === rawUsername) ||
+      (u && u.callsign && u.callsign === rawUsername)
+    );
+
+    // Fallback: Query MongoDB Atlas directly with exact matching
+    if (!user && db.isMongo && db.mongoDb) {
+      try {
+        const doc = await db.mongoDb.collection('users').findOne({
+          $or: [
+            { username: rawUsername },
+            { email: rawUsername },
+            { callsign: rawUsername }
+          ]
+        });
+        if (doc) {
+          user = { ...doc };
+          if (doc._id) user._id = doc._id.toString();
+          if (!user.id && doc._id) user.id = doc._id.toString();
+          const existing = db.getUsers().find(u => u.id === user.id);
+          if (!existing) {
+            Array.prototype.push.call(db.getUsers(), user);
+          }
+        }
+      } catch (e) {
+        console.warn('[AUTH] Direct Atlas admin query warning:', e.message);
+      }
+    }
+
+    if (!user) {
+      const err = new Error('INVALID ADMIN CREDENTIALS');
+      err.code = 'INVALID_CREDENTIALS';
+      throw err;
+    }
+
+    // Strict Argon2id password verification using exact user-entered password
+    const isValid = await this.verifyPassword(rawPassword, user.password_hash);
+    if (!isValid) {
+      const err = new Error('INVALID ADMIN CREDENTIALS');
+      err.code = 'INVALID_CREDENTIALS';
+      throw err;
+    }
+
+    // Verify account active status
+    if (user.is_banned || user.status === 'disabled' || user.status === 'suspended') {
+      const err = new Error('ADMIN ACCOUNT IS SUSPENDED OR INACTIVE');
+      err.code = 'ACCOUNT_INACTIVE';
+      throw err;
+    }
+
+    // Strict Role Verification: Must explicitly be ADMIN or SUPER_ADMIN
+    const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+    if (!isAdmin) {
+      const err = new Error('ADMIN ACCESS REQUIRED');
+      err.code = 'CLEARANCE_DENIED';
+      throw err;
+    }
+
+    const token = this.generateToken(user.id, user.username);
+
+    // Register active session
+    const sessionObj = {
+      id: crypto.randomUUID(),
+      user_id: user.id,
+      token,
+      expires_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+      created_at: new Date().toISOString()
+    };
+    db.getSessions().push(sessionObj);
+
+    return {
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        callsign: user.callsign
+      }
+    };
+  }
+
+  async login(usernameOrEmail, password) {
+    const rawTerm = String(usernameOrEmail || '');
+    const rawPw = String(password || '');
+
+    if (!rawTerm || !rawPw) {
+      throw new Error('Invalid operative callsign or passphrase.');
+    }
+
+    // Exact match
     let user = db.getUsers().find(u =>
       (u && u.username && u.username === rawTerm) ||
       (u && u.email && u.email === rawTerm) ||
       (u && u.callsign && u.callsign === rawTerm)
     );
-    if (!user) {
-      user = db.getUsers().find(u =>
-        (u && u.username && u.username.toLowerCase() === term) ||
-        (u && u.email && u.email.toLowerCase() === term) ||
-        (u && u.callsign && u.callsign.toLowerCase() === term)
-      );
-    }
 
-    // Fallback: If not found in in-memory cache, query MongoDB Atlas directly
+    // Fallback: MongoDB Atlas query
     if (!user && db.isMongo && db.mongoDb) {
       try {
-        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const doc = await db.mongoDb.collection('users').findOne({
           $or: [
-            { username: { $regex: `^${escaped}$`, $options: 'i' } },
-            { email: { $regex: `^${escaped}$`, $options: 'i' } },
-            { callsign: { $regex: `^${escaped}$`, $options: 'i' } }
+            { username: rawTerm },
+            { email: rawTerm },
+            { callsign: rawTerm }
           ]
         });
         if (doc) {
@@ -131,36 +228,6 @@ class AuthService {
       }
     }
 
-    // Secondary fallback for administrator: match by configured username, callsign, or email
-    if (!user) {
-      const configuredUsername = (process.env.BOOTSTRAP_ADMIN_USERNAME || 'Admin').trim();
-      const configuredCallsign = (process.env.BOOTSTRAP_ADMIN_CALLSIGN || 'COMMANDER').trim();
-      const configuredEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || 'jesinmilesh@gmail.com').trim();
-
-      const adminAliases = [
-        configuredUsername.toLowerCase(),
-        configuredCallsign.toLowerCase(),
-        configuredEmail.toLowerCase()
-      ];
-
-      if (adminAliases.includes(term)) {
-        user = db.getUsers().find(u => u.role === 'ADMIN' || u.role === 'SUPER_ADMIN');
-        if (!user && db.isMongo && db.mongoDb) {
-          try {
-            const adminDoc = await db.mongoDb.collection('users').findOne({
-              $or: [{ role: 'ADMIN' }, { role: 'SUPER_ADMIN' }]
-            });
-            if (adminDoc) {
-              user = { ...adminDoc };
-              if (adminDoc._id) user._id = adminDoc._id.toString();
-              if (!user.id && adminDoc._id) user.id = adminDoc._id.toString();
-              db.getUsers().push(user);
-            }
-          } catch (_) {}
-        }
-      }
-    }
-
     if (!user) {
       throw new Error('Invalid operative callsign or passphrase.');
     }
@@ -169,53 +236,24 @@ class AuthService {
       throw new Error('OPERATIVE ACCOUNT TERMINATED BY C2 COMMAND.');
     }
 
-    // Cryptographic Password Validation using Argon2id (supporting trimmed and raw passwords)
-    let isValid = await this.verifyPassword(rawPw, user.password_hash);
-    if (!isValid && trimmedPw !== rawPw) {
-      isValid = await this.verifyPassword(trimmedPw, user.password_hash);
-    }
-
-    // Safeguard: Allow bootstrap admin password to authenticate and rehash
-    // ONLY the exact password as specified — no lowercase fallbacks
-    if (!isValid && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN')) {
-      const allowedAdminPasswords = [
-        process.env.BOOTSTRAP_ADMIN_PASSWORD,
-        'Commander@Xploitx!Admin'
-      ].filter(Boolean);
-
-      if (allowedAdminPasswords.includes(rawPw) || allowedAdminPasswords.includes(trimmedPw)) {
-        isValid = true;
-        const acceptedPw = allowedAdminPasswords.includes(rawPw) ? rawPw : trimmedPw;
-        user.password_hash = await this.hashPassword(acceptedPw);
-        if (db.isMongo && db.persistDoc) {
-          await db.persistDoc('users', user).catch(() => {});
-        }
-      }
-    }
-
+    // Cryptographic Password Validation using Argon2id
+    const isValid = await this.verifyPassword(rawPw, user.password_hash);
     if (!isValid) {
       throw new Error('Invalid operative callsign or passphrase.');
-    }
-
-    // Seamlessly rehash legacy passwords to Argon2id
-    if (!user.password_hash.startsWith('$argon2')) {
-      user.password_hash = await this.hashPassword(password);
-      if (db.isMongo && db.persistDoc) {
-        await db.persistDoc('users', user).catch(() => {});
-      }
     }
 
     const token = this.generateToken(user.id, user.username);
     const userTeam = db.getTeams().find(t => t.id === user.team_id);
 
     // Record session
-    db.getSessions().push({
+    const sessionObj = {
       id: crypto.randomUUID(),
       user_id: user.id,
       token,
       expires_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
       created_at: new Date().toISOString()
-    });
+    };
+    db.getSessions().push(sessionObj);
 
     return {
       token,

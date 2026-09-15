@@ -33,5 +33,7 @@ function rateLimiter({ windowMs = 60 * 1000, max = 10, message = 'Rate limit exc
 module.exports = {
   rateLimiter,
   submissionLimiter: rateLimiter({ windowMs: 60 * 1000, max: 10, message: 'Too many flag submissions. Cooling down.' }),
-  loginLimiter: rateLimiter({ windowMs: 60 * 1000, max: 15, message: 'Too many authentication attempts.' })
+  loginLimiter: rateLimiter({ windowMs: 60 * 1000, max: 15, message: 'Too many authentication attempts.' }),
+  adminLoginLimiter: rateLimiter({ windowMs: 15 * 60 * 1000, max: 20, message: 'Too many administrative authentication attempts. Stand by.' })
 };
+

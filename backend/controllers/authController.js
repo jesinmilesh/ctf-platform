@@ -9,14 +9,96 @@ const auditService = require('../services/auditService');
 const auditLogger = require('../services/auditLogger');
 
 exports.adminLogin = async (req, res, next) => {
-  req.body.adminOnly = true;
-  return exports.login(req, res, next);
+  const username = req.body.username || req.body.identifier || req.body.email;
+  const password = req.body.password;
+  const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '127.0.0.1';
+
+  try {
+    if (!username || !password) {
+      return res.status(401).json({
+        success: false,
+        error: 'INVALID_CREDENTIALS',
+        message: 'INVALID ADMIN CREDENTIALS'
+      });
+    }
+
+    const result = await authService.adminLogin(username, password);
+
+    auditService.record({
+      action: 'AUTH.ADMIN_LOGIN_SUCCESS',
+      category: 'AUTH',
+      severity: 'INFO',
+      actor: result.user,
+      resource: { type: 'PORTAL', id: 'ADMIN_C2' },
+      result: 'SUCCESS',
+      description: `Administrator ${result.user.username} authenticated successfully`,
+      request: { requestId: req.id, method: req.method, route: req.originalUrl },
+      network: { ip, userAgent: req.headers ? req.headers['user-agent'] : null },
+      metadata: { role: result.user.role }
+    }).catch(() => {});
+
+    res.cookie('xploitx_token', result.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 3600 * 1000,
+      path: '/'
+    });
+
+    return res.json({
+      success: true,
+      token: result.token,
+      user: result.user
+    });
+  } catch (err) {
+    res.clearCookie('xploitx_token');
+
+    const isClearanceDenied = err.code === 'CLEARANCE_DENIED' || err.message === 'ADMIN ACCESS REQUIRED';
+    const isInactive = err.code === 'ACCOUNT_INACTIVE';
+
+    auditService.record({
+      action: isClearanceDenied ? 'AUTH.ADMIN_ACCESS_DENIED' : 'AUTH.ADMIN_LOGIN_FAILURE',
+      category: 'AUTH',
+      severity: isClearanceDenied ? 'WARNING' : 'HIGH',
+      actor: { type: 'USER', username: String(username || 'unknown').slice(0, 64) },
+      resource: { type: 'PORTAL', id: 'ADMIN_C2' },
+      result: 'FAILURE',
+      description: isClearanceDenied
+        ? `Participant ${username} denied access to C2 admin portal: ADMIN ACCESS REQUIRED`
+        : `Admin authentication failed for identifier: ${String(username || 'unknown').slice(0, 64)}`,
+      request: { requestId: req.id, method: req.method, route: req.originalUrl },
+      network: { ip, userAgent: req.headers ? req.headers['user-agent'] : null },
+      metadata: { reason: err.message, code: err.code }
+    }).catch(() => {});
+
+    if (isClearanceDenied) {
+      return res.status(403).json({
+        success: false,
+        error: 'CLEARANCE_DENIED',
+        message: 'ADMIN ACCESS REQUIRED'
+      });
+    }
+
+    if (isInactive) {
+      return res.status(403).json({
+        success: false,
+        error: 'ACCOUNT_INACTIVE',
+        message: 'ADMIN ACCOUNT IS SUSPENDED OR INACTIVE'
+      });
+    }
+
+    return res.status(401).json({
+      success: false,
+      error: 'INVALID_CREDENTIALS',
+      message: 'INVALID ADMIN CREDENTIALS'
+    });
+  }
 };
 
 exports.login = async (req, res, next) => {
   const username = req.body.username || req.body.identifier || req.body.email;
   const password = req.body.password;
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip || '127.0.0.1';
+  const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '127.0.0.1';
 
   try {
     if (!username || !password) {
@@ -25,52 +107,40 @@ exports.login = async (req, res, next) => {
     const result = await authService.login(username, password);
 
     const isAdmin = result.user.role === 'ADMIN' || result.user.role === 'SUPER_ADMIN';
-    const adminOnly = req.body.adminOnly === true || req.headers['x-admin-portal'] === 'true' || (req.originalUrl && req.originalUrl.includes('/admin-login'));
+    const adminOnly = req.body.adminOnly === true || req.headers['x-admin-portal'] === 'true' || (req.originalUrl && (req.originalUrl.includes('/admin-login') || req.originalUrl.includes('/admin/auth/login')));
 
     if (adminOnly && !isAdmin) {
-      auditService.record({
-        action: 'AUTH.ADMIN_ACCESS_DENIED',
-        category: 'AUTH',
-        severity: 'WARNING',
-        actor: result.user,
-        resource: { type: 'USER', id: result.user.id },
-        result: 'DENIED',
-        description: `Participant operative ${result.user.username} rejected from C2 Command Center portal`,
-        request: { requestId: req.id, method: req.method, route: req.originalUrl },
-        network: { ip, userAgent: req.headers ? req.headers['user-agent'] : null },
-        metadata: { role: result.user.role }
-      }).catch(() => {});
-
       if (typeof authService.revokeToken === 'function') {
         authService.revokeToken(result.token);
       }
       res.clearCookie('xploitx_token');
 
       return res.status(403).json({
+        success: false,
         error: 'CLEARANCE_DENIED',
-        message: 'Clearance denied. Administrative privileges required to access the C2 Operations Center.'
+        message: 'ADMIN ACCESS REQUIRED'
       });
     }
 
     auditService.record({
-      action: isAdmin ? 'AUTH.ADMIN_LOGIN' : 'AUTH.LOGIN_SUCCESS',
+      action: 'AUTH.LOGIN_SUCCESS',
       category: 'AUTH',
       severity: 'INFO',
       actor: result.user,
       resource: { type: 'USER', id: result.user.id },
       result: 'SUCCESS',
-      description: `${isAdmin ? 'Administrator' : 'Operative'} ${result.user.username} authenticated successfully`,
+      description: `Operative ${result.user.username} authenticated successfully`,
       request: { requestId: req.id, method: req.method, route: req.originalUrl },
       network: { ip, userAgent: req.headers ? req.headers['user-agent'] : null },
       metadata: { role: result.user.role, teamId: result.user.team_id || null }
     }).catch(() => {});
 
-    // Set secure cookie as requested in blueprint
     res.cookie('xploitx_token', result.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 7 * 24 * 3600 * 1000
+      maxAge: 7 * 24 * 3600 * 1000,
+      path: '/'
     });
 
     res.json(result);

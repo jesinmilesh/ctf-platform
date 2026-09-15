@@ -44,8 +44,17 @@ class AuthManager {
   }
 
   async requireAdmin(redirectUrl = '/admin/login.html') {
-    await this.init();
-    if (!this.isAdmin()) {
+    try {
+      const res = await (window.api && window.api.admin && window.api.admin.me ? window.api.admin.me() : window.apiRequest('/admin/me'));
+      if (res && res.user && (res.user.role === 'ADMIN' || res.user.role === 'SUPER_ADMIN')) {
+        this.user = res.user;
+        this.initialized = true;
+        this.updateNavUI();
+        return this.user;
+      }
+      throw new Error('ADMIN_CLEARANCE_DENIED');
+    } catch (err) {
+      this.user = null;
       window.location.href = redirectUrl;
     }
   }
@@ -84,12 +93,19 @@ class AuthManager {
   }
 
   async logout() {
+    const wasAdmin = this.isAdmin();
     try {
-      await window.api.logout();
+      if (wasAdmin && window.api && window.api.admin && window.api.admin.logout) {
+        await window.api.admin.logout();
+      } else if (window.api && window.api.logout) {
+        await window.api.logout();
+      }
     } catch (e) {}
     localStorage.removeItem('xploitx_token');
-    window.location.href = '/login.html';
+    sessionStorage.removeItem('xploitx_token');
+    window.location.href = wasAdmin ? '/admin/login.html' : '/login.html';
   }
 }
 
 window.authManager = new AuthManager();
+

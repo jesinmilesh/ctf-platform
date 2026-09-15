@@ -65,7 +65,7 @@ const api = {
   // 1. Authentication
   auth: {
     login: (credentials) => apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
-    adminLogin: (credentials) => apiRequest('/auth/admin-login', { method: 'POST', body: JSON.stringify(credentials) }),
+    adminLogin: (credentials) => apiRequest('/admin/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
     register: (userData) => apiRequest('/auth/register', { method: 'POST', body: JSON.stringify(userData) }),
     me: () => apiRequest('/auth/me'),
     getMe: () => apiRequest('/auth/me'),
@@ -158,6 +158,9 @@ const api = {
 
   // 9. Administration C2 APIs
   admin: {
+    login: (credentials) => apiRequest('/admin/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
+    logout: () => apiRequest('/admin/auth/logout', { method: 'POST' }),
+    me: () => apiRequest('/admin/me'),
     getOverview: () => apiRequest('/admin/overview'),
     getChallenges: () => apiRequest('/admin/challenges'),
     createChallenge: (data) => apiRequest('/admin/challenges', { method: 'POST', body: JSON.stringify(data) }),

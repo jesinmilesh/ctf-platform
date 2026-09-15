@@ -11,9 +11,15 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     errBox.style.display = 'none';
 
-    // Read credentials exactly as typed — do NOT trim password
-    const username = document.getElementById('adminUsername').value.trim();
+    // Read credentials exactly as typed — do NOT trim or modify username or password
+    const username = document.getElementById('adminUsername').value;
     const password = document.getElementById('adminPassword').value;
+
+    if (!username || !password) {
+      errBox.textContent = 'Please provide both Commander callsign and C2 passphrase.';
+      errBox.style.display = 'block';
+      return;
+    }
 
     const btn = form.querySelector('button[type="submit"]');
     btn.disabled = true;
@@ -24,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sessionStorage.removeItem('xploitx_token');
 
     try {
-      // window.api.adminLogin calls /api/v1/auth/admin-login which enforces admin-only
+      // window.api.adminLogin calls /api/v1/admin/auth/login which enforces admin-only
       const res = await window.api.adminLogin({ username, password });
 
       if (!res || !res.token) {
@@ -32,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (res.user && res.user.role !== 'ADMIN' && res.user.role !== 'SUPER_ADMIN') {
-        throw new Error('CLEARANCE DENIED: Only administrators can access the C2 portal.');
+        throw new Error('ADMIN ACCESS REQUIRED');
       }
 
       // Save token FIRST — before any optional UI calls that might throw
@@ -51,7 +57,10 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       localStorage.removeItem('xploitx_token');
       sessionStorage.removeItem('xploitx_token');
-      errBox.textContent = err.message || 'C2 Access Denied: Invalid administrator credentials.';
+      const msg = err.message || 'INVALID ADMIN CREDENTIALS';
+      errBox.textContent = msg.includes('ADMIN ACCESS REQUIRED')
+        ? 'LOGIN DENIED: ADMIN ACCESS REQUIRED'
+        : (msg.includes('CLEARANCE_DENIED') ? 'LOGIN DENIED: ADMIN ACCESS REQUIRED' : msg);
       errBox.style.display = 'block';
       btn.disabled = false;
       btn.textContent = 'ACCESS CONTROL ROOM';
