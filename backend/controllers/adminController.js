@@ -40,11 +40,15 @@ class AdminController {
     });
   }
 
-  getChallenges(req, res) {
+  async getChallenges(req, res) {
+    // Hydrate from Atlas if empty
+    if (db.isMongo && db.mongoDb && db.getChallenges().length === 0) {
+      await db.syncFromMongo().catch(() => {});
+    }
     const categories = db.getCategories();
     const challenges = db.getChallenges().map(c => {
       const canonicalId = c._id ? String(c._id) : c.id;
-      const fl = db.getFlags().find(f => f.challenge_id === c.id || f.challenge_id === canonicalId);
+      const fl = db.getFlags().find(f => f.challenge_id === canonicalId || f.challenge_id === c.id);
       const cat = categories.find(k => k.id === c.category_id);
       const catName = cat ? cat.name : (c.category_name || c.category || 'Misc');
       return {
@@ -98,6 +102,12 @@ class AdminController {
 
   async getChallengeFiles(req, res) {
     const challengeId = req.params.id ? String(req.params.id).trim() : '';
+
+    // Hydrate from Atlas if empty
+    if (db.isMongo && db.mongoDb && db.getChallenges().length === 0) {
+      await db.syncFromMongo().catch(() => {});
+    }
+
     const challenge = db.getChallenges().find(c =>
       c.id === challengeId ||
       (c._id && String(c._id) === challengeId) ||
@@ -124,6 +134,12 @@ class AdminController {
 
   async uploadChallengeFiles(req, res) {
     const challengeId = req.params.id ? String(req.params.id).trim() : '';
+
+    // Hydrate cache from Atlas if empty (important after server restart)
+    if (db.isMongo && db.mongoDb && db.getChallenges().length === 0) {
+      await db.syncFromMongo().catch(() => {});
+    }
+
     const challenge = db.getChallenges().find(c =>
       c.id === challengeId ||
       (c._id && String(c._id) === challengeId) ||
@@ -140,6 +156,7 @@ class AdminController {
     }
 
     try {
+      // CANONICAL ID: always use the MongoDB _id string for file association
       const canonicalId = challenge._id ? String(challenge._id) : challenge.id;
       const savedRecords = [];
       for (const file of uploadedFiles) {
@@ -167,6 +184,7 @@ class AdminController {
       res.status(400).json({ success: false, error: err.message });
     }
   }
+
 
   async deleteChallengeFile(req, res) {
     const { id: challengeId, fileId } = req.params;

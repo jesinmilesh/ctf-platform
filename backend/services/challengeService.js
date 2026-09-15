@@ -350,17 +350,24 @@ class ChallengeService {
 
   createChallenge(data) {
     const crypto = require('crypto');
-    let canonicalId = data._id ? String(data._id).trim() : (data.id ? String(data.id).trim() : null);
-    if (!canonicalId) {
-      try {
-        const { ObjectId } = require('mongodb');
+    // CANONICAL ID CONTRACT: Generate a MongoDB ObjectId string as the single
+    // canonical identifier. id === _id === String(MongoDB ObjectId) always.
+    // Never generate a separate UUID or hex string that diverges from _id.
+    let canonicalId;
+    try {
+      const { ObjectId } = require('mongodb');
+      // If an explicit _id or id is provided and looks like a valid ObjectId, use it.
+      const provided = data._id || data.id;
+      if (provided && ObjectId.isValid(String(provided)) && String(provided).length === 24) {
+        canonicalId = String(provided);
+      } else {
         canonicalId = new ObjectId().toString();
-      } catch (e) {
-        canonicalId = crypto.randomBytes(12).toString('hex');
       }
+    } catch (e) {
+      canonicalId = crypto.randomBytes(12).toString('hex');
     }
-    const id = canonicalId;
-    const _id = canonicalId;
+    const id = canonicalId;  // id always equals _id string
+    const _id = canonicalId; // _id always equals id
     const slug = (data.title || 'mission').toLowerCase().replace(/[^a-z0-9]+/g, '-');
     
     // Resolve matching category entity from db

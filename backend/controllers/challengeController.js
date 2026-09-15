@@ -11,17 +11,31 @@ const instanceManager = require('../instances/instanceManager');
 const auditService = require('../services/auditService');
 
 exports.getAll = async (req, res) => {
+  // Hydrate in-memory cache from Atlas if needed
   if (db.isMongo && db.mongoDb && db.getChallenges().length === 0) {
-    await db.syncFromMongo().catch(() => {});
+    try {
+      await db.syncFromMongo();
+    } catch (syncErr) {
+      console.error('[CHALLENGE] getAll DB sync failed:', syncErr.message);
+      // Return 503 — the client should retry, not treat this as "no challenges"
+      return res.status(503).json({
+        error: 'SERVICE_UNAVAILABLE',
+        message: 'Challenge database is temporarily unavailable. Please try again shortly.'
+      });
+    }
   }
   const challenges = challengeService.getAllPublicChallenges(req.user);
   res.json({ challenges });
 };
 
+
 exports.getOne = async (req, res) => {
   const challengeId = req.params.id;
+  const reqId = req.id || 'req-?';
+  const userId = req.user ? req.user.id : 'ANONYMOUS';
 
   if (!challengeId || challengeId === 'undefined' || challengeId === 'null') {
+    console.log(`[CHALLENGE] req=${reqId} user=${userId} id=MISSING status=400`);
     return res.status(400).json({ error: 'BAD_REQUEST', message: 'Invalid mission identifier provided' });
   }
 
@@ -47,14 +61,26 @@ exports.getOne = async (req, res) => {
     });
   }
 
-  // Ensure memory cache is hydrated if empty
+  // Ensure memory cache is hydrated from Atlas if empty
   if (db.isMongo && db.mongoDb && db.getChallenges().length === 0) {
-    await db.syncFromMongo().catch(() => {});
+    try {
+      await db.syncFromMongo();
+    } catch (syncErr) {
+      // Database unavailable — return 503, NOT 404
+      console.error(`[CHALLENGE] req=${reqId} user=${userId} id=${challengeId} result=DB_SYNC_FAILED status=503:`, syncErr.message);
+      return res.status(503).json({
+        error: 'SERVICE_UNAVAILABLE',
+        message: 'Mission database is temporarily unavailable. Please try again shortly.',
+        requestId: reqId
+      });
+    }
   }
 
   let challenge = challengeService.getChallengeDetails(challengeId, req.user);
 
-  // Fallback direct Atlas lookup if not found in memory cache
+  // Fallback: direct Atlas lookup if not found in memory cache.
+  // This handles the case where the cache is stale or a challenge was added
+  // after the last hydration without triggering a cache push.
   if (!challenge && db.isMongo && db.mongoDb && challengeId) {
     try {
       const cleanId = String(challengeId).trim();
@@ -63,15 +89,13 @@ exports.getOne = async (req, res) => {
         { id: cleanId.toLowerCase() },
         { mission_id: cleanId },
         { slug: cleanId },
-        { slug: cleanId.toLowerCase() },
-        { title: cleanId },
-        { _id: cleanId }
+        { slug: cleanId.toLowerCase() }
       ];
 
-      // Check ObjectId conversion if valid 24-character hex string
+      // Add ObjectId query if the ID looks like a valid MongoDB ObjectId
       try {
         const { ObjectId } = require('mongodb');
-        if (ObjectId.isValid(cleanId)) {
+        if (ObjectId.isValid(cleanId) && cleanId.length === 24) {
           orConditions.push({ _id: new ObjectId(cleanId) });
         }
       } catch (oidErr) {}
@@ -79,28 +103,37 @@ exports.getOne = async (req, res) => {
       const rawDoc = await db.mongoDb.collection('challenges').findOne({ $or: orConditions });
 
       if (rawDoc) {
+        // Normalize the raw document to use _id string as canonical id
         const item = { ...rawDoc };
-        if (rawDoc._id) item._id = rawDoc._id.toString();
-        if (!item.id && rawDoc._id) item.id = rawDoc._id.toString();
-        
-        const existing = db.getChallenges().find(c =>
-          (item.id && c.id === item.id) ||
-          (item._id && (c._id === item._id || c.id === item._id))
-        );
+        if (rawDoc._id) {
+          item._id = rawDoc._id.toString();
+          item.id = rawDoc._id.toString(); // CANONICAL: id always equals _id string
+        }
+
+        // Merge into in-memory cache
+        const existing = db.getChallenges().find(c => c.id === item.id);
         if (!existing) {
-          db.getChallenges().push(item);
+          Array.prototype.push.call(db.getChallenges(), item);
         } else {
           Object.assign(existing, item);
         }
-        challenge = challengeService.getChallengeDetails(item.id || item._id, req.user);
+
+        // Now look up with the canonical _id string
+        challenge = challengeService.getChallengeDetails(item.id, req.user);
       }
     } catch (e) {
-      console.warn('[CHALLENGE CONTROLLER] Fallback Atlas lookup warning:', e.message);
+      // Atlas lookup failed — this is a DB error, not a missing challenge
+      console.error(`[CHALLENGE] req=${reqId} user=${userId} id=${challengeId} result=ATLAS_FALLBACK_FAILED status=503:`, e.message);
+      return res.status(503).json({
+        error: 'SERVICE_UNAVAILABLE',
+        message: 'Mission database is temporarily unavailable. Please try again shortly.',
+        requestId: reqId
+      });
     }
   }
 
   if (!challenge) {
-    // Check if challenge exists but is restricted/draft
+    // Check if challenge exists but is restricted/draft — return 403, not 404
     const anyChallenge = db.getChallenges().find(c =>
       c.id === challengeId ||
       c.mission_id === challengeId ||
@@ -108,10 +141,14 @@ exports.getOne = async (req, res) => {
       (c._id && String(c._id) === challengeId)
     );
     if (anyChallenge && anyChallenge.status === 'DRAFT') {
+      console.log(`[CHALLENGE] req=${reqId} user=${userId} id=${challengeId} result=DRAFT_RESTRICTED status=403`);
       return res.status(403).json({ error: 'FORBIDDEN', message: 'Mission dossier classified or in draft status' });
     }
+    console.log(`[CHALLENGE] req=${reqId} user=${userId} id=${challengeId} result=NOT_FOUND status=404`);
     return res.status(404).json({ error: 'NOT_FOUND', message: 'Mission dossier not found' });
   }
+
+  console.log(`[CHALLENGE] req=${reqId} user=${userId} id=${challengeId} result=FOUND title="${challenge.title}" status=200`);
 
   if (req.user) {
     const canonicalCId = challenge._id ? String(challenge._id) : challenge.id;
@@ -130,6 +167,7 @@ exports.getOne = async (req, res) => {
   }
   res.json(challenge);
 };
+
 
 exports.submitFlag = (req, res) => {
   if (!req.user) {
@@ -205,6 +243,12 @@ exports.terminateInstance = async (req, res) => {
 
 exports.getChallengeFiles = async (req, res) => {
   const challengeId = req.params.id ? String(req.params.id).trim() : '';
+
+  // Hydrate cache from Atlas if empty
+  if (db.isMongo && db.mongoDb && db.getChallenges().length === 0) {
+    await db.syncFromMongo().catch(() => {});
+  }
+
   const challenge = db.getChallenges().find(c =>
     c.id === challengeId ||
     c.slug === challengeId ||

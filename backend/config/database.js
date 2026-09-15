@@ -390,19 +390,26 @@ class DatabaseEngine {
       }
 
       // 2. Hydrate each collection from Atlas
+      // Use raw Array.prototype.push during hydration to avoid triggering
+      // the tracked push() which would replicate data back to MongoDB (infinite loop).
       for (const [key, colName] of Object.entries(COLLECTION_MAP)) {
         const docs = await this.mongoDb.collection(colName).find({}).toArray();
         const cleanDocs = docs.map(d => {
           const item = { ...d };
-          if (d._id) item._id = d._id.toString();
-          if (!item.id && d._id) item.id = d._id.toString();
+          // CRITICAL: Always override item.id with the MongoDB _id string.
+          // This ensures challenge.id === String(challenge._id) everywhere,
+          // eliminating the dual-ID mismatch that caused "Mission Not Found".
+          if (d._id) {
+            item._id = d._id.toString();
+            item.id = d._id.toString();
+          }
           return item;
         });
 
-        // Update in-memory array keeping the tracked array wrapper
+        // Update in-memory array — use raw push to skip Atlas replication during hydration
         const target = this.data[key];
         target.length = 0;
-        cleanDocs.forEach(d => target.push(d));
+        cleanDocs.forEach(d => Array.prototype.push.call(target, d));
       }
 
       // 3. Hydrate Settings
@@ -427,6 +434,9 @@ class DatabaseEngine {
     if (!this.mongoDb) return;
 
     try {
+      let ObjectIdClass = null;
+      try { ObjectIdClass = require('mongodb').ObjectId; } catch (_) {}
+
       for (const [key, colName] of Object.entries(COLLECTION_MAP)) {
         const items = this.data[key];
         if (!items || items.length === 0) continue;
@@ -435,11 +445,27 @@ class DatabaseEngine {
         for (const item of items) {
           const doc = { ...item };
           delete doc._id;
-          const itemId = doc.id || doc._id || doc.instanceId;
+          const itemId = doc.id || doc.instanceId;
           if (itemId && !doc.id) doc.id = String(itemId);
-          const filter = doc.instanceId
-            ? { $or: [{ instanceId: doc.instanceId }, { id: String(itemId) }] }
-            : (itemId ? { id: String(itemId) } : { _id: item._id });
+
+          let filter;
+          // Use ObjectId filter if the id looks like a valid MongoDB ObjectId (24-char hex)
+          if (ObjectIdClass && itemId && String(itemId).length === 24 && ObjectIdClass.isValid(itemId)) {
+            try {
+              filter = { _id: new ObjectIdClass(String(itemId)) };
+            } catch (_) {
+              filter = doc.instanceId
+                ? { $or: [{ instanceId: doc.instanceId }, { id: String(itemId) }] }
+                : { id: String(itemId) };
+            }
+          } else if (doc.instanceId) {
+            filter = { $or: [{ instanceId: doc.instanceId }, { id: String(itemId) }] };
+          } else if (itemId) {
+            filter = { id: String(itemId) };
+          } else {
+            filter = { _id: item._id };
+          }
+
           await coll.updateOne(filter, { $set: doc }, { upsert: true });
         }
       }
@@ -454,6 +480,7 @@ class DatabaseEngine {
       console.error('[DATABASE] syncToMongo error:', err.message);
     }
   }
+
 
   /**
    * Single document upsert to MongoDB Atlas
@@ -497,17 +524,30 @@ class DatabaseEngine {
     for (const item of items) {
       try {
         const toSave = { ...item };
+        // Preserve _id as ObjectId if it looks like one (24-char hex), otherwise delete
+        let objectIdFilter = null;
+        try {
+          const { ObjectId } = require('mongodb');
+          const rawId = item._id || item.id;
+          if (rawId && ObjectId.isValid(rawId) && String(rawId).length === 24) {
+            objectIdFilter = new ObjectId(String(rawId));
+          }
+        } catch (_) {}
         delete toSave._id;
+
         const docId = item.id || item._id || item.instanceId;
         if (docId) {
           if (!toSave.id) toSave.id = String(docId);
-          let filter = { id: toSave.id };
-          if (toSave.instanceId) {
+          let filter;
+          if (objectIdFilter) {
+            // Use _id ObjectId filter for maximum accuracy — avoids duplicate creation
+            filter = { _id: objectIdFilter };
+          } else if (toSave.instanceId) {
             filter = { $or: [{ instanceId: toSave.instanceId }, { id: toSave.id }] };
-          } else if (toSave.mission_id) {
-            filter = { $or: [{ id: toSave.id }, { mission_id: toSave.mission_id }] };
           } else if (toSave.username) {
             filter = { $or: [{ id: toSave.id }, { username: toSave.username }] };
+          } else {
+            filter = { id: toSave.id };
           }
           await coll.updateOne(filter, { $set: toSave }, { upsert: true });
         } else {

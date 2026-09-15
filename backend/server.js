@@ -106,15 +106,14 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Explicit Production Origins & Restricted CORS (Section 6)
-const TRUSTED_ORIGINS = new Set([
-  'https://www.xploitxctf.me',
-  'https://xploitxctf.me'
-]);
+// Explicit Production Origins — configured via CORS_ORIGIN environment variable.
+// Do NOT hardcode domain names here; use the environment to configure allowed origins.
+const TRUSTED_ORIGINS = new Set();
 
 if (process.env.CORS_ORIGIN) {
   process.env.CORS_ORIGIN.split(',').map(s => s.trim()).filter(Boolean).forEach(o => TRUSTED_ORIGINS.add(o));
 }
+
 
 app.use(cors({ 
   origin: (origin, callback) => {

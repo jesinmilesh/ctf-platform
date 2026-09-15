@@ -323,9 +323,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   } catch (err) {
     if (grid) {
+      const is503 = err.status === 503 || (err.message && err.message.includes('temporarily unavailable'));
       grid.innerHTML = `
-        <div style="grid-column:1/-1; color:var(--danger); text-align:center; font-family:var(--font-mono); padding:40px;">
-          FAILED TO COMMUNICATE WITH MISSION DATABASE: ${err.message}
+        <div style="grid-column:1/-1; text-align:center; padding:60px 20px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-sm);">
+          <div style="font-size:32px; margin-bottom:12px;">${is503 ? '🔌' : '⚠️'}</div>
+          <h3 style="font-family:var(--font-heading); font-size:18px; color:${is503 ? 'var(--warning)' : 'var(--danger)'}; margin-bottom:8px;">
+            ${is503 ? 'MISSION DATABASE TEMPORARILY UNAVAILABLE' : 'FAILED TO LOAD MISSION ROSTER'}
+          </h3>
+          <p style="color:var(--text-secondary); font-size:13px; font-family:var(--font-mono); margin:0 0 16px 0;">
+            ${is503 ? 'The mission database is temporarily offline. Please try again in a few seconds.' : err.message}
+          </p>
+          <button onclick="location.reload()" class="btn btn-outline" style="padding:10px 20px; font-size:12px;">
+            ↻ RETRY
+          </button>
         </div>
       `;
     }

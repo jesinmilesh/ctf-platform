@@ -18,33 +18,45 @@ document.addEventListener('DOMContentLoaded', async () => {
   const challengeId = rawId ? decodeURIComponent(rawId).trim() : null;
 
   function showMissionError(status, customMessage) {
-    let title = 'MISSION SERVICE UNAVAILABLE';
-    let message = customMessage || 'Unable to load mission. Please try again.';
+    let title, message, icon;
 
     if (status === 400) {
       title = 'INVALID MISSION IDENTIFIER';
-      message = customMessage || 'The requested mission ID is missing, malformed, or invalid.';
+      message = customMessage || 'The requested mission ID is missing, malformed, or invalid. Check the URL.';
+      icon = '⚠️';
     } else if (status === 401) {
       title = 'AUTHENTICATION REQUIRED';
-      message = customMessage || 'Login required to access this mission.';
+      message = customMessage || 'Login required to access this mission. Please authenticate.';
+      icon = '🔐';
     } else if (status === 403) {
       title = 'MISSION ACCESS DENIED';
-      message = customMessage || 'You are not authorized to access this mission.';
+      message = customMessage || 'You are not authorized to access this mission. It may be classified or in draft status.';
+      icon = '🛡️';
     } else if (status === 404) {
       title = 'MISSION NOT FOUND';
-      message = customMessage || 'Mission not found.';
+      message = customMessage || 'This mission does not exist in the database. The ID may be invalid or the mission may have been removed.';
+      icon = '🔍';
     } else if (status === 409) {
       title = 'MISSION CURRENTLY UNAVAILABLE';
       message = customMessage || 'Mission unavailable due to competition state or schedule.';
+      icon = '⏸️';
     } else if (status === 429) {
       title = 'RATE LIMIT EXCEEDED';
       message = customMessage || 'Too many requests. Please wait a moment before trying again.';
+      icon = '⏳';
     } else if (status === 503) {
-      title = 'MISSION SERVICE UNAVAILABLE';
-      message = customMessage || 'Mission service is temporarily unavailable.';
+      // IMPORTANT: 503 is NOT "mission not found" — the database is temporarily down
+      title = 'MISSION DATABASE UNAVAILABLE';
+      message = customMessage || 'The mission database is temporarily offline. This is a server-side issue — the mission exists, but cannot be loaded right now. Please try again in a few seconds.';
+      icon = '🔌';
     } else if (status >= 500) {
-      title = 'MISSION SERVICE UNAVAILABLE';
-      message = customMessage || 'Unable to load mission. Please try again.';
+      title = 'MISSION SERVICE ERROR';
+      message = customMessage || `Server error (${status}). This is not a missing mission — please try again or contact the CTF organizers.`;
+      icon = '🔴';
+    } else {
+      title = 'MISSION LOAD FAILED';
+      message = customMessage || `Unexpected error (status ${status}). Please try again.`;
+      icon = '🛡️';
     }
 
     const esc = window.Utils ? window.Utils.escapeHTML : (s => s);
@@ -52,12 +64,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (contentArea) {
       contentArea.innerHTML = `
         <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:50px 20px; text-align:center; max-width:640px; margin:40px auto; grid-column:1 / -1;">
-          <div style="font-size:36px; margin-bottom:12px;">🛡️</div>
-          <h2 style="font-family:var(--font-heading); color:var(--danger); font-size:20px; font-weight:800; margin-bottom:12px; letter-spacing:0.05em;">
+          <div style="font-size:36px; margin-bottom:12px;">${icon}</div>
+          <h2 style="font-family:var(--font-heading); color:${status === 503 || status >= 500 ? 'var(--warning)' : 'var(--danger)'}; font-size:20px; font-weight:800; margin-bottom:12px; letter-spacing:0.05em;">
             ${esc(title)}
           </h2>
-          <p style="color:var(--text-secondary); font-family:var(--font-mono); font-size:13px; line-height:1.6; margin-bottom:24px;">
+          <p style="color:var(--text-secondary); font-family:var(--font-mono); font-size:13px; line-height:1.6; margin-bottom:8px;">
             ${esc(message)}
+          </p>
+          <p style="color:var(--text-muted); font-family:var(--font-mono); font-size:11px; margin-bottom:24px;">
+            Challenge ID: ${esc(challengeId || 'MISSING')} &nbsp;|&nbsp; Status: ${status}
           </p>
           <a href="/challenges.html" class="btn btn-primary" style="text-decoration:none; display:inline-block; padding:12px 24px;">
             ← RETURN TO ALL MISSIONS
@@ -66,6 +81,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       `;
     }
   }
+
 
   if (!challengeId || challengeId === 'undefined' || challengeId === 'null' || challengeId === '') {
     showMissionError(400, 'Invalid or missing mission identifier in request URL.');
