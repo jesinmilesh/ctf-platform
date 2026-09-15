@@ -7,7 +7,8 @@
     "start": "node backend/server.js",
     "dev": "node backend/server.js",
     "instance-server": "node instance-server/index.js",
-    "worker": "node instance-worker/server.js"
+    "worker": "node instance-worker/server.js",
+    "test": "node scripts/ci-verify.js"
   },
   "dependencies": {
     "argon2": "^0.45.1",
