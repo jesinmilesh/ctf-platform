@@ -6,9 +6,28 @@
 const db = require('../config/database');
 const auditService = require('../services/auditService');
 
-exports.getTeam = (req, res) => {
+exports.getTeam = async (req, res) => {
   const teamId = req.params.id;
-  const team = db.getTeams().find(t => t.id === teamId || t.slug === teamId);
+  let team = db.getTeams().find(t => t.id === teamId || t.slug === teamId);
+
+  // Fallback: query MongoDB Atlas if not found in memory
+  if (!team && db.isMongo && db.mongoDb) {
+    try {
+      const doc = await db.mongoDb.collection('teams').findOne({
+        $or: [{ id: teamId }, { slug: teamId }]
+      });
+      if (doc) {
+        team = { ...doc };
+        if (doc._id) team._id = doc._id.toString();
+        // Merge into memory cache
+        const existing = db.getTeams().find(t => t.id === team.id);
+        if (!existing) db.getTeams().push(team);
+      }
+    } catch (e) {
+      console.warn('[TEAM] Atlas getTeam fallback error:', e.message);
+    }
+  }
+
   if (!team) {
     return res.status(404).json({ error: 'NOT_FOUND', message: 'Tactical squad not found' });
   }
@@ -53,7 +72,7 @@ exports.getTeam = (req, res) => {
   });
 };
 
-exports.createTeam = (req, res) => {
+exports.createTeam = async (req, res) => {
   if (!req.user) {
     return res.status(401).json({ error: 'AUTH_REQUIRED', message: 'Authentication required' });
   }
@@ -95,14 +114,22 @@ exports.createTeam = (req, res) => {
     user.team_id = team.id;
   }
 
-  // Record team member (Section 7)
-  db.getTeamMembers().push({
+  // Record team member
+  const memberRecord = {
     id: crypto.randomUUID(),
     team_id: team.id,
     user_id: req.user.id,
     role: 'CAPTAIN',
     joined_at: new Date().toISOString()
-  });
+  };
+  db.getTeamMembers().push(memberRecord);
+
+  // Persist to MongoDB Atlas
+  if (db.isMongo && db.persistDoc) {
+    await db.persistDoc('teams', team).catch(e => console.warn('[TEAM] persistDoc(team) error:', e.message));
+    if (user) await db.persistDoc('users', user).catch(e => console.warn('[TEAM] persistDoc(user) error:', e.message));
+    await db.persistDoc('teamMembers', memberRecord).catch(e => console.warn('[TEAM] persistDoc(member) error:', e.message));
+  }
 
   auditService.record({
     action: 'TEAM.CREATED',
@@ -128,7 +155,7 @@ exports.createTeam = (req, res) => {
   });
 };
 
-exports.joinTeam = (req, res) => {
+exports.joinTeam = async (req, res) => {
   if (!req.user) {
     return res.status(401).json({ error: 'AUTH_REQUIRED', message: 'Authentication required' });
   }
@@ -143,7 +170,7 @@ exports.joinTeam = (req, res) => {
     return res.status(404).json({ error: 'INVALID_CODE', message: 'Invalid squad security access code' });
   }
 
-  // Enforce server-side team size limits (Section 7)
+  // Enforce server-side team size limits
   const comp = db.getCompetitions()[0];
   const maxTeamSize = comp?.max_team_size || 4;
   const currentMembers = db.getUsers().filter(u => u.team_id === team.id);
@@ -159,15 +186,22 @@ exports.joinTeam = (req, res) => {
     user.team_id = team.id;
   }
 
-  // Record team member (Section 7)
+  // Record team member
   const crypto = require('crypto');
-  db.getTeamMembers().push({
+  const memberRecord = {
     id: crypto.randomUUID(),
     team_id: team.id,
     user_id: req.user.id,
     role: 'MEMBER',
     joined_at: new Date().toISOString()
-  });
+  };
+  db.getTeamMembers().push(memberRecord);
+
+  // Persist to MongoDB Atlas
+  if (db.isMongo && db.persistDoc) {
+    if (user) await db.persistDoc('users', user).catch(e => console.warn('[TEAM] persistDoc(user) error:', e.message));
+    await db.persistDoc('teamMembers', memberRecord).catch(e => console.warn('[TEAM] persistDoc(member) error:', e.message));
+  }
 
   auditService.record({
     action: 'TEAM.JOINED',

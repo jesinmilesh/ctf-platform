@@ -6,8 +6,11 @@
 document.addEventListener('DOMContentLoaded', async () => {
   Navbar.render('navbar-container', 'team');
 
-  await window.authManager.requireAuth('/login.html');
+  await window.authManager.requireAuth('/login.html?redirect=/team.html');
   const user = window.authManager.getUser();
+
+  // If requireAuth redirected (user not logged in), stop execution
+  if (!user) return;
 
   const noSquadView = document.getElementById('noSquadView');
   const hasSquadView = document.getElementById('hasSquadView');
@@ -28,8 +31,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       noSquadView.style.display = 'none';
       hasSquadView.style.display = 'block';
 
-      const teamRes = await window.api.getTeam(currentUser.team_id);
-      const team = teamRes.team;
+      let team;
+      try {
+        const teamRes = await window.api.getTeam(currentUser.team_id);
+        team = teamRes.team;
+      } catch (teamErr) {
+        // Team not found (stale team_id after DB reset or team deleted)
+        // Fall back to no-squad view gracefully
+        console.warn('[SQUAD] Team not found (stale ID?), showing no-squad view:', teamErr.message);
+        noSquadView.style.display = 'block';
+        hasSquadView.style.display = 'none';
+        setupCreateAndJoinForms();
+        return;
+      }
 
       document.getElementById('squadName').textContent = team.name;
       document.getElementById('squadScore').textContent = window.Utils.formatXP(team.total_score);
@@ -80,7 +94,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
     } catch (err) {
-      console.error('Failed to load squad data:', err);
+      // Outer catch: unexpected errors — show no-squad view rather than blank page
+      console.error('[SQUAD] Failed to load squad data:', err);
+      noSquadView.style.display = 'block';
+      hasSquadView.style.display = 'none';
+      setupCreateAndJoinForms();
     }
   }
 
