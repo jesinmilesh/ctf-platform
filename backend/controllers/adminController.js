@@ -47,14 +47,13 @@ class AdminController {
     }
     const categories = db.getCategories();
     const challenges = db.getChallenges().map(c => {
-      const canonicalId = c._id ? String(c._id) : c.id;
-      const fl = db.getFlags().find(f => f.challenge_id === canonicalId || f.challenge_id === c.id);
+      const fl = db.getFlags().find(f => f.challenge_id === c.id || (c._id && f.challenge_id === String(c._id)));
       const cat = categories.find(k => k.id === c.category_id);
       const catName = cat ? cat.name : (c.category_name || c.category || 'Misc');
       return {
         ...c,
-        id: canonicalId,
-        _id: canonicalId,
+        id: c.id,
+        _id: c._id ? String(c._id) : undefined,
         category: catName,
         category_name: catName,
         flag: fl ? fl.flag_value : '***'
@@ -117,8 +116,8 @@ class AdminController {
     if (!challenge) {
       return res.status(404).json({ success: false, error: 'Challenge not found' });
     }
-    const canonicalId = challenge._id ? String(challenge._id) : challenge.id;
-    const files = fileService.getChallengeFiles(canonicalId, challenge.id, challenge._id).map(f => ({
+    const canonicalId = challenge.id;
+    const files = fileService.getChallengeFiles(canonicalId, challenge._id).map(f => ({
       id: f.id,
       filename: f.filename,
       name: f.filename,
@@ -156,8 +155,8 @@ class AdminController {
     }
 
     try {
-      // CANONICAL ID: always use the MongoDB _id string for file association
-      const canonicalId = challenge._id ? String(challenge._id) : challenge.id;
+      // CANONICAL ID: use the public challenge.id for file association
+      const canonicalId = challenge.id;
       const savedRecords = [];
       for (const file of uploadedFiles) {
         const record = await fileService.saveChallengeFile({

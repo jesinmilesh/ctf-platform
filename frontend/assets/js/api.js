@@ -77,7 +77,8 @@ const api = {
   // 2. Challenges
   challenges: {
     list: () => apiRequest('/challenges'),
-    get: (id) => apiRequest(`/challenges/${id}`),
+    get: (id) => apiRequest(`/challenges/${encodeURIComponent(id)}`),
+    getByPublicRoute: (publicRouteId) => apiRequest(`/challenges/public/${encodeURIComponent(publicRouteId)}`),
     submitFlag: (challengeId, flag) => apiRequest('/submissions', {
       method: 'POST',
       body: JSON.stringify({ challengeId, flag })
@@ -223,6 +224,7 @@ api.getMe = api.auth.getMe;
 api.logout = api.auth.logout;
 api.getChallenges = api.challenges.list;
 api.getChallenge = api.challenges.get;
+api.getChallengeByPublicRoute = api.challenges.getByPublicRoute;
 api.submitFlag = api.challenges.submitFlag;
 api.unlockHint = api.challenges.unlockHint;
 api.deployInstance = api.challenges.deployInstance;

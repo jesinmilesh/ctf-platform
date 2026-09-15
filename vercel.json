@@ -27,6 +27,14 @@
       "destination": "/frontend/admin/:match*"
     },
     {
+      "source": "/challenge/:publicRouteId",
+      "destination": "/frontend/public/challenge.html"
+    },
+    {
+      "source": "/challenge",
+      "destination": "/frontend/public/challenge.html"
+    },
+    {
       "source": "/",
       "destination": "/frontend/public/index.html"
     },

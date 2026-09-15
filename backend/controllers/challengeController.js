@@ -85,6 +85,8 @@ exports.getOne = async (req, res) => {
     try {
       const cleanId = String(challengeId).trim();
       const orConditions = [
+        { publicRouteId: cleanId },
+        { challengeId: cleanId },
         { id: cleanId },
         { id: cleanId.toLowerCase() },
         { mission_id: cleanId },
@@ -103,12 +105,11 @@ exports.getOne = async (req, res) => {
       const rawDoc = await db.mongoDb.collection('challenges').findOne({ $or: orConditions });
 
       if (rawDoc) {
-        // Normalize the raw document to use _id string as canonical id
         const item = { ...rawDoc };
         if (rawDoc._id) {
           item._id = rawDoc._id.toString();
-          item.id = rawDoc._id.toString(); // CANONICAL: id always equals _id string
         }
+        item.id = rawDoc.id ? String(rawDoc.id) : (rawDoc._id ? rawDoc._id.toString() : cleanId);
 
         // Merge into in-memory cache
         const existing = db.getChallenges().find(c => c.id === item.id);
@@ -118,7 +119,7 @@ exports.getOne = async (req, res) => {
           Object.assign(existing, item);
         }
 
-        // Now look up with the canonical _id string
+        // Now look up with the public id
         challenge = challengeService.getChallengeDetails(item.id, req.user);
       }
     } catch (e) {
@@ -151,7 +152,7 @@ exports.getOne = async (req, res) => {
   console.log(`[CHALLENGE] req=${reqId} user=${userId} id=${challengeId} result=FOUND title="${challenge.title}" status=200`);
 
   if (req.user) {
-    const canonicalCId = challenge._id ? String(challenge._id) : challenge.id;
+    const canonicalCId = challenge.id;
     auditService.record({
       action: 'CHALLENGE.VIEWED',
       category: 'CHALLENGE',
@@ -264,8 +265,8 @@ exports.getChallengeFiles = async (req, res) => {
     return res.status(403).json({ success: false, error: 'Mission classified. Asset access restricted.' });
   }
 
-  const canonicalId = challenge._id ? String(challenge._id) : challenge.id;
-  const files = fileService.getChallengeFiles(canonicalId, challenge.id, challenge._id).map(f => ({
+  const publicId = challenge.id;
+  const files = fileService.getChallengeFiles(publicId, challenge._id).map(f => ({
     id: f.id,
     name: f.filename,
     filename: f.filename,
@@ -273,7 +274,7 @@ exports.getChallengeFiles = async (req, res) => {
     file_size_bytes: f.file_size_bytes || f.size,
     mimeType: f.mime_type || f.mimeType || 'application/octet-stream',
     sha256: f.sha256,
-    downloadUrl: `/api/v1/challenges/${canonicalId}/files/${f.id}/download`,
+    downloadUrl: `/api/v1/challenges/${publicId}/files/${f.id}/download`,
     uploadedAt: f.uploaded_at || f.uploadedAt
   }));
 
@@ -305,11 +306,12 @@ exports.downloadChallengeFile = async (req, res) => {
   }
 
   const fileRecord = fileService.getFileRecord(fileId);
-  const targetChallengeId = challenge._id ? String(challenge._id) : challenge.id;
-  const altChallengeIds = [challenge.id, String(challenge._id || ''), challenge.slug, challenge.mission_id, challenge.legacy_id, targetChallengeId].filter(Boolean);
+  const targetChallengeId = challenge.id;
+  const altChallengeIds = [challenge.id, String(challenge._id || ''), challenge.slug, challenge.mission_id, challenge.legacy_id].filter(Boolean);
   const fileBelongsToChallenge = fileRecord && (
     altChallengeIds.includes(String(fileRecord.challenge_id || '').trim()) ||
-    altChallengeIds.includes(String(fileRecord.challengeId || '').trim())
+    altChallengeIds.includes(String(fileRecord.challengeId || '').trim()) ||
+    (fileRecord.challengeObjectId && challenge._id && String(fileRecord.challengeObjectId) === String(challenge._id))
   );
 
   if (!fileRecord || !fileBelongsToChallenge) {
@@ -395,4 +397,9 @@ exports.downloadChallengeFile = async (req, res) => {
 
     res.status(statusCode).json({ error: errorCode, message: errorMessage });
   }
+};
+
+exports.getByPublicRouteId = async (req, res) => {
+  req.params.id = req.params.publicRouteId;
+  return exports.getOne(req, res);
 };

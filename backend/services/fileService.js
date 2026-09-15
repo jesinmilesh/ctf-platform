@@ -47,10 +47,21 @@ class FileService {
     await this.storage.putObject(storageKey, buffer, mimeType || 'application/octet-stream');
 
     // 5. Authoritative File Metadata Record for MongoDB Atlas
+    const challenges = db.getChallenges ? db.getChallenges() : [];
+    const ch = challenges.find(c =>
+      c.id === challengeId ||
+      (c._id && String(c._id) === challengeId) ||
+      c.slug === challengeId ||
+      c.mission_id === challengeId
+    );
+    const publicChallengeId = ch ? ch.id : challengeId;
+    const internalChallengeObjectId = (ch && ch._id) ? String(ch._id) : null;
+
     const fileRecord = {
       id: fileId,
-      challenge_id: challengeId,
-      challengeId: challengeId,
+      challenge_id: publicChallengeId,
+      challengeId: publicChallengeId,
+      challengeObjectId: internalChallengeObjectId,
       filename: safeFilename,
       name: safeFilename,
       originalName: base,
@@ -73,13 +84,6 @@ class FileService {
     files.push(fileRecord);
 
     // Link file directly to challenge files array
-    const challenges = db.getChallenges ? db.getChallenges() : [];
-    const ch = challenges.find(c =>
-      c.id === challengeId ||
-      (c._id && String(c._id) === challengeId) ||
-      c.slug === challengeId ||
-      c.mission_id === challengeId
-    );
     if (ch) {
       ch.files = ch.files || [];
       if (!ch.files.some(f => (f.id || f.fileId) === fileId)) {
@@ -107,7 +111,7 @@ class FileService {
     }
 
     // 7. Realtime Synchronization Event (Section 21)
-    await realtimeService.broadcastChallengeFileAdded(challengeId, fileRecord).catch(() => {});
+    await realtimeService.broadcastChallengeFileAdded(publicChallengeId, fileRecord).catch(() => {});
     await realtimeService.broadcastChallengeUpdated(challengeId).catch(() => {});
 
     // 8. Audit Record (Prompt Section 16 & 38)

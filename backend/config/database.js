@@ -61,7 +61,7 @@ class DatabaseEngine {
     const isMongoUri = rawUrl.startsWith('mongodb://') || rawUrl.startsWith('mongodb+srv://');
     
     this.dbType = process.env.DB_TYPE || (isMongoUri ? 'mongodb' : 'memory');
-    this.isMongo = this.dbType === 'mongodb' || isMongoUri;
+    this.isMongo = this.dbType === 'mongodb';
     this.isPostgres = this.dbType === 'postgres' || rawUrl.startsWith('postgres://') || rawUrl.startsWith('postgresql://');
     
     this.mongoUrl = isMongoUri ? rawUrl : (process.env.MONGODB_URI || process.env.DATABASE_URL);
@@ -316,17 +316,21 @@ class DatabaseEngine {
       await tColl.createIndex({ access_code: 1 });
 
       const cColl = this.mongoDb.collection('challenges');
-      // NOTE: id is now always equal to _id.toString(). We drop any legacy unique
-      // index on id to prevent silent E11000 conflicts during document updates/upserts.
+      // CANONICAL PUBLIC ID: id is unique across all challenges.
+      // Drop any conflicting index before creating unique sparse index.
       try {
         const existingIndexes = await cColl.indexes().catch(() => []);
-        const legacyIdIndex = existingIndexes.find(idx => idx.name === 'id_1' && idx.unique);
+        const legacyIdIndex = existingIndexes.find(idx => idx.name === 'id_1' && !idx.unique);
         if (legacyIdIndex) {
           await cColl.dropIndex('id_1').catch(() => {});
-          console.log('[DATABASE] Dropped legacy unique index id_1 on challenges collection');
+          console.log('[DATABASE] Recreating unique index id_1 on challenges collection');
         }
       } catch (_) {}
-      await cColl.createIndex({ id: 1 }, { sparse: true }); // non-unique, sparse
+      await cColl.createIndex({ id: 1 }, { unique: true, sparse: true });
+      await cColl.createIndex({ challengeId: 1 }, { unique: true, sparse: true });
+      await cColl.createIndex({ publicRouteId: 1 }, { unique: true, sparse: true });
+      await cColl.createIndex({ competitionId: 1 });
+      await cColl.createIndex({ domain: 1 });
       await cColl.createIndex({ slug: 1 }, { sparse: true });
 
       const cfColl = this.mongoDb.collection('challenge_files');
@@ -414,29 +418,25 @@ class DatabaseEngine {
       // Use raw Array.prototype.push during hydration to avoid triggering
       // the tracked push() which would replicate data back to MongoDB (infinite loop).
       //
-      // CANONICAL ID CONTRACT:
-      // - challenges: ALWAYS set id = String(_id). This ensures challenge.id === MongoDB _id string,
-      //   fixing the "Mission Not Found" bug caused by the dual-ID system.
-      // - ALL OTHER collections: preserve existing id field if present.
-      //   Foreign key references (competition_id, category_id, challenge_id) rely on these original IDs.
-      //   Only set id = String(_id) as a FALLBACK when id is absent.
+      // CANONICAL IDENTIFIER ARCHITECTURE:
+      // - MongoDB _id: Internal database identifier (ObjectId string).
+      // - item.id: XploitX Canonical Public Identifier (e.g. c0000000-0000-0000-0000-000000000001 or custom UUID).
+      //
+      // For all collections:
+      // - item._id is always set to d._id.toString() for internal database correlation.
+      // - item.id is PRESERVED from d.id (the public ID).
+      // - Only fall back to d._id.toString() if d.id is completely missing from the document.
       for (const [key, colName] of Object.entries(COLLECTION_MAP)) {
         const docs = await this.mongoDb.collection(colName).find({}).toArray();
         const cleanDocs = docs.map(d => {
           const item = { ...d };
           if (d._id) {
             item._id = d._id.toString();
-            if (key === 'challenges') {
-              // Retain original custom UUID if present so old file associations can be migrated
-              if (d.id && String(d.id) !== d._id.toString()) {
-                item.legacy_id = String(d.id);
-              }
-              // Challenges: ALWAYS override id with _id string (canonical ID contract).
-              item.id = d._id.toString();
-            } else {
-              // All other collections: preserve existing id; fall back to _id string only if absent.
-              if (!item.id) item.id = d._id.toString();
-            }
+          }
+          if (d.id) {
+            item.id = String(d.id);
+          } else if (d._id) {
+            item.id = d._id.toString();
           }
           return item;
         });
@@ -448,9 +448,12 @@ class DatabaseEngine {
       }
 
       // After hydrating challenge_files, reconcile any file records whose challenge_id
-      // still contains an old custom UUID (pre-canonical-ID-fix). Update them to the
-      // canonical _id string so file lookups work correctly.
+      // still contains an old custom UUID or MongoDB _id string. Update them to the
+      // canonical public challenge.id so file lookups work correctly.
       this._reconcileFileChallengeIds();
+
+      // Non-destructive idempotent migration: assign challengeId and publicRouteId to any challenge lacking them
+      await this._migrateChallengeIdentities();
 
       // 3. Hydrate Settings
       const savedSettings = await this.mongoDb.collection('settings').findOne({ id: 'global_settings' });
@@ -469,14 +472,10 @@ class DatabaseEngine {
   }
 
   /**
-   * After hydration, repair any challenge_file records whose challenge_id
-   * still contains an old custom UUID from before the canonical ID fix.
-   * Matches files to challenges by attempting both the stored challenge_id
-   * AND the challenge's _id string. Updates in-memory records and persists
-   * corrections back to MongoDB Atlas.
-   *
-   * This is safe to run repeatedly — it only updates stale records.
-   * It NEVER deletes any data.
+   * Reconcile file-to-challenge relationships:
+   * Ensures challenge_id on files points to the public canonical challenge.id.
+   * If a file was saved with an internal MongoDB _id string, normalizes it to challenge.id.
+   * Also records challengeObjectId = challenge._id for internal database correlation.
    */
   _reconcileFileChallengeIds() {
     if (!this.data.challengeFiles || this.data.challengeFiles.length === 0) return;
@@ -487,39 +486,122 @@ class DatabaseEngine {
       const storedChallengeId = file.challenge_id || file.challengeId;
       if (!storedChallengeId) continue;
 
-      // Check if the stored challenge_id already matches a known challenge canonical id
-      const matchDirect = this.data.challenges.find(c => c.id === storedChallengeId);
-      if (matchDirect) continue; // Already correct — no repair needed
+      // Match challenge by public id first
+      let owningChallenge = this.data.challenges.find(c => c.id === storedChallengeId);
 
-      // Try to find the owning challenge by old UUID or other identifiers
-      const matchAlt = this.data.challenges.find(c =>
-        (c._id && c._id.toString() === storedChallengeId) ||
-        c.legacy_id === storedChallengeId ||
-        c.mission_id === storedChallengeId ||
-        c.slug === storedChallengeId
-      );
+      // If not matched by public id, check internal _id, mission_id, or slug
+      if (!owningChallenge) {
+        owningChallenge = this.data.challenges.find(c =>
+          (c._id && String(c._id) === storedChallengeId) ||
+          (c.legacy_id && c.legacy_id === storedChallengeId) ||
+          c.mission_id === storedChallengeId ||
+          c.slug === storedChallengeId
+        );
 
-      if (matchAlt) {
-        const canonicalId = matchAlt.id; // always = _id.toString() after hydration
-        console.log(`[DATABASE] Repairing file ${file.id}: challenge_id ${storedChallengeId} -> ${canonicalId}`);
-        file.challenge_id = canonicalId;
-        file.challengeId = canonicalId;
-        repaired++;
-
-        // Persist the corrected relationship back to Atlas
-        if (this.isMongo && this.mongoDb) {
-          const fileFilter = file._id
-            ? { _id: file._id }
-            : { id: file.id };
-          this.mongoDb.collection('challenge_files')
-            .updateOne(fileFilter, { $set: { challenge_id: canonicalId, challengeId: canonicalId } })
-            .catch(err => console.warn('[DATABASE] File reconciliation persist error:', err.message));
+        if (owningChallenge) {
+          const publicId = owningChallenge.id;
+          console.log(`[DATABASE] Reconciling file ${file.id}: challenge_id ${storedChallengeId} -> public ID ${publicId}`);
+          file.challenge_id = publicId;
+          file.challengeId = publicId;
+          repaired++;
         }
+      }
+
+      if (owningChallenge && owningChallenge._id && !file.challengeObjectId) {
+        file.challengeObjectId = String(owningChallenge._id);
+      }
+
+      // Persist corrected relationship back to Atlas
+      if (this.isMongo && this.mongoDb && owningChallenge) {
+        const fileFilter = file._id ? { _id: file._id } : { id: file.id };
+        this.mongoDb.collection('challenge_files')
+          .updateOne(fileFilter, {
+            $set: {
+              challenge_id: file.challenge_id,
+              challengeId: file.challengeId,
+              challengeObjectId: file.challengeObjectId || (owningChallenge._id ? String(owningChallenge._id) : null)
+            }
+          })
+          .catch(err => console.warn('[DATABASE] File reconciliation persist error:', err.message));
       }
     }
 
     if (repaired > 0) {
       console.log(`[DATABASE] Reconciled ${repaired} file-challenge relationship(s).`);
+    }
+  }
+
+  /**
+   * Idempotent Challenge Identity Migration:
+   * Ensures every challenge has a domain-specific challengeId (e.g. CRY-000000-00000-C001)
+   * and an opaque publicRouteId (e.g. a8F2kLm91Qx7pL9z) while strictly preserving existing _id.
+   * If challengeId and publicRouteId already exist, they are NEVER overwritten or regenerated.
+   */
+  async _migrateChallengeIdentities() {
+    if (!this.data.challenges || this.data.challenges.length === 0) return;
+
+    const {
+      resolveDomainPrefix,
+      getDomainName,
+      formatChallengeId,
+      generatePublicRouteId,
+      allocateNextSequence
+    } = require('../utils/challengeIdentity');
+
+    const existingRouteIds = new Set(
+      this.data.challenges.map(c => c.publicRouteId).filter(Boolean)
+    );
+
+    let migrated = 0;
+    for (const challenge of this.data.challenges) {
+      let changed = false;
+
+      // 1. Resolve domain
+      const prefix = resolveDomainPrefix(challenge.category_name || challenge.category || challenge.domain);
+      const domainName = getDomainName(prefix);
+      if (!challenge.domain) {
+        challenge.domain = domainName;
+        changed = true;
+      }
+
+      // 2. Resolve competitionId
+      if (!challenge.competitionId) {
+        challenge.competitionId = challenge.competition_id || 'XPLOITX-2026';
+        changed = true;
+      }
+
+      // 3. Resolve domain-specific challengeId if missing or legacy format
+      if (!challenge.challengeId) {
+        const nextSeq = allocateNextSequence(prefix, this.data.challenges);
+        challenge.challengeId = formatChallengeId(prefix, nextSeq);
+        changed = true;
+      }
+
+      // 4. Resolve publicRouteId if missing
+      if (!challenge.publicRouteId) {
+        challenge.publicRouteId = generatePublicRouteId(challenge.challengeId, existingRouteIds);
+        existingRouteIds.add(challenge.publicRouteId);
+        changed = true;
+      }
+
+      if (changed) {
+        migrated++;
+        if (this.isMongo && this.mongoDb) {
+          const filter = challenge._id ? { _id: challenge._id } : { id: challenge.id };
+          await this.mongoDb.collection('challenges').updateOne(filter, {
+            $set: {
+              challengeId: challenge.challengeId,
+              publicRouteId: challenge.publicRouteId,
+              domain: challenge.domain,
+              competitionId: challenge.competitionId
+            }
+          }).catch(err => console.warn('[DATABASE] Identity migration persist warning:', err.message));
+        }
+      }
+    }
+
+    if (migrated > 0) {
+      console.log(`[DATABASE] Migrated ${migrated} challenge(s) to domain-specific challengeId & publicRouteId.`);
     }
   }
 
@@ -545,21 +627,14 @@ class DatabaseEngine {
           if (itemId && !doc.id) doc.id = String(itemId);
 
           let filter;
-          // Use ObjectId filter if the id looks like a valid MongoDB ObjectId (24-char hex)
-          if (ObjectIdClass && itemId && String(itemId).length === 24 && ObjectIdClass.isValid(itemId)) {
-            try {
-              filter = { _id: new ObjectIdClass(String(itemId)) };
-            } catch (_) {
-              filter = doc.instanceId
-                ? { $or: [{ instanceId: doc.instanceId }, { id: String(itemId) }] }
-                : { id: String(itemId) };
-            }
+          if (doc.id) {
+            filter = { id: String(doc.id) };
+          } else if (ObjectIdClass && item._id && ObjectIdClass.isValid(String(item._id))) {
+            filter = { _id: new ObjectIdClass(String(item._id)) };
           } else if (doc.instanceId) {
-            filter = { $or: [{ instanceId: doc.instanceId }, { id: String(itemId) }] };
-          } else if (itemId) {
-            filter = { id: String(itemId) };
+            filter = { instanceId: String(doc.instanceId) };
           } else {
-            filter = { _id: item._id };
+            filter = { id: String(itemId) };
           }
 
           await coll.updateOne(filter, { $set: doc }, { upsert: true });
@@ -635,13 +710,14 @@ class DatabaseEngine {
         if (docId) {
           if (!toSave.id) toSave.id = String(docId);
           let filter;
-          if (objectIdFilter) {
-            // Use _id ObjectId filter for maximum accuracy — avoids duplicate creation
+          if (toSave.id) {
+            filter = { id: toSave.id };
+          } else if (objectIdFilter) {
             filter = { _id: objectIdFilter };
           } else if (toSave.instanceId) {
-            filter = { $or: [{ instanceId: toSave.instanceId }, { id: toSave.id }] };
+            filter = { instanceId: toSave.instanceId };
           } else if (toSave.username) {
-            filter = { $or: [{ id: toSave.id }, { username: toSave.username }] };
+            filter = { username: toSave.username };
           } else {
             filter = { id: toSave.id };
           }
@@ -786,6 +862,22 @@ class DatabaseEngine {
       return this.pool.query(sql, params);
     }
     return { rows: [], rowCount: 0 };
+  }
+
+  async close() {
+    if (this._syncInterval) {
+      clearInterval(this._syncInterval);
+      this._syncInterval = null;
+    }
+    if (this.mongoClient) {
+      await this.mongoClient.close().catch(() => {});
+      this.mongoClient = null;
+    }
+    if (this.mongoose && this.mongoose.connection) {
+      await this.mongoose.disconnect().catch(() => {});
+    }
+    this.connected = false;
+    this.initPromise = null;
   }
 }
 

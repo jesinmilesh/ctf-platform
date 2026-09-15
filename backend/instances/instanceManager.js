@@ -296,11 +296,13 @@ class InstanceManager {
     const ttlMinutes = challenge.runtime?.durationMinutes || challenge.instance_ttl_minutes || env.INSTANCE_DEFAULT_TTL_MINUTES || 30;
     const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000).toISOString();
     const endpoints = instanceRouter.resolveEndpoints(instanceId, allocatedPort, containerInfo.protocol);
-    const canonicalChallengeId = challenge._id ? String(challenge._id) : challenge.id;
+    const canonicalChallengeId = challenge.id;
+    const challengeObjectId = challenge._id ? String(challenge._id) : null;
 
     const instanceRecord = {
       instanceId,
       challengeId: canonicalChallengeId,
+      challengeObjectId,
       competitionId: challenge.competition_id || null,
       teamId,
       ownerUserId: userId,

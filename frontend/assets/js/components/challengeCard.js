@@ -19,11 +19,13 @@ const ChallengeCard = {
     else if (difficulty === 'HARD') diffColor = 'var(--warning)';
     else if (difficulty === 'INSANE') diffColor = 'var(--danger)';
 
-    const targetId = challenge.id || (challenge._id ? String(challenge._id) : '') || challenge.mission_id || challenge.slug || 'preview';
-    const isPreview = targetId === 'preview';
+    const displayChallengeId = challenge.challengeId || challenge.id || challenge.mission_id || 'OP-CLASSIFIED';
+    const isPreview = (challenge.id === 'preview' || challenge.slug === 'preview');
+    const routeToken = challenge.publicRouteId || challenge.id || challenge.slug || 'preview';
+    const linkHref = isPreview ? '/challenge.html?id=preview' : `/challenge/${encodeURIComponent(routeToken)}`;
 
     return `
-      <article class="mission-card ${isSolved ? 'solved' : ''}" style="${isSolved ? 'border-color: rgba(0, 255, 156, 0.4);' : ''}">
+      <article class="mission-card ${isSolved ? 'solved' : ''}" data-challenge-id="${esc(challenge.challengeId || challenge.id || routeToken)}" style="${isSolved ? 'border-color: rgba(0, 255, 156, 0.4);' : ''}">
         <div class="mission-card-top" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
           <span class="mission-category" style="color:${esc(categoryColor)}; font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:0.1em;">
             [ ${esc(categoryName.toUpperCase())} ]
@@ -38,7 +40,7 @@ const ChallengeCard = {
         </h2>
 
         <div style="font-size:12px; color:var(--text-secondary); margin-bottom:16px; font-family:var(--font-mono);">
-          MISSION ID: ${esc(challenge.mission_id || 'OP-CLASSIFIED')}
+          MISSION ID: <span style="color:var(--text-primary); font-weight:700;">${esc(displayChallengeId)}</span>
         </div>
 
         <div class="mission-meta" style="display:flex; align-items:center; gap:12px; font-size:12px; font-family:var(--font-mono); margin-bottom:16px; color:var(--text-secondary);">
@@ -49,8 +51,8 @@ const ChallengeCard = {
           <span>${challenge.solve_count || 0} SOLVES</span>
         </div>
 
-        <a href="/challenge.html?id=${encodeURIComponent(targetId)}" class="btn ${isSolved ? 'btn-outline' : 'btn-primary'}" style="width:100%; text-decoration:none;">
-          ${isSolved ? 'REVIEW MISSION' : (isPreview ? 'PREVIEW DOSSIER ↗' : 'OPEN MISSION')}
+        <a href="${linkHref}" class="btn ${isSolved ? 'btn-outline' : 'btn-primary'}" style="width:100%; text-decoration:none;">
+          ${isSolved ? 'REVIEW MISSION' : (isPreview ? 'PREVIEW DOSSIER ↗' : 'ACCESS MISSION')}
         </a>
       </article>
     `;

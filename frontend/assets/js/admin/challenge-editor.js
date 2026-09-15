@@ -259,7 +259,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const c = await window.api.getChallenge(id);
       document.getElementById('editTitle').value = c.title || '';
-      document.getElementById('editMissionId').value = c.mission_id || '';
+      const missionIdEl = document.getElementById('editMissionId');
+      if (missionIdEl) {
+        missionIdEl.value = c.challengeId || c.mission_id || '';
+        missionIdEl.readOnly = true;
+        missionIdEl.style.opacity = '0.7';
+      }
       document.getElementById('editCategory').value = c.category || c.category_name || 'PWN';
       document.getElementById('editDifficulty').value = c.difficulty || 'MEDIUM';
       document.getElementById('editDescription').value = c.description || '';
@@ -469,7 +474,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.showSuccess('MISSION UPDATED SUCCESSFULLY');
       } else {
         const res = await window.api.admin.createChallenge(payload);
-        targetChallengeId = res.challenge?._id || res.challenge?.id;
+        targetChallengeId = res.challenge?.id || res.challenge?._id;
         window.showSuccess('NEW MISSION COMMISSIONED');
       }
 

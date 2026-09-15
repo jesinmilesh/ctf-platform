@@ -88,10 +88,36 @@ class AuthService {
 
   async login(usernameOrEmail, password) {
     const term = (usernameOrEmail || '').trim().toLowerCase();
-    const user = db.getUsers().find(u =>
+    let user = db.getUsers().find(u =>
       (u && u.username && u.username.toLowerCase() === term) ||
-      (u && u.email && u.email.toLowerCase() === term)
+      (u && u.email && u.email.toLowerCase() === term) ||
+      (u && u.callsign && u.callsign.toLowerCase() === term)
     );
+
+    // Fallback: If not found in in-memory cache, query MongoDB Atlas directly
+    if (!user && db.isMongo && db.mongoDb) {
+      try {
+        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const doc = await db.mongoDb.collection('users').findOne({
+          $or: [
+            { username: { $regex: `^${escaped}$`, $options: 'i' } },
+            { email: { $regex: `^${escaped}$`, $options: 'i' } },
+            { callsign: { $regex: `^${escaped}$`, $options: 'i' } }
+          ]
+        });
+        if (doc) {
+          user = { ...doc };
+          if (doc._id) user._id = doc._id.toString();
+          if (!user.id && doc._id) user.id = doc._id.toString();
+          const existing = db.getUsers().find(u => u.id === user.id);
+          if (!existing) {
+            Array.prototype.push.call(db.getUsers(), user);
+          }
+        }
+      } catch (e) {
+        console.warn('[AUTH] Direct Atlas user query warning:', e.message);
+      }
+    }
 
     if (!user) {
       throw new Error('Invalid operative callsign or passphrase.');
@@ -102,7 +128,19 @@ class AuthService {
     }
 
     // Cryptographic Password Validation using Argon2id
-    const isValid = await this.verifyPassword(password, user.password_hash);
+    let isValid = await this.verifyPassword(password, user.password_hash);
+
+    // Safeguard: Allow bootstrap admin password from .env to authenticate and rehash
+    if (!isValid && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') && process.env.BOOTSTRAP_ADMIN_PASSWORD) {
+      if (password === process.env.BOOTSTRAP_ADMIN_PASSWORD) {
+        isValid = true;
+        user.password_hash = await this.hashPassword(password);
+        if (db.isMongo && db.persistDoc) {
+          await db.persistDoc('users', user).catch(() => {});
+        }
+      }
+    }
+
     if (!isValid) {
       throw new Error('Invalid operative callsign or passphrase.');
     }

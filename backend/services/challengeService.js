@@ -7,6 +7,14 @@ const db = require('../config/database');
 const scoringService = require('./scoringService');
 const realtimeService = require('./realtimeService');
 const auditService = require('./auditService');
+const {
+  resolveDomainPrefix,
+  getDomainName,
+  isValidChallengeId,
+  formatChallengeId,
+  generatePublicRouteId,
+  allocateNextSequence
+} = require('../utils/challengeIdentity');
 
 class ChallengeService {
   _resolveCategory(identifier, explicitId) {
@@ -54,6 +62,15 @@ class ChallengeService {
     if (clean.includes('osint') || clean.includes('intel') || clean === 'recon') {
       return categories.find(c => c.slug === 'osint') || categories.find(c => c.name.toLowerCase().includes('osint'));
     }
+    if (clean.includes('reverse') || clean.includes('rev') || clean === 're' || clean === 'reversing') {
+      return categories.find(c => c.slug === 'reverse') || categories.find(c => c.name.toLowerCase().includes('reverse')) || { id: 'cat-rev', name: 'Reverse Engineering', slug: 'reverse' };
+    }
+    if (clean.includes('malware') || clean.includes('mal')) {
+      return categories.find(c => c.slug === 'malware') || categories.find(c => c.name.toLowerCase().includes('malware')) || { id: 'cat-mal', name: 'Malware Analysis', slug: 'malware' };
+    }
+    if (clean.includes('vapt') || clean.includes('vap') || clean.includes('securecode') || clean.includes('secure code')) {
+      return categories.find(c => c.slug === 'vapt') || categories.find(c => c.name.toLowerCase().includes('vapt')) || { id: 'cat-vap', name: 'Secure Code / VAPT', slug: 'vapt' };
+    }
     if (clean.includes('misc') || clean.includes('trivia')) {
       return categories.find(c => c.slug === 'misc') || categories.find(c => c.name.toLowerCase().includes('misc'));
     }
@@ -78,14 +95,17 @@ class ChallengeService {
       if (!category && (c.category_name || c.category)) {
         category = this._resolveCategory(c.category_name || c.category, c.category_id);
       }
-      const isSolved = solves.some(s => (s.challenge_id === c.id || (c._id && s.challenge_id === String(c._id))) && ((teamId && s.team_id === teamId) || (userId && s.user_id === userId)));
+      const isSolved = solves.some(s => (s.challenge_id === c.id || s.challenge_id === c.challengeId || (c._id && s.challenge_id === String(c._id))) && ((teamId && s.team_id === teamId) || (userId && s.user_id === userId)));
       const hasInst = !!(c.requiresInstance || c.has_instance || c.runtime?.enabled);
+      const challengeDisplayId = c.challengeId || c.id;
 
-      const canonicalId = c._id ? String(c._id) : (c.id || c.slug);
       return {
-        id: canonicalId,
-        _id: canonicalId,
-        mission_id: c.mission_id,
+        id: challengeDisplayId,
+        challengeId: challengeDisplayId,
+        publicRouteId: c.publicRouteId,
+        competitionId: c.competitionId || c.competition_id || 'XPLOITX-2026',
+        domain: c.domain || (category ? category.name : (c.category_name || 'Misc')),
+        mission_id: challengeDisplayId,
         slug: c.slug,
         title: c.title,
         category: category ? category.name : (c.category_name || c.category || 'Misc'),
@@ -106,19 +126,25 @@ class ChallengeService {
     const cleanId = String(challengeId).trim();
     const cleanIdLower = cleanId.toLowerCase();
 
-    // 1. Search in-memory cache first (by id, _id, mission_id, slug, or title - case-insensitive)
+    // 1. Search in-memory cache by publicRouteId, challengeId, id, _id, mission_id, slug, or title
     const c = db.getChallenges().find(item => {
       if (!item) return false;
       const itemId = item.id ? String(item.id).trim() : '';
+      const itemChallengeId = item.challengeId ? String(item.challengeId).trim() : '';
+      const itemPublicRouteId = item.publicRouteId ? String(item.publicRouteId).trim() : '';
       const itemMongoId = item._id ? String(item._id).trim() : '';
       const itemMissionId = item.mission_id ? String(item.mission_id).trim() : '';
       const itemSlug = item.slug ? String(item.slug).trim() : '';
       const itemTitle = item.title ? String(item.title).trim() : '';
 
-      return itemId === cleanId ||
+      return itemPublicRouteId === cleanId ||
+        itemChallengeId === cleanId ||
+        itemId === cleanId ||
         itemMongoId === cleanId ||
         itemMissionId === cleanId ||
         itemSlug === cleanId ||
+        itemPublicRouteId.toLowerCase() === cleanIdLower ||
+        itemChallengeId.toLowerCase() === cleanIdLower ||
         itemId.toLowerCase() === cleanIdLower ||
         itemMongoId.toLowerCase() === cleanIdLower ||
         itemMissionId.toLowerCase() === cleanIdLower ||
@@ -140,13 +166,16 @@ class ChallengeService {
       category = this._resolveCategory(c.category_name || c.category, c.category_id);
     }
 
-    const canonicalId = c._id ? String(c._id) : (c.id || c.slug);
+    const publicId = c.challengeId || c.id;
+    const publicRoute = c.publicRouteId || publicId;
     const altIds = [
       c.id ? String(c.id).trim() : null,
+      c.challengeId ? String(c.challengeId).trim() : null,
+      c.publicRouteId ? String(c.publicRouteId).trim() : null,
       c._id ? String(c._id).trim() : null,
       c.mission_id ? String(c.mission_id).trim() : null,
       c.slug ? String(c.slug).trim() : null,
-      canonicalId
+      publicId
     ].filter(Boolean);
 
     // Merge registered files from db.getFiles() and challenge.files array
@@ -166,7 +195,7 @@ class ChallengeService {
         sizeBytes: f.file_size_bytes || f.size || 0,
         mimeType: f.mime_type || f.mimeType || 'application/octet-stream',
         sha256: f.sha256 || null,
-        downloadUrl: `/api/v1/challenges/${canonicalId}/files/${f.id}/download`,
+        downloadUrl: `/api/v1/challenges/${publicId}/files/${f.id}/download`,
         uploadedAt: f.uploaded_at || f.uploadedAt || new Date().toISOString()
       });
     }
@@ -183,7 +212,7 @@ class ChallengeService {
           sizeBytes: ef.size || ef.file_size_bytes || 0,
           mimeType: ef.mimeType || ef.mime_type || 'application/octet-stream',
           sha256: ef.sha256 || null,
-          downloadUrl: `/api/v1/challenges/${canonicalId}/files/${fId}/download`,
+          downloadUrl: `/api/v1/challenges/${publicId}/files/${fId}/download`,
           uploadedAt: ef.uploadedAt || ef.uploaded_at || new Date().toISOString()
         });
       }
@@ -222,9 +251,13 @@ class ChallengeService {
     const requiresInstance = !!(c.requiresInstance || c.has_instance || c.runtime?.enabled);
 
     return {
-      id: canonicalId,
-      _id: canonicalId,
-      mission_id: c.mission_id,
+      id: publicId,
+      challengeId: publicId,
+      publicRouteId: c.publicRouteId,
+      domain: c.domain || (category ? category.name : (c.category_name || 'Misc')),
+      competitionId: c.competitionId || c.competition_id || 'XPLOITX-2026',
+      _id: (isAdmin && c._id) ? String(c._id) : undefined,
+      mission_id: publicId,
       slug: c.slug,
       title: c.title,
       category: category ? category.name : (c.category_name || c.category || 'Misc'),
@@ -350,38 +383,40 @@ class ChallengeService {
 
   createChallenge(data) {
     const crypto = require('crypto');
-    // CANONICAL ID CONTRACT: Generate a MongoDB ObjectId string as the single
-    // canonical identifier. id === _id === String(MongoDB ObjectId) always.
-    // Never generate a separate UUID or hex string that diverges from _id.
-    let canonicalId;
-    try {
-      const { ObjectId } = require('mongodb');
-      // If an explicit _id or id is provided and looks like a valid ObjectId, use it.
-      const provided = data._id || data.id;
-      if (provided && ObjectId.isValid(String(provided)) && String(provided).length === 24) {
-        canonicalId = String(provided);
-      } else {
-        canonicalId = new ObjectId().toString();
+    let _id = data._id ? String(data._id).trim() : null;
+    if (!_id) {
+      try {
+        const { ObjectId } = require('mongodb');
+        _id = new ObjectId().toString();
+      } catch (_) {
+        _id = crypto.randomBytes(12).toString('hex');
       }
-    } catch (e) {
-      canonicalId = crypto.randomBytes(12).toString('hex');
     }
-    const id = canonicalId;  // id always equals _id string
-    const _id = canonicalId; // _id always equals id
     const slug = (data.title || 'mission').toLowerCase().replace(/[^a-z0-9]+/g, '-');
     
-    // Resolve matching category entity from db
+    // 1. Resolve matching category & domain
     const category = this._resolveCategory(data.category || data.category_name, data.category_id);
     const category_id = category ? category.id : (db.getCategories()[0]?.id || 'cat-01');
     const category_name = category ? category.name : (data.category || data.category_name || 'Misc');
 
-    // Generate unique non-colliding mission_id
-    let mission_id = (data.mission_id || '').trim();
-    if (!mission_id) {
-      const catPrefix = (category ? category.name.replace(/[^A-Za-z]/g, '').slice(0, 4) : 'SEC').toUpperCase();
-      const randHex = crypto.randomBytes(2).toString('hex').toUpperCase();
-      mission_id = `OP-${catPrefix}-${randHex}`;
-    }
+    // 2. Resolve domain prefix and domain name
+    const domainPrefix = resolveDomainPrefix(data.domain || data.category || data.category_name || (category ? category.name : 'Misc'));
+    const domainName = getDomainName(domainPrefix);
+
+    // 3. Allocate atomic domain-isolated sequence and format Challenge ID
+    // Format: <DOMAIN>-<SERIAL>-<CHALLENGE>-<SEQUENCE>, e.g. CRY-000000-00000-C001
+    const allChallenges = db.getChallenges();
+    const nextSeq = allocateNextSequence(domainPrefix, allChallenges);
+    const challengeId = formatChallengeId(domainPrefix, nextSeq);
+
+    // 4. Server-Side Cryptographically Secure / HMAC Opaque Public Route ID
+    const existingRouteIds = new Set(allChallenges.map(c => c.publicRouteId).filter(Boolean));
+    const publicRouteId = generatePublicRouteId(challengeId, existingRouteIds);
+
+    // 5. Competition ID
+    const competitionId = data.competitionId || data.competition_id || db.getCompetitions()[0]?.id || 'XPLOITX-2026';
+
+    const mission_id = challengeId;
 
     const hasInstance = !!(data.requiresInstance !== undefined ? data.requiresInstance : (data.has_instance || data.runtime?.enabled));
     const dockerImage = data.docker_image || data.runtime?.image || (hasInstance ? 'xploitx/vault:latest' : null);
@@ -393,9 +428,13 @@ class ChallengeService {
     const pidsLimit = parseInt(data.pids_limit || data.runtime?.resources?.pidsLimit || 128, 10);
 
     const newChallenge = {
-      id: canonicalId,
-      _id: canonicalId,
-      competition_id: db.getCompetitions()[0]?.id || 'c0000000-0000-0000-0000-000000000001',
+      id: challengeId,
+      challengeId,
+      publicRouteId,
+      domain: domainName,
+      competitionId,
+      competition_id: competitionId,
+      _id,
       category_id,
       category_name,
       mission_id,
@@ -428,6 +467,7 @@ class ChallengeService {
       } : { enabled: false },
       instance_host: data.instance_host || null,
       instance_port: data.instance_port || null,
+      hints: [],
       files: [],
       created_at: new Date().toISOString()
     };
@@ -438,7 +478,7 @@ class ChallengeService {
     if (data.flag) {
       const flagRec = {
         id: `f-${Date.now()}`,
-        challenge_id: canonicalId,
+        challenge_id: newChallenge.id,
         flag_type: data.flag_type || 'STATIC',
         flag_value: data.flag.trim(),
         case_sensitive: data.case_sensitive !== false
@@ -453,7 +493,7 @@ class ChallengeService {
     if (data.hint) {
       const hintRec = {
         id: `h-${Date.now()}`,
-        challenge_id: canonicalId,
+        challenge_id: newChallenge.id,
         content: data.hint,
         cost: parseInt(data.hint_cost || 50, 10),
         order_index: 1,
@@ -471,10 +511,10 @@ class ChallengeService {
       category: 'CHALLENGE',
       severity: 'INFO',
       actor: { type: 'USER', username: 'ADMIN', role: 'ADMIN' },
-      resource: { type: 'CHALLENGE', id: canonicalId, challengeId: canonicalId },
+      resource: { type: 'CHALLENGE', id: newChallenge.id, challengeId: newChallenge.id },
       result: 'SUCCESS',
-      description: `Challenge mission "${newChallenge.title}" commissioned (${canonicalId})`,
-      metadata: { challengeId: canonicalId, title: newChallenge.title, category: newChallenge.category_name, points: newChallenge.base_points }
+      description: `Challenge mission "${newChallenge.title}" commissioned (${newChallenge.id})`,
+      metadata: { challengeId: newChallenge.id, title: newChallenge.title, category: newChallenge.category_name, points: newChallenge.base_points }
     }).catch(() => {});
 
     if (db.isMongo && db.persistDoc) {
@@ -492,15 +532,27 @@ class ChallengeService {
     const cleanId = String(id).trim();
     const cleanIdLower = cleanId.toLowerCase();
     const c = db.getChallenges().find(item =>
+      item.publicRouteId === cleanId ||
+      item.challengeId === cleanId ||
       item.id === cleanId ||
       item.slug === cleanId ||
       item.mission_id === cleanId ||
       (item._id && String(item._id) === cleanId) ||
+      (item.publicRouteId && item.publicRouteId.toLowerCase() === cleanIdLower) ||
+      (item.challengeId && item.challengeId.toLowerCase() === cleanIdLower) ||
       (item.id && item.id.toLowerCase() === cleanIdLower) ||
       (item.slug && item.slug.toLowerCase() === cleanIdLower) ||
       (item.mission_id && item.mission_id.toLowerCase() === cleanIdLower)
     );
     if (!c) throw new Error('Challenge not found');
+
+    // Requirements 11 & 12: Challenge identity and publicRouteId NEVER change
+    delete data.id;
+    delete data.challengeId;
+    delete data.publicRouteId;
+    delete data._id;
+    delete data.competitionId;
+    delete data.competition_id;
 
     if (data.title) {
       c.title = data.title;
@@ -558,15 +610,15 @@ class ChallengeService {
     }
 
     if (data.flag) {
-      const canonicalChallengeId = c._id ? String(c._id) : c.id;
-      const fl = db.getFlags().find(f => f.challenge_id === c.id || f.challenge_id === canonicalChallengeId);
+      const fl = db.getFlags().find(f => f.challenge_id === c.id || (c._id && f.challenge_id === String(c._id)));
       if (fl) {
         fl.flag_value = data.flag.trim();
+        fl.challenge_id = c.id;
         if (db.isMongo && db.persistDoc) db.persistDoc('flags', fl).catch(() => {});
       } else {
         const newFl = {
           id: `f-${Date.now()}`,
-          challenge_id: canonicalChallengeId,
+          challenge_id: c.id,
           flag_type: 'STATIC',
           flag_value: data.flag.trim(),
           case_sensitive: true
@@ -581,16 +633,15 @@ class ChallengeService {
     }
 
     const isPublishedAction = data.status && (data.status.toUpperCase() === 'PUBLISHED' || data.status.toUpperCase() === 'LIVE');
-    const canonicalCId = c._id ? String(c._id) : c.id;
     auditService.record({
       action: isPublishedAction ? 'CHALLENGE.PUBLISHED' : 'CHALLENGE.UPDATED',
       category: 'CHALLENGE',
       severity: isPublishedAction ? 'NOTICE' : 'INFO',
       actor: { type: 'USER', username: 'ADMIN', role: 'ADMIN' },
-      resource: { type: 'CHALLENGE', id: canonicalCId, challengeId: canonicalCId },
+      resource: { type: 'CHALLENGE', id: c.id, challengeId: c.id },
       result: 'SUCCESS',
       description: isPublishedAction ? `Mission "${c.title}" promoted to LIVE status` : `Mission "${c.title}" updated`,
-      metadata: { challengeId: canonicalCId, title: c.title, status: c.status }
+      metadata: { challengeId: c.id, title: c.title, status: c.status }
     }).catch(() => {});
 
     // Real-time notification
@@ -607,7 +658,6 @@ class ChallengeService {
     const ch = db.getChallenges()[idx];
     const compId = ch.competition_id;
     const targetId = ch.id;
-    const canonicalTargetId = ch._id ? String(ch._id) : targetId;
     db.getChallenges().splice(idx, 1);
 
     auditService.record({
@@ -615,14 +665,15 @@ class ChallengeService {
       category: 'CHALLENGE',
       severity: 'WARNING',
       actor: { type: 'USER', username: 'ADMIN', role: 'ADMIN' },
-      resource: { type: 'CHALLENGE', id: canonicalTargetId, challengeId: canonicalTargetId },
+      resource: { type: 'CHALLENGE', id: targetId, challengeId: targetId },
       result: 'SUCCESS',
-      description: `Mission "${ch.title}" neutralized / deleted (${canonicalTargetId})`,
-      metadata: { challengeId: canonicalTargetId, title: ch.title }
+      description: `Mission "${ch.title}" neutralized / deleted (${targetId})`,
+      metadata: { challengeId: targetId, title: ch.title }
     }).catch(() => {});
 
     if (db.isMongo && db.mongoDb) {
-      db.mongoDb.collection('challenges').deleteOne({ $or: [{ id: targetId }, { _id: targetId }] }).catch(() => {});
+      const deleteFilter = ch._id ? { $or: [{ id: targetId }, { _id: ch._id }] } : { id: targetId };
+      db.mongoDb.collection('challenges').deleteOne(deleteFilter).catch(() => {});
       db.mongoDb.collection('challenge_flags').deleteMany({ challenge_id: targetId }).catch(() => {});
       db.mongoDb.collection('challenge_hints').deleteMany({ challenge_id: targetId }).catch(() => {});
       db.mongoDb.collection('challenge_files').deleteMany({ challenge_id: targetId }).catch(() => {});

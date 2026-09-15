@@ -13,8 +13,19 @@ let currentChallenge = null;
 document.addEventListener('DOMContentLoaded', async () => {
   Navbar.render('navbar-container', 'challenges');
 
-  const params = new URLSearchParams(location.search);
-  const rawId = params.get('id') || params.get('challengeId') || params.get('mission_id') || params.get('slug');
+  // Extract route token from pathname: /challenge/<publicRouteId>
+  let rawId = null;
+  const pathMatch = window.location.pathname.match(/\/challenge\/([^\/?#]+)/i);
+  if (pathMatch && pathMatch[1] && pathMatch[1] !== 'challenge.html' && pathMatch[1] !== 'challenge') {
+    rawId = pathMatch[1];
+  }
+
+  // Fallback to URL search parameters for backward compatibility (?id=..., ?publicRouteId=...)
+  if (!rawId) {
+    const params = new URLSearchParams(location.search);
+    rawId = params.get('publicRouteId') || params.get('id') || params.get('challengeId') || params.get('mission_id') || params.get('slug');
+  }
+
   const challengeId = rawId ? decodeURIComponent(rawId).trim() : null;
 
   function showMissionError(status, customMessage) {
@@ -225,10 +236,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       currentChallenge = data;
 
+      // Canonicalize participant browser URL to /challenge/<publicRouteId>
+      if (data.publicRouteId && window.history && window.history.replaceState) {
+        const canonicalPath = `/challenge/${data.publicRouteId}`;
+        if (window.location.pathname !== canonicalPath && !window.location.pathname.includes('preview')) {
+          window.history.replaceState(null, '', canonicalPath);
+        }
+      }
+
       // 1. Mission Header Metadata
+      const displayId = data.challengeId || data.mission_id || data.id || 'OP-CLASSIFIED';
       document.title = `${data.title} // XPLOITX CYBER BATTLEFIELD`;
-      document.getElementById('missionIdBadge').textContent = data.mission_id || 'OP-CLASSIFIED';
-      document.getElementById('missionCategoryBadge').textContent = `[ ${data.category || 'MISC'} ]`;
+      document.getElementById('missionIdBadge').textContent = displayId;
+      document.getElementById('missionCategoryBadge').textContent = `[ ${(data.domain || data.category || 'MISC').toUpperCase()} ]`;
       document.getElementById('missionCategoryBadge').style.color = data.category_color || 'var(--accent)';
       document.getElementById('missionDifficultyBadge').innerHTML = window.Utils.getDifficultyBadge(data.difficulty);
       document.getElementById('missionPoints').textContent = window.Utils.formatXP(data.points);
@@ -269,7 +289,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (files.length > 0) {
         filesContainer.innerHTML = files.map(f => {
           const sizeStr = formatBytes(f.size || f.sizeBytes || f.file_size_bytes);
-          const targetChallengeId = data.id || data._id || challengeId;
+          const targetChallengeId = data.id || challengeId;
           const targetFileId = f.id || f.fileId;
           const downloadUrl = f.downloadUrl || `/api/v1/challenges/${targetChallengeId}/files/${targetFileId}/download`;
           const fileName = f.name || f.filename || 'asset.bin';

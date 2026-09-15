@@ -10,6 +10,7 @@ const { submissionLimiter } = require('../middleware/rateLimit');
 const { validateIdParam } = require('../middleware/validation');
 
 router.get('/', challengeController.getAll);
+router.get('/public/:publicRouteId', validateIdParam('publicRouteId'), challengeController.getByPublicRouteId);
 router.get('/:id', validateIdParam('id'), challengeController.getOne);
 router.get('/:id/files', validateIdParam('id'), challengeController.getChallengeFiles);
 router.get('/:id/files/:fileId/download', validateIdParam('id', 'fileId'), challengeController.downloadChallengeFile);

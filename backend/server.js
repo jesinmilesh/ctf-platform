@@ -297,6 +297,11 @@ app.get('/admin/*', (req, res) => {
   res.sendFile(path.join(ADMIN_DIR, 'index.html'));
 });
 
+// Challenge Public Dossier Route
+app.get(['/challenge/:publicRouteId', '/challenge'], (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'challenge.html'));
+});
+
 // Fallback for Public SPA
 app.get('*', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));

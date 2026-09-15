@@ -63,8 +63,8 @@ class SubmissionService {
 
     const teamId = user.team_id || (user.team && user.team.id);
     const team = db.getTeams().find(t => t.id === teamId);
-    const canonicalChallengeId = challenge._id ? String(challenge._id) : challenge.id;
-    const challengeIds = [challenge.id, String(challenge._id || ''), canonicalChallengeId, challenge.slug, challenge.mission_id].filter(Boolean);
+    const canonicalChallengeId = challenge.id;
+    const challengeIds = [challenge.id, String(challenge._id || ''), challenge.slug, challenge.mission_id].filter(Boolean);
 
     // 2. Check if already solved
     const existingSolve = db.getSolves().find(s =>

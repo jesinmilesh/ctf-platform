@@ -10,6 +10,10 @@ const mongoose = require('mongoose');
 
 const challengeSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
+  challengeId: { type: String, unique: true, sparse: true, index: true },
+  publicRouteId: { type: String, unique: true, sparse: true, index: true },
+  domain: { type: String, index: true },
+  competitionId: { type: String, default: 'XPLOITX-2026', index: true },
   competition_id: { type: String, required: true, index: true },
   category_id: { type: String, required: true, index: true },
   category_name: { type: String, default: 'MISC' },
