@@ -50,6 +50,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (editingId) {
     document.getElementById('editorTitleHeader').textContent = 'EDIT MISSION DOSSIER';
     loadExistingChallenge(editingId);
+    const auditBtn = document.getElementById('viewAuditHistoryBtn');
+    if (auditBtn) {
+      auditBtn.style.display = 'inline-block';
+      auditBtn.addEventListener('click', () => {
+        window.location.href = `/admin/action-logs.html?challengeId=${encodeURIComponent(editingId)}`;
+      });
+    }
   } else {
     renderEmptyFilesTable('Save or publish the mission to activate live asset uploads, or select assets below to upload upon creation.');
   }
@@ -462,7 +469,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.showSuccess('MISSION UPDATED SUCCESSFULLY');
       } else {
         const res = await window.api.admin.createChallenge(payload);
-        targetChallengeId = res.challenge?.id;
+        targetChallengeId = res.challenge?._id || res.challenge?.id;
         window.showSuccess('NEW MISSION COMMISSIONED');
       }
 

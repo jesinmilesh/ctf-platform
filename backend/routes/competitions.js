@@ -13,13 +13,12 @@ router.get('/', (req, res) => {
 
 router.get('/current', (req, res) => {
   const comp = db.getCompetitions()[0];
-  const settings = db.getSettings();
+  if (!comp) {
+    return res.json({ competition: null });
+  }
+  const { flag_prefix, flag_suffix, ...safeComp } = comp;
   res.json({
-    competition: {
-      ...comp,
-      flagPrefix: settings.flagPrefix,
-      flagSuffix: settings.flagSuffix
-    }
+    competition: safeComp
   });
 });
 

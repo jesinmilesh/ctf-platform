@@ -25,8 +25,10 @@ class LeaderboardService {
       name: t.name,
       slug: t.slug,
       score: t.total_score,
+      solves: t.solves_count || 0,
       solvesCount: t.solves_count || 0,
       firstBloods: t.first_bloods || 0,
+      first_bloods: t.first_bloods || 0,
       lastScoreUpdate: t.last_score_update
     }));
 
@@ -34,6 +36,7 @@ class LeaderboardService {
 
     return {
       teams: ranked,
+      leaderboard: ranked,
       podium: {
         first: top3[0] || null,
         second: top3[1] || null,

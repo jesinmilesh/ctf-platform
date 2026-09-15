@@ -8,6 +8,7 @@ const challengeService = require('../services/challengeService');
 const submissionService = require('../services/submissionService');
 const fileService = require('../services/fileService');
 const instanceManager = require('../instances/instanceManager');
+const auditService = require('../services/auditService');
 
 exports.getAll = async (req, res) => {
   if (db.isMongo && db.mongoDb && db.getChallenges().length === 0) {
@@ -111,6 +112,22 @@ exports.getOne = async (req, res) => {
     }
     return res.status(404).json({ error: 'NOT_FOUND', message: 'Mission dossier not found' });
   }
+
+  if (req.user) {
+    const canonicalCId = challenge._id ? String(challenge._id) : challenge.id;
+    auditService.record({
+      action: 'CHALLENGE.VIEWED',
+      category: 'CHALLENGE',
+      severity: 'INFO',
+      actor: req.user,
+      resource: { type: 'CHALLENGE', id: canonicalCId, challengeId: canonicalCId },
+      result: 'SUCCESS',
+      description: `Operative ${req.user.username} viewed mission dossier "${challenge.title}"`,
+      request: { requestId: req.id, method: req.method, route: req.originalUrl },
+      network: { ip: req.ip || '127.0.0.1', userAgent: req.headers ? req.headers['user-agent'] : null },
+      metadata: { challengeId: canonicalCId, title: challenge.title }
+    }).catch(() => {});
+  }
   res.json(challenge);
 };
 
@@ -137,9 +154,11 @@ exports.submitFlag = (req, res) => {
   });
 
   if (result.correct) {
-    res.json(result);
+    return res.json(result);
   } else {
-    res.status(400).json(result);
+    const status = result.status === 'FORBIDDEN' || result.status === 'COMPETITION_NOT_ACTIVE' ? 403 :
+                   result.status === 'NOT_FOUND' ? 404 : 400;
+    return res.status(status).json(result);
   }
 };
 
@@ -201,7 +220,8 @@ exports.getChallengeFiles = async (req, res) => {
     return res.status(403).json({ success: false, error: 'Mission classified. Asset access restricted.' });
   }
 
-  const files = fileService.getChallengeFiles(challenge.id, challenge._id).map(f => ({
+  const canonicalId = challenge._id ? String(challenge._id) : challenge.id;
+  const files = fileService.getChallengeFiles(canonicalId, challenge.id, challenge._id).map(f => ({
     id: f.id,
     name: f.filename,
     filename: f.filename,
@@ -209,7 +229,7 @@ exports.getChallengeFiles = async (req, res) => {
     file_size_bytes: f.file_size_bytes || f.size,
     mimeType: f.mime_type || f.mimeType || 'application/octet-stream',
     sha256: f.sha256,
-    downloadUrl: `/api/v1/challenges/${challenge.id || challenge._id}/files/${f.id}/download`,
+    downloadUrl: `/api/v1/challenges/${canonicalId}/files/${f.id}/download`,
     uploadedAt: f.uploaded_at || f.uploadedAt
   }));
 
@@ -235,14 +255,27 @@ exports.downloadChallengeFile = async (req, res) => {
   }
 
   const fileRecord = fileService.getFileRecord(fileId);
+  const targetChallengeId = challenge._id ? String(challenge._id) : challenge.id;
+  const altChallengeIds = [challenge.id, String(challenge._id || ''), challenge.slug, challenge.mission_id, targetChallengeId].filter(Boolean);
   const fileBelongsToChallenge = fileRecord && (
-    fileRecord.challenge_id === challenge.id ||
-    fileRecord.challengeId === challenge.id ||
-    (challenge._id && (fileRecord.challenge_id === String(challenge._id) || fileRecord.challengeId === String(challenge._id))) ||
-    (challenge.mission_id && (fileRecord.challenge_id === challenge.mission_id || fileRecord.challengeId === challenge.mission_id))
+    altChallengeIds.includes(String(fileRecord.challenge_id || '').trim()) ||
+    altChallengeIds.includes(String(fileRecord.challengeId || '').trim())
   );
 
   if (!fileRecord || !fileBelongsToChallenge) {
+    auditService.record({
+      action: 'CHALLENGE_FILE_DOWNLOAD_FAILED',
+      category: 'FILE',
+      severity: 'WARNING',
+      actor: req.user,
+      resource: { type: 'FILE', id: fileId, challengeId: targetChallengeId },
+      result: 'FAILURE',
+      description: 'Asset download failed: asset not found or cross-challenge boundary breach',
+      request: { requestId: req.id, method: req.method, route: req.originalUrl },
+      network: { ip: req.ip || '127.0.0.1', userAgent: req.headers ? req.headers['user-agent'] : null },
+      metadata: { challengeId: targetChallengeId, fileId, reason: 'FILE_NOT_FOUND_OR_ISOLATED' }
+    }).catch(() => {});
+
     return res.status(404).json({ error: 'FILE_NOT_FOUND', message: 'Challenge asset not found for this mission' });
   }
 
@@ -251,6 +284,25 @@ exports.downloadChallengeFile = async (req, res) => {
     if (!stream) {
       return res.status(404).json({ error: 'STORAGE_ERROR', message: 'Asset payload missing from isolated storage' });
     }
+
+    auditService.record({
+      action: 'CHALLENGE_FILE_DOWNLOADED',
+      category: 'FILE',
+      severity: 'INFO',
+      actor: req.user,
+      resource: { type: 'FILE', id: fileRecord.id, challengeId: targetChallengeId },
+      result: 'SUCCESS',
+      description: `Challenge asset "${fileRecord.filename}" downloaded by ${req.user?.username || 'PARTICIPANT'}`,
+      request: { requestId: req.id, method: req.method, route: req.originalUrl },
+      network: { ip: req.ip || '127.0.0.1', userAgent: req.headers ? req.headers['user-agent'] : null },
+      metadata: {
+        challengeId: targetChallengeId,
+        fileId: fileRecord.id,
+        filename: fileRecord.filename,
+        size: fileRecord.file_size_bytes || fileRecord.size,
+        sha256: fileRecord.sha256
+      }
+    }).catch(() => {});
 
     res.setHeader('Content-Disposition', `attachment; filename="${fileRecord.filename}"`);
     res.setHeader('Content-Type', fileRecord.mime_type || 'application/octet-stream');
@@ -268,6 +320,19 @@ exports.downloadChallengeFile = async (req, res) => {
 
     stream.pipe(res);
   } catch (err) {
+    auditService.record({
+      action: 'CHALLENGE_FILE_DOWNLOAD_FAILED',
+      category: 'FILE',
+      severity: 'WARNING',
+      actor: req.user,
+      resource: { type: 'FILE', id: fileId, challengeId: targetChallengeId },
+      result: 'FAILURE',
+      description: `Asset download failed: ${err.message}`,
+      request: { requestId: req.id, method: req.method, route: req.originalUrl },
+      network: { ip: req.ip || '127.0.0.1', userAgent: req.headers ? req.headers['user-agent'] : null },
+      metadata: { challengeId: targetChallengeId, fileId, error: err.message }
+    }).catch(() => {});
+
     res.status(500).json({ error: 'DOWNLOAD_FAILED', message: err.message });
   }
 };

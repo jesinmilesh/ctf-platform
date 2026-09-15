@@ -193,25 +193,27 @@ class DatabaseEngine {
       { id: 'cat-08', competition_id: compId, name: 'Steganograhy', slug: 'stegano', description: 'Covert data channels and hidden payloads', color_accent: '#ffb020', display_order: 8 }
     );
 
-    // 3. Initial Administrator User (Required for initial setup & C2 login)
-    const adminSalt = crypto.randomBytes(16).toString('hex');
-    const adminKey = crypto.scryptSync('admin123', adminSalt, 64).toString('hex');
-    const adminPasswordHash = `${adminSalt}:${adminKey}`;
-
+    // 3. Administrator Policy: ZERO hardcoded credentials.
+    // Clean initial state: 0 users unless securely configured via BOOTSTRAP_ADMIN_EMAIL & BOOTSTRAP_ADMIN_PASSWORD
     this.data.users.length = 0;
-    this.data.users.push({
-      id: 'u0000000-0000-0000-0000-000000000001',
-      competition_id: compId,
-      team_id: null,
-      username: 'admin',
-      email: 'admin@xploitxctf.me',
-      password_hash: adminPasswordHash,
-      role: 'ADMIN',
-      callsign: 'COMMANDER',
-      affiliation: 'XploitX Operations Command',
-      is_banned: false,
-      created_at: new Date().toISOString()
-    });
+    if (process.env.BOOTSTRAP_ADMIN_EMAIL && process.env.BOOTSTRAP_ADMIN_PASSWORD) {
+      const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL.trim().toLowerCase();
+      const adminSalt = crypto.randomBytes(16).toString('hex');
+      const adminKey = crypto.scryptSync(process.env.BOOTSTRAP_ADMIN_PASSWORD, adminSalt, 64).toString('hex');
+      this.data.users.push({
+        id: 'u0000000-0000-0000-0000-000000000001',
+        competition_id: compId,
+        team_id: null,
+        username: process.env.BOOTSTRAP_ADMIN_USERNAME || 'admin',
+        email: adminEmail,
+        password_hash: `${adminSalt}:${adminKey}`,
+        role: 'ADMIN',
+        callsign: process.env.BOOTSTRAP_ADMIN_CALLSIGN || 'COMMANDER',
+        affiliation: 'XploitX Operations Command',
+        is_banned: false,
+        created_at: new Date().toISOString()
+      });
+    }
 
     // Clean initial state
     this.data.teams.length = 0;
@@ -251,11 +253,16 @@ class DatabaseEngine {
 
       try {
         console.log('[DATABASE] Initializing connection to MongoDB Atlas...');
-        this.mongoClient = new MongoClient(this.mongoUrl, {
+        const mongoOptions = {
           maxPoolSize: 20,
+          minPoolSize: 2,
           serverSelectionTimeoutMS: 8000,
-          connectTimeoutMS: 10000
-        });
+          connectTimeoutMS: 10000,
+          socketTimeoutMS: 30000,
+          maxIdleTimeMS: 60000
+        };
+
+        this.mongoClient = new MongoClient(this.mongoUrl, mongoOptions);
 
         await this.mongoClient.connect();
         this.mongoDb = this.mongoClient.db(this.mongoDbName);
@@ -266,7 +273,7 @@ class DatabaseEngine {
         if (mongoose && mongoose.connection.readyState === 0) {
           await mongoose.connect(this.mongoUrl, {
             dbName: this.mongoDbName,
-            serverSelectionTimeoutMS: 8000
+            ...mongoOptions
           }).catch(err => {
             console.warn('[DATABASE] Mongoose connect notice:', err.message);
           });
@@ -342,13 +349,44 @@ class DatabaseEngine {
     if (!this.mongoDb) return;
     this._hydrating = true;
     try {
-      // 1. Check if users collection exists in Atlas
+      // 1. Administrator Bootstrap Policy:
+      // If Atlas has 0 users and environment credentials are provided, provision single authorized administrator.
+      // ZERO automatic sample data creation. If Atlas is empty, it remains 100% clean across restarts.
       const usersInMongo = await this.mongoDb.collection('users').countDocuments();
-      if (usersInMongo === 0) {
-        // Initial setup: Atlas is empty. Seed initial baseline into Atlas.
-        console.log('[DATABASE] First-time Atlas initialization: seeding baseline data to Atlas...');
-        await this.syncToMongo();
-        return;
+      if (usersInMongo === 0 && process.env.BOOTSTRAP_ADMIN_EMAIL && process.env.BOOTSTRAP_ADMIN_PASSWORD) {
+        console.log('[DATABASE] Bootstrapping authorized administrator from environment credentials...');
+        const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL.trim().toLowerCase();
+        const adminSalt = crypto.randomBytes(16).toString('hex');
+        const adminKey = crypto.scryptSync(process.env.BOOTSTRAP_ADMIN_PASSWORD, adminSalt, 64).toString('hex');
+        const adminDoc = {
+          id: 'u0000000-0000-0000-0000-000000000001',
+          competition_id: 'c0000000-0000-0000-0000-000000000001',
+          team_id: null,
+          username: process.env.BOOTSTRAP_ADMIN_USERNAME || 'admin',
+          email: adminEmail,
+          password_hash: `${adminSalt}:${adminKey}`,
+          role: 'ADMIN',
+          callsign: process.env.BOOTSTRAP_ADMIN_CALLSIGN || 'COMMANDER',
+          affiliation: 'XploitX Operations Command',
+          is_banned: false,
+          created_at: new Date().toISOString()
+        };
+        await this.mongoDb.collection('users').insertOne(adminDoc);
+      }
+
+      // Ensure Core Category Taxonomy is present in Atlas
+      const categoriesInMongo = await this.mongoDb.collection('categories').countDocuments();
+      if (categoriesInMongo === 0 && this.data.categories.length > 0) {
+        for (const cat of this.data.categories) {
+          await this.mongoDb.collection('categories').updateOne({ id: cat.id }, { $set: cat }, { upsert: true });
+        }
+      }
+
+      const compInMongo = await this.mongoDb.collection('competitions').countDocuments();
+      if (compInMongo === 0 && this.data.competitions.length > 0) {
+        for (const comp of this.data.competitions) {
+          await this.mongoDb.collection('competitions').updateOne({ id: comp.id }, { $set: comp }, { upsert: true });
+        }
       }
 
       // 2. Hydrate each collection from Atlas
@@ -457,17 +495,28 @@ class DatabaseEngine {
     const colName = COLLECTION_MAP[collectionKey] || collectionKey;
     const coll = this.mongoDb.collection(colName);
     for (const item of items) {
-      const toSave = { ...item };
-      delete toSave._id;
-      const docId = item.id || item._id || item.instanceId;
-      if (docId) {
-        if (!toSave.id) toSave.id = String(docId);
-        const filter = toSave.instanceId
-          ? { $or: [{ instanceId: toSave.instanceId }, { id: toSave.id }] }
-          : { id: toSave.id };
-        await coll.updateOne(filter, { $set: toSave }, { upsert: true });
-      } else {
-        await coll.insertOne(toSave);
+      try {
+        const toSave = { ...item };
+        delete toSave._id;
+        const docId = item.id || item._id || item.instanceId;
+        if (docId) {
+          if (!toSave.id) toSave.id = String(docId);
+          let filter = { id: toSave.id };
+          if (toSave.instanceId) {
+            filter = { $or: [{ instanceId: toSave.instanceId }, { id: toSave.id }] };
+          } else if (toSave.mission_id) {
+            filter = { $or: [{ id: toSave.id }, { mission_id: toSave.mission_id }] };
+          } else if (toSave.username) {
+            filter = { $or: [{ id: toSave.id }, { username: toSave.username }] };
+          }
+          await coll.updateOne(filter, { $set: toSave }, { upsert: true });
+        } else {
+          await coll.insertOne(toSave);
+        }
+      } catch (err) {
+        if (err.code !== 11000) {
+          console.warn(`[DATABASE] Replication notice for ${colName}:`, err.message);
+        }
       }
     }
   }

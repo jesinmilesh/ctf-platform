@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ACTION LOG // XPLOITX C2 CONTROL ROOM</title>
+  <meta name="description" content="Complete platform activity and security audit trail across all operations.">
+
+  <link rel="stylesheet" href="/assets/css/variables.css">
+  <link rel="stylesheet" href="/assets/css/reset.css">
+  <link rel="stylesheet" href="/assets/css/global.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <link rel="stylesheet" href="/assets/css/animations.css">
+  <link rel="stylesheet" href="/assets/css/responsive.css">
+  <link rel="stylesheet" href="/assets/css/admin.css">
+
+  <style>
+    .audit-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .audit-stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      position: relative;
+      overflow: hidden;
+    }
+    .audit-stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; bottom: 0;
+      width: 3px;
+    }
+    .audit-stat-card.stat-security::before { background: var(--danger); }
+    .audit-stat-card.stat-failed::before { background: #ff79c6; }
+    .audit-stat-card.stat-denials::before { background: var(--warning); }
+    .audit-stat-card.stat-instances::before { background: #bd93f9; }
+    .audit-stat-card.stat-admin::before { background: var(--accent); }
+    .audit-stat-card.stat-players::before { background: var(--success); }
+
+    .audit-stat-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    .audit-stat-value {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .filter-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 18px;
+      margin-bottom: 20px;
+    }
+    .filter-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+      min-width: 140px;
+    }
+    .filter-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .filter-select, .filter-input {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      padding: 8px 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .filter-select:focus, .filter-input:focus {
+      border-color: var(--accent);
+    }
+
+    .badge-severity {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: inline-block;
+    }
+    .badge-sev-info { background: rgba(0, 216, 246, 0.12); color: var(--accent); border: 1px solid rgba(0, 216, 246, 0.3); }
+    .badge-sev-notice { background: rgba(59, 130, 246, 0.12); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+    .badge-sev-warning { background: rgba(250, 204, 21, 0.12); color: var(--warning); border: 1px solid rgba(250, 204, 21, 0.3); }
+    .badge-sev-high { background: rgba(249, 115, 22, 0.15); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.4); }
+    .badge-sev-critical { background: rgba(239, 68, 68, 0.18); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.5); }
+
+    .badge-result {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 3px;
+      text-transform: uppercase;
+    }
+    .badge-result-success { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+    .badge-result-failure { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+    .badge-result-denied { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+
+    .audit-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+    .audit-table th {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      padding: 12px 14px;
+      letter-spacing: 0.05em;
+    }
+    .audit-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      vertical-align: middle;
+    }
+    .audit-table tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+      cursor: pointer;
+    }
+
+    /* Modal Backdrop and Box */
+    .audit-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 20px;
+    }
+    .audit-modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      max-width: 720px;
+      width: 100%;
+      max-height: 85vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    }
+    .audit-modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .audit-modal-body {
+      padding: 20px;
+    }
+    .audit-prop-grid {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 10px 16px;
+      font-size: 12px;
+      margin-bottom: 16px;
+    }
+    .audit-prop-label {
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      font-weight: 700;
+    }
+    .audit-prop-val {
+      color: #fff;
+      font-family: var(--font-mono);
+      word-break: break-all;
+    }
+    .metadata-json {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--accent);
+      max-height: 220px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Tactical Admin Header -->
+  <header class="tactical-navbar admin-header">
+    <div class="container navbar-inner">
+      <div style="display:flex; align-items:center; gap:16px;">
+        <span style="font-family:var(--font-display); font-size:16px; font-weight:900; color:#fff; letter-spacing:0.1em;">
+          XPLOITX // <span style="color:var(--danger);">C2 COMMAND ROOM</span>
+        </span>
+        <span class="badge" style="border-color:var(--danger); color:var(--danger); background:var(--danger-muted);">LEVEL 5 CLEARANCE</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div id="liveStreamStatus" style="font-family:var(--font-mono); font-size:11px; color:var(--success); display:flex; align-items:center; gap:6px;">
+          <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--success); animation:pulse 2s infinite;"></span>
+          LIVE AUDIT STREAM ACTIVE
+        </div>
+        <a href="/dashboard.html" class="btn btn-sm btn-outline" style="text-decoration:none;">PUBLIC PORTAL</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="container" style="padding: 24px 20px;">
+    <div class="admin-layout-body">
+      <div id="admin-sidebar-container"></div>
+
+      <main>
+        <!-- Page Header -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px;">
+          <div>
+            <span style="font-family:var(--font-mono); font-size:11px; color:var(--danger); font-weight:700; letter-spacing:0.1em;">
+              SECURITY AUDIT TRAIL // SYSTEM & OPERATIONS LOG
+            </span>
+            <h1 style="font-family:var(--font-heading); font-size:26px; font-weight:800; color:#fff; margin:2px 0 0 0;">
+              Action Log & Security Audit
+            </h1>
+            <p style="font-size:12px; color:var(--text-secondary); margin:4px 0 0 0;">
+              Complete, authoritative, immutable platform audit trail across participants, admins, instances, and services.
+            </p>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button id="btnExportCsv" class="btn btn-sm btn-outline">📥 EXPORT CSV</button>
+            <button id="btnExportJson" class="btn btn-sm btn-outline">📥 EXPORT JSON</button>
+            <button id="btnRefresh" class="btn btn-sm btn-primary">🔄 REFRESH</button>
+          </div>
+        </div>
+
+        <!-- Section 28: Summary Counters based on real database data -->
+        <div class="audit-stats-grid">
+          <div class="audit-stat-card stat-security">
+            <div class="audit-stat-label">Security Events Today</div>
+            <div class="audit-stat-value" id="statSecurityEvents">0</div>
+          </div>
+          <div class="audit-stat-card stat-failed">
+            <div class="audit-stat-label">Failed Logins</div>
+            <div class="audit-stat-value" id="statFailedLogins">0</div>
+          </div>
+          <div class="audit-stat-card stat-denials">
+            <div class="audit-stat-label">Auth Denials</div>
+            <div class="audit-stat-value" id="statAuthDenials">0</div>
+          </div>
+          <div class="audit-stat-card stat-instances">
+            <div class="audit-stat-label">Instance Failures</div>
+            <div class="audit-stat-value" id="statInstanceFailures">0</div>
+          </div>
+          <div class="audit-stat-card stat-admin">
+            <div class="audit-stat-label">Admin Actions</div>
+            <div class="audit-stat-value" id="statAdminActions">0</div>
+          </div>
+          <div class="audit-stat-card stat-players">
+            <div class="audit-stat-label">Player Actions</div>
+            <div class="audit-stat-value" id="statPlayerActions">0</div>
+          </div>
+        </div>
+
+        <!-- Section 2 & 20: Filter & Search Panel -->
+        <div class="filter-panel">
+          <div class="filter-row" style="margin-bottom:12px;">
+            <div class="filter-group" style="flex:2; min-width:260px;">
+              <label class="filter-label">Search (User, Mission, Team, IP, Req ID, Action)</label>
+              <input type="text" id="filterSearch" class="filter-input" placeholder="e.g. Operation Blackout, 6aa8cb..., req_01, admin...">
+            </div>
+            <div class="filter-group">
+              <label class="filter-label">Actor</label>
+              <select id="filterActor" class="filter-select">
+                <option value="all">All Actors</option>
+                <option value="USER">Participants</option>
+                <option value="ADMIN">Administrators</option>
+                <option value="MODERATOR">Moderators</option>
+                <option value="SYSTEM">System Engine</option>
+                <option value="WORKER">Background Workers</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label class="filter-label">Category</label>
+              <select id="filterCategory" class="filter-select">
+                <option value="all">All Categories</option>
+                <option value="AUTH">Authentication</option>
+                <option value="CHALLENGE">Challenges / Missions</option>
+                <option value="SUBMISSION">Submissions / Flags</option>
+                <option value="FILE">Challenge Files</option>
+                <option value="INSTANCE">Docker Instances</option>
+                <option value="TEAM">Squads / Teams</option>
+                <option value="MODERATION">Moderation</option>
+                <option value="SECURITY">Security Events</option>
+                <option value="ADMIN">Admin Operations</option>
+                <option value="SYSTEM">System Events</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label class="filter-label">Severity</label>
+              <select id="filterSeverity" class="filter-select">
+                <option value="all">All Severities</option>
+                <option value="INFO">INFO</option>
+                <option value="NOTICE">NOTICE</option>
+                <option value="WARNING">WARNING</option>
+                <option value="HIGH">HIGH</option>
+                <option value="CRITICAL">CRITICAL</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="filter-row">
+            <div class="filter-group">
+              <label class="filter-label">Result</label>
+              <select id="filterResult" class="filter-select">
+                <option value="all">All Results</option>
+                <option value="SUCCESS">SUCCESS</option>
+                <option value="FAILURE">FAILURE</option>
+                <option value="DENIED">DENIED</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label class="filter-label">Time Range</label>
+              <select id="filterTimeRange" class="filter-select">
+                <option value="all">All Time</option>
+                <option value="15m">Last 15 minutes</option>
+                <option value="1h">Last hour</option>
+                <option value="today">Today</option>
+                <option value="yesterday">Yesterday</option>
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+              </select>
+            </div>
+            <div style="display:flex; align-items:flex-end; gap:8px; margin-top:auto;">
+              <button id="btnApplyFilters" class="btn btn-sm btn-primary">APPLY FILTERS</button>
+              <button id="btnResetFilters" class="btn btn-sm btn-outline">RESET</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Audit Table Container -->
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden; margin-bottom:16px;">
+          <table class="audit-table">
+            <thead>
+              <tr>
+                <th style="width:170px;">Timestamp</th>
+                <th style="width:140px;">Actor</th>
+                <th style="width:190px;">Action</th>
+                <th>Resource / Target</th>
+                <th style="width:90px;">Result</th>
+                <th style="width:90px;">Severity</th>
+                <th style="width:70px; text-align:center;">Inspect</th>
+              </tr>
+            </thead>
+            <tbody id="auditTableBody">
+              <tr>
+                <td colspan="7" style="text-align:center; padding:36px; color:var(--text-secondary);">
+                  INITIALIZING SECURE AUDIT REPOSITORY...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Section 22: Pagination Controls -->
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div id="paginationSummary" style="font-family:var(--font-mono); font-size:12px; color:var(--text-secondary);">
+            Showing 0 of 0 events
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button id="btnPrevPage" class="btn btn-sm btn-outline" disabled>PREVIOUS</button>
+            <span id="pageIndicator" style="font-family:var(--font-mono); font-size:12px; padding:6px 12px; color:#fff;">PAGE 1 / 1</span>
+            <button id="btnNextPage" class="btn btn-sm btn-outline" disabled>NEXT</button>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Section 27: Event Details Modal -->
+  <div id="auditDetailModal" class="audit-modal-backdrop">
+    <div class="audit-modal">
+      <div class="audit-modal-header">
+        <div style="font-family:var(--font-display); font-size:14px; font-weight:800; color:#fff; letter-spacing:0.05em;">
+          SECURITY AUDIT RECORD // <span id="modalEventId" style="color:var(--accent);">evt_...</span>
+        </div>
+        <button id="btnModalClose" style="background:none; border:none; color:var(--text-secondary); font-size:20px; cursor:pointer;">&times;</button>
+      </div>
+      <div class="audit-modal-body">
+        <div class="audit-prop-grid">
+          <div class="audit-prop-label">Timestamp:</div>
+          <div class="audit-prop-val" id="modalTimestamp">--</div>
+
+          <div class="audit-prop-label">Actor:</div>
+          <div class="audit-prop-val" id="modalActor">--</div>
+
+          <div class="audit-prop-label">Role / Type:</div>
+          <div class="audit-prop-val" id="modalRole">--</div>
+
+          <div class="audit-prop-label">Action:</div>
+          <div class="audit-prop-val" id="modalAction">--</div>
+
+          <div class="audit-prop-label">Category:</div>
+          <div class="audit-prop-val" id="modalCategory">--</div>
+
+          <div class="audit-prop-label">Result:</div>
+          <div class="audit-prop-val" id="modalResult">--</div>
+
+          <div class="audit-prop-label">Severity:</div>
+          <div class="audit-prop-val" id="modalSeverity">--</div>
+
+          <div class="audit-prop-label">Resource:</div>
+          <div class="audit-prop-val" id="modalResource">--</div>
+
+          <div class="audit-prop-label">Request ID:</div>
+          <div class="audit-prop-val" id="modalRequestId">--</div>
+
+          <div class="audit-prop-label">Network IP:</div>
+          <div class="audit-prop-val" id="modalIp">--</div>
+
+          <div class="audit-prop-label">User Agent:</div>
+          <div class="audit-prop-val" id="modalUserAgent">--</div>
+
+          <div class="audit-prop-label">Description:</div>
+          <div class="audit-prop-val" id="modalDescription">--</div>
+        </div>
+
+        <div style="margin-top:16px;">
+          <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); text-transform:uppercase; margin-bottom:6px;">
+            Sanitized Metadata Payload (Secrets & Flags Scrubbed)
+          </div>
+          <pre id="modalMetadata" class="metadata-json">{}</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/storage.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/components/toast.js"></script>
+  <script src="/assets/js/components/sidebar.js"></script>
+  <script src="/assets/js/admin/action-logs.js"></script>
+</body>
+</html>

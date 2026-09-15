@@ -14,6 +14,7 @@ const crypto = require('crypto');
 const db = require('../config/database');
 const { getStorageProvider } = require('../storage/storageProvider');
 const realtimeService = require('./realtimeService');
+const auditService = require('./auditService');
 
 class FileService {
   constructor() {
@@ -71,6 +72,34 @@ class FileService {
     const files = db.getFiles ? db.getFiles() : [];
     files.push(fileRecord);
 
+    // Link file directly to challenge files array
+    const challenges = db.getChallenges ? db.getChallenges() : [];
+    const ch = challenges.find(c =>
+      c.id === challengeId ||
+      (c._id && String(c._id) === challengeId) ||
+      c.slug === challengeId ||
+      c.mission_id === challengeId
+    );
+    if (ch) {
+      ch.files = ch.files || [];
+      if (!ch.files.some(f => (f.id || f.fileId) === fileId)) {
+        ch.files.push({
+          fileId,
+          id: fileId,
+          originalName: base,
+          filename: safeFilename,
+          name: safeFilename,
+          size: buffer.length,
+          file_size_bytes: buffer.length,
+          mimeType: mimeType || 'application/octet-stream',
+          sha256: hash
+        });
+      }
+      if (db.isMongo && db.persistDoc) {
+        db.persistDoc('challenges', ch).catch(() => {});
+      }
+    }
+
     if (db.isMongo && db.mongoDb) {
       await db.persistDoc('challengeFiles', fileRecord).catch(err => {
         console.error('[FILE SERVICE] Atlas persistDoc error:', err.message);
@@ -80,6 +109,24 @@ class FileService {
     // 7. Realtime Synchronization Event (Section 21)
     await realtimeService.broadcastChallengeFileAdded(challengeId, fileRecord).catch(() => {});
     await realtimeService.broadcastChallengeUpdated(challengeId).catch(() => {});
+
+    // 8. Audit Record (Prompt Section 16 & 38)
+    auditService.record({
+      action: 'CHALLENGE_FILE_UPLOADED',
+      category: 'FILE',
+      severity: 'INFO',
+      actor: user || { type: 'USER', username: 'ADMIN', role: 'ADMIN' },
+      resource: { type: 'FILE', id: fileId, challengeId },
+      result: 'SUCCESS',
+      description: `Challenge asset "${safeFilename}" uploaded (${buffer.length} bytes)`,
+      metadata: {
+        challengeId,
+        fileId,
+        filename: safeFilename,
+        size: buffer.length,
+        sha256: hash
+      }
+    }).catch(() => {});
 
     return fileRecord;
   }
@@ -106,7 +153,11 @@ class FileService {
     if (!challengeId) return [];
     const ids = [challengeId, ...altIds].filter(Boolean).map(id => String(id).trim());
     const files = db.getFiles ? db.getFiles() : [];
-    return files.filter(f => ids.includes(f.challenge_id) || ids.includes(f.challengeId));
+    return files.filter(f => {
+      const fCId = f.challenge_id ? String(f.challenge_id).trim() : '';
+      const fAltCId = f.challengeId ? String(f.challengeId).trim() : '';
+      return ids.includes(fCId) || ids.includes(fAltCId);
+    });
   }
 
   /**
@@ -160,13 +211,39 @@ class FileService {
       files.splice(idx, 1);
     }
 
-    // 3. Remove from MongoDB Atlas
+    // 3. Remove from challenge.files array
+    const challenges = db.getChallenges ? db.getChallenges() : [];
+    for (const c of challenges) {
+      if (Array.isArray(c.files)) {
+        const fIdx = c.files.findIndex(f => (f.id || f.fileId) === rec.id);
+        if (fIdx !== -1) {
+          c.files.splice(fIdx, 1);
+          if (db.isMongo && db.persistDoc) {
+            db.persistDoc('challenges', c).catch(() => {});
+          }
+        }
+      }
+    }
+
+    // 4. Remove from MongoDB Atlas
     if (db.isMongo && db.mongoDb) {
       await db.mongoDb.collection('challenge_files').deleteOne({ id: rec.id }).catch(() => {});
     }
 
-    // 4. Real-time notification & cache invalidation (Section 20 & 21)
+    // 5. Real-time notification & cache invalidation (Section 20 & 21)
     await realtimeService.broadcastChallengeUpdated(rec.challenge_id || rec.challengeId).catch(() => {});
+
+    // 6. Audit Record
+    auditService.record({
+      action: 'CHALLENGE_FILE_DELETED',
+      category: 'FILE',
+      severity: 'NOTICE',
+      actor: { type: 'USER', username: 'ADMIN', role: 'ADMIN' },
+      resource: { type: 'FILE', id: rec.id, challengeId: rec.challenge_id || rec.challengeId },
+      result: 'SUCCESS',
+      description: `Challenge asset "${rec.filename}" neutralized`,
+      metadata: { challengeId: rec.challenge_id || rec.challengeId, fileId: rec.id, filename: rec.filename }
+    }).catch(() => {});
 
     return true;
   }

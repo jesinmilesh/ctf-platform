@@ -69,6 +69,14 @@ class RealtimeService {
       expiresAt
     });
   }
+
+  async broadcastAdminEvent(eventType, data) {
+    return eventBus.publish(eventType, data);
+  }
+
+  async broadcastAuditLog(logRecord) {
+    return eventBus.publish('audit.created', logRecord);
+  }
 }
 
 const realtimeService = new RealtimeService();

@@ -8,6 +8,7 @@ const challengeService = require('../services/challengeService');
 const instanceService = require('../services/instanceService');
 const fileService = require('../services/fileService');
 const realtimeService = require('../services/realtimeService');
+const auditService = require('../services/auditService');
 
 class AdminController {
   constructor() {
@@ -42,11 +43,14 @@ class AdminController {
   getChallenges(req, res) {
     const categories = db.getCategories();
     const challenges = db.getChallenges().map(c => {
-      const fl = db.getFlags().find(f => f.challenge_id === c.id);
+      const canonicalId = c._id ? String(c._id) : c.id;
+      const fl = db.getFlags().find(f => f.challenge_id === c.id || f.challenge_id === canonicalId);
       const cat = categories.find(k => k.id === c.category_id);
       const catName = cat ? cat.name : (c.category_name || c.category || 'Misc');
       return {
         ...c,
+        id: canonicalId,
+        _id: canonicalId,
         category: catName,
         category_name: catName,
         flag: fl ? fl.flag_value : '***'
@@ -93,12 +97,18 @@ class AdminController {
   }
 
   async getChallengeFiles(req, res) {
-    const challengeId = req.params.id;
-    const challenge = db.getChallenges().find(c => c.id === challengeId || c.slug === challengeId);
+    const challengeId = req.params.id ? String(req.params.id).trim() : '';
+    const challenge = db.getChallenges().find(c =>
+      c.id === challengeId ||
+      (c._id && String(c._id) === challengeId) ||
+      c.slug === challengeId ||
+      c.mission_id === challengeId
+    );
     if (!challenge) {
       return res.status(404).json({ success: false, error: 'Challenge not found' });
     }
-    const files = fileService.getChallengeFiles(challenge.id).map(f => ({
+    const canonicalId = challenge._id ? String(challenge._id) : challenge.id;
+    const files = fileService.getChallengeFiles(canonicalId, challenge.id, challenge._id).map(f => ({
       id: f.id,
       filename: f.filename,
       name: f.filename,
@@ -107,14 +117,19 @@ class AdminController {
       mimeType: f.mime_type || f.mimeType,
       sha256: f.sha256,
       uploadedAt: f.uploaded_at || f.uploadedAt,
-      downloadUrl: `/api/v1/challenges/${challenge.id}/files/${f.id}/download`
+      downloadUrl: `/api/v1/challenges/${canonicalId}/files/${f.id}/download`
     }));
     res.json({ success: true, files });
   }
 
   async uploadChallengeFiles(req, res) {
-    const challengeId = req.params.id;
-    const challenge = db.getChallenges().find(c => c.id === challengeId || c.slug === challengeId);
+    const challengeId = req.params.id ? String(req.params.id).trim() : '';
+    const challenge = db.getChallenges().find(c =>
+      c.id === challengeId ||
+      (c._id && String(c._id) === challengeId) ||
+      c.slug === challengeId ||
+      c.mission_id === challengeId
+    );
     if (!challenge) {
       return res.status(404).json({ success: false, error: 'Challenge not found' });
     }
@@ -125,10 +140,11 @@ class AdminController {
     }
 
     try {
+      const canonicalId = challenge._id ? String(challenge._id) : challenge.id;
       const savedRecords = [];
       for (const file of uploadedFiles) {
         const record = await fileService.saveChallengeFile({
-          challengeId: challenge.id,
+          challengeId: canonicalId,
           filename: file.originalname || file.name,
           buffer: file.buffer,
           mimeType: file.mimetype,
@@ -143,7 +159,7 @@ class AdminController {
           mimeType: record.mime_type,
           sha256: record.sha256,
           uploadedAt: record.uploaded_at,
-          downloadUrl: `/api/v1/challenges/${challenge.id}/files/${record.id}/download`
+          downloadUrl: `/api/v1/challenges/${canonicalId}/files/${record.id}/download`
         });
       }
       res.status(201).json({ success: true, files: savedRecords });
@@ -154,13 +170,25 @@ class AdminController {
 
   async deleteChallengeFile(req, res) {
     const { id: challengeId, fileId } = req.params;
-    const challenge = db.getChallenges().find(c => c.id === challengeId || c.slug === challengeId);
+    const cleanId = challengeId ? String(challengeId).trim() : '';
+    const challenge = db.getChallenges().find(c =>
+      c.id === cleanId ||
+      (c._id && String(c._id) === cleanId) ||
+      c.slug === cleanId ||
+      c.mission_id === cleanId
+    );
     if (!challenge) {
       return res.status(404).json({ success: false, error: 'Challenge not found' });
     }
 
     const fileRec = fileService.getFileRecord(fileId);
-    if (!fileRec || (fileRec.challenge_id !== challenge.id && fileRec.challengeId !== challenge.id)) {
+    const belongs = fileRec && (
+      fileRec.challenge_id === challenge.id ||
+      fileRec.challengeId === challenge.id ||
+      (challenge._id && (fileRec.challenge_id === String(challenge._id) || fileRec.challengeId === String(challenge._id))) ||
+      (challenge.mission_id && (fileRec.challenge_id === challenge.mission_id || fileRec.challengeId === challenge.mission_id))
+    );
+    if (!fileRec || !belongs) {
       return res.status(404).json({ success: false, error: 'File not found or does not belong to this challenge' });
     }
 
@@ -223,6 +251,20 @@ class AdminController {
     const user = db.getUsers().find(u => u.id === req.params.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
     user.is_banned = !user.is_banned;
+
+    auditService.record({
+      action: user.is_banned ? 'MODERATION.USER_SUSPENDED' : 'MODERATION.USER_UNSUSPENDED',
+      category: 'MODERATION',
+      severity: 'WARNING',
+      actor: req.user,
+      resource: { type: 'USER', id: user.id },
+      result: 'SUCCESS',
+      description: `Operative ${user.username} (${user.id}) ${user.is_banned ? 'suspended/banned' : 'unsuspended/reinstated'}`,
+      request: { requestId: req.id, method: req.method, route: req.originalUrl },
+      network: { ip: req.ip || '127.0.0.1', userAgent: req.headers ? req.headers['user-agent'] : null },
+      metadata: { targetUserId: user.id, targetUsername: user.username, isBanned: user.is_banned }
+    }).catch(() => {});
+
     res.json({ success: true, is_banned: user.is_banned });
   }
 
@@ -281,8 +323,56 @@ class AdminController {
     res.json({ instances: instanceService.getAllInstances() });
   }
 
-  getAuditLogs(req, res) {
-    res.json({ logs: [...db.getAuditLogs()].reverse() });
+  async getAuditLogs(req, res) {
+    try {
+      const result = await auditService.queryLogs(req.query);
+      res.json({
+        success: true,
+        logs: result.logs,
+        pagination: result.pagination,
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+        totalPages: result.totalPages
+      });
+    } catch (err) {
+      res.status(500).json({ success: false, error: 'QUERY_FAILED', message: err.message });
+    }
+  }
+
+  async getAuditStats(req, res) {
+    try {
+      const stats = await auditService.getDashboardStats();
+      res.json({ success: true, stats });
+    } catch (err) {
+      res.status(500).json({ success: false, error: 'STATS_FAILED', message: err.message });
+    }
+  }
+
+  async exportAuditLogs(req, res) {
+    try {
+      const format = (req.query.format || 'json').toLowerCase();
+      const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip || '127.0.0.1';
+      const exportResult = await auditService.exportLogs(req.query, format, req.user, req.id, ip);
+
+      res.setHeader('Content-Type', exportResult.contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${exportResult.filename}"`);
+      return res.send(exportResult.data);
+    } catch (err) {
+      res.status(500).json({ success: false, error: 'EXPORT_FAILED', message: err.message });
+    }
+  }
+
+  async getAuditLogEntry(req, res) {
+    try {
+      const event = await auditService.getEventById(req.params.id);
+      if (!event) {
+        return res.status(404).json({ success: false, error: 'NOT_FOUND', message: 'Audit event not found' });
+      }
+      res.json({ success: true, event });
+    } catch (err) {
+      res.status(500).json({ success: false, error: 'FETCH_FAILED', message: err.message });
+    }
   }
 
   updateSettings(req, res) {
@@ -290,13 +380,18 @@ class AdminController {
     const payload = req.body;
     Object.assign(settings, payload);
 
-    db.getAuditLogs().push({
-      id: `aud-${Date.now()}`,
-      action: 'SETTINGS_UPDATE',
-      target: 'COMPETITION_CONFIG',
-      ip_address: req.ip || '127.0.0.1',
-      created_at: new Date().toISOString()
-    });
+    auditService.record({
+      action: 'ADMIN.SETTINGS_UPDATED',
+      category: 'ADMIN',
+      severity: 'NOTICE',
+      actor: req.user,
+      resource: { type: 'SETTINGS', id: 'COMPETITION_CONFIG' },
+      result: 'SUCCESS',
+      description: `Competition settings updated by ${req.user?.username || 'ADMIN'}`,
+      request: { requestId: req.id, method: req.method, route: req.originalUrl },
+      network: { ip: req.ip || '127.0.0.1', userAgent: req.headers ? req.headers['user-agent'] : null },
+      metadata: { updatedKeys: Object.keys(payload) }
+    }).catch(() => {});
 
     if (payload.status) {
       realtimeService.broadcastCompetitionStatus(payload.status)
@@ -321,6 +416,19 @@ class AdminController {
       created_at: new Date().toISOString()
     };
     db.getAnnouncements().push(ann);
+
+    auditService.record({
+      action: 'ANNOUNCEMENT.CREATED',
+      category: 'ANNOUNCEMENT',
+      severity: urgent ? 'WARNING' : 'INFO',
+      actor: req.user,
+      resource: { type: 'ANNOUNCEMENT', id: ann.id },
+      result: 'SUCCESS',
+      description: `Announcement dispatched: "${ann.title}"`,
+      request: { requestId: req.id, method: req.method, route: req.originalUrl },
+      network: { ip: req.ip || '127.0.0.1', userAgent: req.headers ? req.headers['user-agent'] : null },
+      metadata: { announcementId: ann.id, title: ann.title, urgent: ann.urgent }
+    }).catch(() => {});
 
     if (this.broadcastFn) {
       this.broadcastFn('ANNOUNCEMENT', ann);

@@ -11,7 +11,7 @@ const userSchema = new mongoose.Schema({
   team_id: { type: String, default: null, index: true },
   username: { type: String, required: true, unique: true, index: true, trim: true },
   email: { type: String, required: true, unique: true, index: true, lowercase: true, trim: true },
-  password_hash: { type: String, required: true },
+  password_hash: { type: String, required: true, select: false },
   role: { 
     type: String, 
     enum: ['PLAYER', 'TEAM_CAPTAIN', 'CHALLENGE_AUTHOR', 'MODERATOR', 'ADMIN', 'SUPER_ADMIN'], 
@@ -24,11 +24,28 @@ const userSchema = new mongoose.Schema({
   affiliation: { type: String, default: 'Independent Operative' },
   is_banned: { type: Boolean, default: false, index: true },
   mfa_enabled: { type: Boolean, default: false },
-  mfa_secret: { type: String, default: null },
+  mfa_secret: { type: String, default: null, select: false },
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
 }, {
-  timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
+  strict: true,
+  timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
+  toJSON: {
+    transform(doc, ret) {
+      delete ret.password_hash;
+      delete ret.mfa_secret;
+      delete ret.__v;
+      return ret;
+    }
+  },
+  toObject: {
+    transform(doc, ret) {
+      delete ret.password_hash;
+      delete ret.mfa_secret;
+      delete ret.__v;
+      return ret;
+    }
+  }
 });
 
 module.exports = mongoose.models.User || mongoose.model('User', userSchema);

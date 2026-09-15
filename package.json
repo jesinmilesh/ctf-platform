@@ -7,13 +7,10 @@
     "start": "node backend/server.js",
     "dev": "node backend/server.js",
     "instance-server": "node instance-server/index.js",
-    "worker": "node instance-worker/server.js",
-    "test": "node test/verify.js",
-    "test:pipeline": "node test/test-challenge-pipeline.js",
-    "test:runtime": "node test/docker-runtime-test.js",
-    "test:master": "node test/production-master-test.js"
+    "worker": "node instance-worker/server.js"
   },
   "dependencies": {
+    "argon2": "^0.45.1",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^4.19.2",
@@ -22,7 +19,8 @@
     "mongodb": "^7.6.0",
     "mongoose": "^9.10.0",
     "multer": "^2.3.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "zod": "^4.6.5"
   },
   "keywords": [
     "ctf",

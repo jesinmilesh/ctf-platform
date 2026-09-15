@@ -4,6 +4,7 @@
  */
 
 const db = require('../config/database');
+const auditService = require('../services/auditService');
 
 exports.getTeam = (req, res) => {
   const teamId = req.params.id;
@@ -31,9 +32,21 @@ exports.getTeam = (req, res) => {
     };
   });
 
+  const isMemberOrAdmin = req.user && (
+    req.user.team_id === team.id ||
+    req.user.role === 'ADMIN' ||
+    req.user.role === 'SUPER_ADMIN'
+  );
+
+  const safeTeam = { ...team };
+  if (!isMemberOrAdmin) {
+    delete safeTeam.access_code;
+    delete safeTeam.accessCode;
+  }
+
   res.json({
     team: {
-      ...team,
+      ...safeTeam,
       members,
       solves
     }
@@ -91,6 +104,19 @@ exports.createTeam = (req, res) => {
     joined_at: new Date().toISOString()
   });
 
+  auditService.record({
+    action: 'TEAM.CREATED',
+    category: 'TEAM',
+    severity: 'INFO',
+    actor: req.user,
+    resource: { type: 'TEAM', id: team.id },
+    result: 'SUCCESS',
+    description: `Tactical squad "${team.name}" commissioned by operative ${req.user.username}`,
+    request: { requestId: req.id, method: req.method, route: req.originalUrl },
+    network: { ip: req.ip || '127.0.0.1', userAgent: req.headers ? req.headers['user-agent'] : null },
+    metadata: { teamId: team.id, name: team.name }
+  }).catch(() => {});
+
   res.status(201).json({
     success: true,
     team: {
@@ -142,6 +168,19 @@ exports.joinTeam = (req, res) => {
     role: 'MEMBER',
     joined_at: new Date().toISOString()
   });
+
+  auditService.record({
+    action: 'TEAM.JOINED',
+    category: 'TEAM',
+    severity: 'INFO',
+    actor: req.user,
+    resource: { type: 'TEAM', id: team.id },
+    result: 'SUCCESS',
+    description: `Operative ${req.user.username} joined squad "${team.name}"`,
+    request: { requestId: req.id, method: req.method, route: req.originalUrl },
+    network: { ip: req.ip || '127.0.0.1', userAgent: req.headers ? req.headers['user-agent'] : null },
+    metadata: { teamId: team.id, name: team.name }
+  }).catch(() => {});
 
   res.json({
     success: true,

@@ -6,6 +6,7 @@
 const db = require('../config/database');
 const scoringService = require('./scoringService');
 const realtimeService = require('./realtimeService');
+const auditService = require('./auditService');
 
 class ChallengeService {
   _resolveCategory(identifier, explicitId) {
@@ -77,13 +78,13 @@ class ChallengeService {
       if (!category && (c.category_name || c.category)) {
         category = this._resolveCategory(c.category_name || c.category, c.category_id);
       }
-      const isSolved = solves.some(s => s.challenge_id === c.id && ((teamId && s.team_id === teamId) || (userId && s.user_id === userId)));
+      const isSolved = solves.some(s => (s.challenge_id === c.id || (c._id && s.challenge_id === String(c._id))) && ((teamId && s.team_id === teamId) || (userId && s.user_id === userId)));
       const hasInst = !!(c.requiresInstance || c.has_instance || c.runtime?.enabled);
 
-      const canonicalId = c.id || (c._id ? String(c._id) : c.slug);
+      const canonicalId = c._id ? String(c._id) : (c.id || c.slug);
       return {
         id: canonicalId,
-        _id: c._id ? String(c._id) : canonicalId,
+        _id: canonicalId,
         mission_id: c.mission_id,
         slug: c.slug,
         title: c.title,
@@ -127,8 +128,9 @@ class ChallengeService {
 
     if (!c) return null;
 
-    // Check if mission is draft and operative is not admin (in production)
-    if (c.status === 'DRAFT' && (!user || user.role !== 'ADMIN') && process.env.NODE_ENV === 'production') {
+    // Check if mission is draft/unpublished and operative is not admin
+    const isAdmin = user && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN');
+    if ((c.status === 'DRAFT' || (c.status !== 'PUBLISHED' && c.status !== 'LIVE')) && !isAdmin) {
       return null;
     }
 
@@ -138,20 +140,56 @@ class ChallengeService {
       category = this._resolveCategory(c.category_name || c.category, c.category_id);
     }
 
-    const altIds = [c.id, c._id ? String(c._id) : null, c.mission_id].filter(Boolean);
-    const files = db.getFiles().filter(f =>
-      altIds.includes(f.challenge_id) || altIds.includes(f.challengeId)
-    ).map(f => ({
-      id: f.id,
-      name: f.filename,
-      filename: f.filename,
-      size: f.file_size_bytes || f.size,
-      sizeBytes: f.file_size_bytes || f.size,
-      mimeType: f.mime_type || f.mimeType || 'application/octet-stream',
-      sha256: f.sha256,
-      downloadUrl: `/api/v1/challenges/${c.id || c._id}/files/${f.id}/download`,
-      uploadedAt: f.uploaded_at || f.uploadedAt
-    }));
+    const canonicalId = c._id ? String(c._id) : (c.id || c.slug);
+    const altIds = [
+      c.id ? String(c.id).trim() : null,
+      c._id ? String(c._id).trim() : null,
+      c.mission_id ? String(c.mission_id).trim() : null,
+      c.slug ? String(c.slug).trim() : null,
+      canonicalId
+    ].filter(Boolean);
+
+    // Merge registered files from db.getFiles() and challenge.files array
+    const registeredFiles = db.getFiles().filter(f => {
+      const fCId = f.challenge_id ? String(f.challenge_id).trim() : '';
+      const fAltCId = f.challengeId ? String(f.challengeId).trim() : '';
+      return altIds.includes(fCId) || altIds.includes(fAltCId);
+    });
+
+    const fileMap = new Map();
+    for (const f of registeredFiles) {
+      fileMap.set(f.id, {
+        id: f.id,
+        name: f.filename || f.name,
+        filename: f.filename || f.name,
+        size: f.file_size_bytes || f.size || 0,
+        sizeBytes: f.file_size_bytes || f.size || 0,
+        mimeType: f.mime_type || f.mimeType || 'application/octet-stream',
+        sha256: f.sha256 || null,
+        downloadUrl: `/api/v1/challenges/${canonicalId}/files/${f.id}/download`,
+        uploadedAt: f.uploaded_at || f.uploadedAt || new Date().toISOString()
+      });
+    }
+
+    const embeddedFiles = Array.isArray(c.files) ? c.files : [];
+    for (const ef of embeddedFiles) {
+      const fId = ef.id || ef.fileId;
+      if (fId && !fileMap.has(fId)) {
+        fileMap.set(fId, {
+          id: fId,
+          name: ef.originalName || ef.filename || ef.name,
+          filename: ef.filename || ef.originalName || ef.name,
+          size: ef.size || ef.file_size_bytes || 0,
+          sizeBytes: ef.size || ef.file_size_bytes || 0,
+          mimeType: ef.mimeType || ef.mime_type || 'application/octet-stream',
+          sha256: ef.sha256 || null,
+          downloadUrl: `/api/v1/challenges/${canonicalId}/files/${fId}/download`,
+          uploadedAt: ef.uploadedAt || ef.uploaded_at || new Date().toISOString()
+        });
+      }
+    }
+
+    const files = Array.from(fileMap.values());
 
     const teamId = user ? (user.team_id || (user.team && user.team.id)) : null;
     const userId = user ? user.id : null;
@@ -160,7 +198,7 @@ class ChallengeService {
     const hintReveals = db.getHintReveals().filter(r => (teamId && r.team_id === teamId) || (userId && r.user_id === userId));
     const unlockedHintIds = new Set(hintReveals.map(r => r.hint_id));
 
-    const hints = db.getHints().filter(h => altIds.includes(h.challenge_id) && h.enabled).map((h, index) => {
+    const hints = db.getHints().filter(h => altIds.includes(String(h.challenge_id).trim()) && h.enabled).map((h, index) => {
       const isUnlocked = unlockedHintIds.has(h.id) || h.cost === 0;
       return {
         id: h.id,
@@ -172,11 +210,11 @@ class ChallengeService {
     });
 
     const isSolved = db.getSolves().some(s =>
-      altIds.includes(s.challenge_id) && ((teamId && s.team_id === teamId) || (userId && s.user_id === userId))
+      altIds.includes(String(s.challenge_id).trim()) && ((teamId && s.team_id === teamId) || (userId && s.user_id === userId))
     );
 
     const instance = db.getInstances().find(i =>
-      (altIds.includes(i.challengeId) || altIds.includes(i.challenge_id)) &&
+      (altIds.includes(String(i.challengeId || '').trim()) || altIds.includes(String(i.challenge_id || '').trim())) &&
       ((teamId && (i.teamId === teamId || i.team_id === teamId)) || (userId && (i.ownerUserId === userId || i.userId === userId || i.user_id === userId))) &&
       i.status === 'RUNNING'
     );
@@ -184,7 +222,8 @@ class ChallengeService {
     const requiresInstance = !!(c.requiresInstance || c.has_instance || c.runtime?.enabled);
 
     return {
-      id: c.id,
+      id: canonicalId,
+      _id: canonicalId,
       mission_id: c.mission_id,
       slug: c.slug,
       title: c.title,
@@ -281,6 +320,17 @@ class ChallengeService {
       revealed_at: new Date().toISOString()
     });
 
+    auditService.record({
+      action: 'HINT.UNLOCKED',
+      category: 'HINT',
+      severity: 'INFO',
+      actor: user,
+      resource: { type: 'HINT', id: hint.id, challengeId: challenge.id },
+      result: 'SUCCESS',
+      description: `Intelligence hint unlocked for mission "${challenge.title}" (-${hint.cost} XP)`,
+      metadata: { challengeId: challenge.id, hintId: hint.id, cost: hint.cost, teamId }
+    }).catch(() => {});
+
     // Broadcast score change if points deducted
     if (hint.cost > 0 && teamId) {
       realtimeService.broadcastScoreboardUpdated({
@@ -300,7 +350,17 @@ class ChallengeService {
 
   createChallenge(data) {
     const crypto = require('crypto');
-    const id = data.id || `ch-${crypto.randomBytes(4).toString('hex')}`;
+    let canonicalId = data._id ? String(data._id).trim() : (data.id ? String(data.id).trim() : null);
+    if (!canonicalId) {
+      try {
+        const { ObjectId } = require('mongodb');
+        canonicalId = new ObjectId().toString();
+      } catch (e) {
+        canonicalId = crypto.randomBytes(12).toString('hex');
+      }
+    }
+    const id = canonicalId;
+    const _id = canonicalId;
     const slug = (data.title || 'mission').toLowerCase().replace(/[^a-z0-9]+/g, '-');
     
     // Resolve matching category entity from db
@@ -326,7 +386,8 @@ class ChallengeService {
     const pidsLimit = parseInt(data.pids_limit || data.runtime?.resources?.pidsLimit || 128, 10);
 
     const newChallenge = {
-      id,
+      id: canonicalId,
+      _id: canonicalId,
       competition_id: db.getCompetitions()[0]?.id || 'c0000000-0000-0000-0000-000000000001',
       category_id,
       category_name,
@@ -360,6 +421,7 @@ class ChallengeService {
       } : { enabled: false },
       instance_host: data.instance_host || null,
       instance_port: data.instance_port || null,
+      files: [],
       created_at: new Date().toISOString()
     };
 
@@ -367,35 +429,50 @@ class ChallengeService {
 
     // Save Flag
     if (data.flag) {
-      db.getFlags().push({
+      const flagRec = {
         id: `f-${Date.now()}`,
-        challenge_id: id,
+        challenge_id: canonicalId,
         flag_type: data.flag_type || 'STATIC',
         flag_value: data.flag.trim(),
         case_sensitive: data.case_sensitive !== false
-      });
+      };
+      db.getFlags().push(flagRec);
+      if (db.isMongo && db.persistDoc) {
+        db.persistDoc('flags', flagRec).catch(() => {});
+      }
     }
 
     // Save Hint
     if (data.hint) {
-      db.getHints().push({
+      const hintRec = {
         id: `h-${Date.now()}`,
-        challenge_id: id,
+        challenge_id: canonicalId,
         content: data.hint,
         cost: parseInt(data.hint_cost || 50, 10),
         order_index: 1,
         enabled: true
-      });
+      };
+      db.getHints().push(hintRec);
+      if (db.isMongo && db.persistDoc) {
+        db.persistDoc('challengeHints', hintRec).catch(() => {});
+      }
     }
 
     // Record audit log
-    db.getAuditLogs().push({
-      id: `aud-${Date.now()}`,
-      action: 'CHALLENGE_CREATED',
-      target: newChallenge.title,
-      ip_address: '127.0.0.1',
-      created_at: new Date().toISOString()
-    });
+    auditService.record({
+      action: 'CHALLENGE.CREATED',
+      category: 'CHALLENGE',
+      severity: 'INFO',
+      actor: { type: 'USER', username: 'ADMIN', role: 'ADMIN' },
+      resource: { type: 'CHALLENGE', id: canonicalId, challengeId: canonicalId },
+      result: 'SUCCESS',
+      description: `Challenge mission "${newChallenge.title}" commissioned (${canonicalId})`,
+      metadata: { challengeId: canonicalId, title: newChallenge.title, category: newChallenge.category_name, points: newChallenge.base_points }
+    }).catch(() => {});
+
+    if (db.isMongo && db.persistDoc) {
+      db.persistDoc('challenges', newChallenge).catch(() => {});
+    }
 
     // Real-time notification
     realtimeService.broadcastChallengeCreated(newChallenge.id, newChallenge.competition_id)
@@ -411,6 +488,7 @@ class ChallengeService {
       item.id === cleanId ||
       item.slug === cleanId ||
       item.mission_id === cleanId ||
+      (item._id && String(item._id) === cleanId) ||
       (item.id && item.id.toLowerCase() === cleanIdLower) ||
       (item.slug && item.slug.toLowerCase() === cleanIdLower) ||
       (item.mission_id && item.mission_id.toLowerCase() === cleanIdLower)
@@ -473,19 +551,40 @@ class ChallengeService {
     }
 
     if (data.flag) {
-      const fl = db.getFlags().find(f => f.challenge_id === c.id);
+      const canonicalChallengeId = c._id ? String(c._id) : c.id;
+      const fl = db.getFlags().find(f => f.challenge_id === c.id || f.challenge_id === canonicalChallengeId);
       if (fl) {
         fl.flag_value = data.flag.trim();
+        if (db.isMongo && db.persistDoc) db.persistDoc('flags', fl).catch(() => {});
       } else {
-        db.getFlags().push({
+        const newFl = {
           id: `f-${Date.now()}`,
-          challenge_id: c.id,
+          challenge_id: canonicalChallengeId,
           flag_type: 'STATIC',
           flag_value: data.flag.trim(),
           case_sensitive: true
-        });
+        };
+        db.getFlags().push(newFl);
+        if (db.isMongo && db.persistDoc) db.persistDoc('flags', newFl).catch(() => {});
       }
     }
+
+    if (db.isMongo && db.persistDoc) {
+      db.persistDoc('challenges', c).catch(() => {});
+    }
+
+    const isPublishedAction = data.status && (data.status.toUpperCase() === 'PUBLISHED' || data.status.toUpperCase() === 'LIVE');
+    const canonicalCId = c._id ? String(c._id) : c.id;
+    auditService.record({
+      action: isPublishedAction ? 'CHALLENGE.PUBLISHED' : 'CHALLENGE.UPDATED',
+      category: 'CHALLENGE',
+      severity: isPublishedAction ? 'NOTICE' : 'INFO',
+      actor: { type: 'USER', username: 'ADMIN', role: 'ADMIN' },
+      resource: { type: 'CHALLENGE', id: canonicalCId, challengeId: canonicalCId },
+      result: 'SUCCESS',
+      description: isPublishedAction ? `Mission "${c.title}" promoted to LIVE status` : `Mission "${c.title}" updated`,
+      metadata: { challengeId: canonicalCId, title: c.title, status: c.status }
+    }).catch(() => {});
 
     // Real-time notification
     realtimeService.broadcastChallengeUpdated(c.id, c.competition_id)
@@ -495,13 +594,35 @@ class ChallengeService {
   }
 
   deleteChallenge(id) {
-    const idx = db.getChallenges().findIndex(c => c.id === id);
+    const cleanId = String(id).trim();
+    const idx = db.getChallenges().findIndex(c => c.id === cleanId || (c._id && String(c._id) === cleanId) || c.slug === cleanId);
     if (idx === -1) throw new Error('Challenge not found');
-    const compId = db.getChallenges()[idx].competition_id;
+    const ch = db.getChallenges()[idx];
+    const compId = ch.competition_id;
+    const targetId = ch.id;
+    const canonicalTargetId = ch._id ? String(ch._id) : targetId;
     db.getChallenges().splice(idx, 1);
 
+    auditService.record({
+      action: 'CHALLENGE.DELETED',
+      category: 'CHALLENGE',
+      severity: 'WARNING',
+      actor: { type: 'USER', username: 'ADMIN', role: 'ADMIN' },
+      resource: { type: 'CHALLENGE', id: canonicalTargetId, challengeId: canonicalTargetId },
+      result: 'SUCCESS',
+      description: `Mission "${ch.title}" neutralized / deleted (${canonicalTargetId})`,
+      metadata: { challengeId: canonicalTargetId, title: ch.title }
+    }).catch(() => {});
+
+    if (db.isMongo && db.mongoDb) {
+      db.mongoDb.collection('challenges').deleteOne({ $or: [{ id: targetId }, { _id: targetId }] }).catch(() => {});
+      db.mongoDb.collection('challenge_flags').deleteMany({ challenge_id: targetId }).catch(() => {});
+      db.mongoDb.collection('challenge_hints').deleteMany({ challenge_id: targetId }).catch(() => {});
+      db.mongoDb.collection('challenge_files').deleteMany({ challenge_id: targetId }).catch(() => {});
+    }
+
     // Real-time notification
-    realtimeService.broadcastChallengeDeleted(id, compId)
+    realtimeService.broadcastChallengeDeleted(targetId, compId)
       .catch(e => console.error('[CHALLENGE SERVICE] Broadcast deleted error:', e));
 
     return true;
@@ -526,7 +647,7 @@ class ChallengeService {
     }
 
     // Check flag presence
-    const flags = db.getFlags().filter(f => f.challenge_id === c.id);
+    const flags = db.getFlags().filter(f => f.challenge_id === c.id || (c._id && f.challenge_id === String(c._id)));
     if (flags.length === 0) {
       errors.push('At least one valid flag configuration is required before publishing');
     }

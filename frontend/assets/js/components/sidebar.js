@@ -52,8 +52,8 @@ const Sidebar = {
         <a href="/admin/instances.html" class="admin-nav-item ${activePage === 'instances' ? 'active' : ''}">
           <span>🐳</span> Sandboxes
         </a>
-        <a href="/admin/audit.html" class="admin-nav-item ${activePage === 'audit' ? 'active' : ''}">
-          <span>📜</span> Audit Trail
+        <a href="/admin/action-logs.html" class="admin-nav-item ${activePage === 'action-logs' || activePage === 'audit' ? 'active' : ''}">
+          <span>📜</span> Action Logs
         </a>
         <a href="/admin/settings.html" class="admin-nav-item ${activePage === 'settings' ? 'active' : ''}">
           <span>⚙️</span> Settings

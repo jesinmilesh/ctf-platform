@@ -41,6 +41,11 @@ document.addEventListener('DOMContentLoaded', async () => {
               ${t.is_disqualified ? 'DISQUALIFIED' : 'ACTIVE'}
             </span>
           </td>
+          <td style="padding:12px 16px;">
+            <a href="/admin/action-logs.html?teamId=${encodeURIComponent(t.id)}" class="btn btn-sm btn-outline" style="text-decoration:none; font-size:11px; color:var(--cyan); border-color:var(--cyan);">
+              ACTIVITY
+            </a>
+          </td>
         </tr>
       `).join('');
 

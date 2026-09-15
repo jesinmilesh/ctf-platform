@@ -52,12 +52,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
-    // Dynamic Flag Prefix display
-    if (compRes && compRes.competition) {
-      const prefixEl = document.getElementById('homeFlagPrefix');
-      if (prefixEl) prefixEl.textContent = compRes.competition.flagPrefix || 'XploitXβ{';
-    }
-
   } catch (err) {
     console.error('Home initialization error:', err);
   }

@@ -73,7 +73,14 @@ const instanceSchema = new mongoose.Schema({
   expires_at: { type: Date },
   created_at: { type: Date }
 }, {
-  timestamps: { createdAt: 'createdAt', updatedAt: 'lastHealthCheckAt' }
+  strict: true,
+  timestamps: { createdAt: 'createdAt', updatedAt: 'lastHealthCheckAt' },
+  toJSON: {
+    transform(doc, ret) {
+      delete ret.__v;
+      return ret;
+    }
+  }
 });
 
 // Compound index for active instances per team & challenge

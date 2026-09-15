@@ -9,7 +9,25 @@ const fileController = require('../controllers/fileController');
 const db = require('../config/database');
 
 router.get('/', (req, res) => {
-  res.json({ files: db.getFiles() });
+  const isAdmin = req.user && (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN');
+  const challenges = db.getChallenges();
+  const publishedChallengeIds = new Set(
+    challenges.filter(c => c.status === 'PUBLISHED' || c.status === 'LIVE' || isAdmin).map(c => c.id)
+  );
+
+  const files = db.getFiles()
+    .filter(f => publishedChallengeIds.has(f.challenge_id || f.challengeId))
+    .map(f => ({
+      id: f.id,
+      challenge_id: f.challenge_id || f.challengeId,
+      filename: f.filename,
+      size: f.file_size_bytes || f.size,
+      mime_type: f.mime_type || f.mimeType,
+      sha256: f.sha256,
+      uploaded_at: f.uploaded_at || f.uploadedAt
+    }));
+
+  res.json({ files });
 });
 
 router.get('/:fileId', fileController.downloadFile);

@@ -11,6 +11,7 @@ dotenv.config();
 
 const crypto = require('crypto');
 const db = require('../config/database');
+const authService = require('../services/authService');
 
 function authMiddleware(req, res, next) {
   let token = null;
@@ -31,7 +32,7 @@ function authMiddleware(req, res, next) {
     token = cookies['xploitx_token'];
   }
 
-  if (!token) {
+  if (!token || authService.isTokenRevoked(token)) {
     req.user = null;
     return next();
   }

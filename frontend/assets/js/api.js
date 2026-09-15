@@ -78,9 +78,9 @@ const api = {
   challenges: {
     list: () => apiRequest('/challenges'),
     get: (id) => apiRequest(`/challenges/${id}`),
-    submitFlag: (challengeId, flag) => apiRequest(`/challenges/${challengeId}/submit`, {
+    submitFlag: (challengeId, flag) => apiRequest('/submissions', {
       method: 'POST',
-      body: JSON.stringify({ flag })
+      body: JSON.stringify({ challengeId, flag })
     }),
     unlockHint: (challengeId, hintId) => apiRequest(`/challenges/${challengeId}/hints/${hintId}/reveal`, {
       method: 'POST'
@@ -97,9 +97,9 @@ const api = {
 
   // 3. Submissions
   submissions: {
-    submit: (challengeId, flag) => apiRequest(`/challenges/${challengeId}/submit`, {
+    submit: (challengeId, flag) => apiRequest('/submissions', {
       method: 'POST',
-      body: JSON.stringify({ flag })
+      body: JSON.stringify({ challengeId, flag })
     }),
     list: () => apiRequest('/submissions')
   },
@@ -185,7 +185,32 @@ const api = {
     getSubmissions: () => apiRequest('/admin/submissions'),
     getAnalytics: () => apiRequest('/admin/analytics'),
     getInstances: () => apiRequest('/admin/instances'),
-    getAuditLogs: () => apiRequest('/admin/audit'),
+    getAuditLogs: (params = {}) => {
+      const cleanParams = {};
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null && v !== '' && v !== 'all') {
+          cleanParams[k] = v;
+        }
+      }
+      const qs = new URLSearchParams(cleanParams).toString();
+      return apiRequest(`/admin/audit-logs${qs ? '?' + qs : ''}`);
+    },
+    getAuditStats: () => apiRequest('/admin/audit-logs/stats'),
+    getAuditLogEntry: (id) => apiRequest(`/admin/audit-logs/${id}`),
+    exportAuditLogs: (params = {}) => {
+      const cleanParams = {};
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null && v !== '' && v !== 'all') {
+          cleanParams[k] = v;
+        }
+      }
+      const qs = new URLSearchParams(cleanParams).toString();
+      const token = localStorage.getItem('xploitx_token');
+      const url = `${API_BASE}/admin/audit-logs/export${qs ? '?' + qs : ''}`;
+      return fetch(url, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+    },
     updateSettings: (settings) => apiRequest('/admin/settings', { method: 'POST', body: JSON.stringify(settings) }),
     dispatchAnnouncement: (ann) => apiRequest('/admin/announcements', { method: 'POST', body: JSON.stringify(ann) })
   }

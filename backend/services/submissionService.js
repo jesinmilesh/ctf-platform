@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const db = require('../config/database');
 const scoringService = require('./scoringService');
 const realtimeService = require('./realtimeService');
+const auditService = require('./auditService');
 
 class SubmissionService {
   constructor() {
@@ -54,15 +55,35 @@ class SubmissionService {
       return { success: false, correct: false, status: 'NOT_FOUND', message: 'Mission dossier not found' };
     }
 
+    // Verify challenge publication status
+    const isAdmin = user && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN');
+    if (challenge.status !== 'PUBLISHED' && challenge.status !== 'LIVE' && !isAdmin) {
+      return { success: false, correct: false, status: 'FORBIDDEN', message: 'Mission dossier classified or in draft status' };
+    }
+
     const teamId = user.team_id || (user.team && user.team.id);
     const team = db.getTeams().find(t => t.id === teamId);
+    const canonicalChallengeId = challenge._id ? String(challenge._id) : challenge.id;
+    const challengeIds = [challenge.id, String(challenge._id || ''), canonicalChallengeId, challenge.slug, challenge.mission_id].filter(Boolean);
 
     // 2. Check if already solved
     const existingSolve = db.getSolves().find(s =>
-      s.challenge_id === challenge.id &&
+      challengeIds.includes(String(s.challenge_id).trim()) &&
       ((teamId && s.team_id === teamId) || (user.id && s.user_id === user.id))
     );
     if (existingSolve) {
+      auditService.record({
+        action: 'SUBMISSION.ALREADY_SOLVED',
+        category: 'SUBMISSION',
+        severity: 'NOTICE',
+        actor: user,
+        resource: { type: 'CHALLENGE', id: canonicalChallengeId, challengeId: canonicalChallengeId },
+        result: 'DENIED',
+        description: `Duplicate flag submission by ${user.username} for mission "${challenge.title}"`,
+        network: { ip },
+        metadata: { challengeId: canonicalChallengeId, teamId, status: 'ALREADY_SOLVED' }
+      }).catch(() => {});
+
       return {
         success: false,
         status: 'ALREADY_SOLVED',
@@ -76,24 +97,36 @@ class SubmissionService {
     const suffix = settings.flagSuffix || '}';
     if (!cleanFlag.startsWith(prefix) || !cleanFlag.endsWith(suffix)) {
       this.recordSubmission({
-        challengeId: challenge.id,
+        challengeId: canonicalChallengeId,
         teamId,
         userId: user.id,
-        flag: cleanFlag,
         status: 'MALFORMED',
         ip
       });
+
+      auditService.record({
+        action: 'SUBMISSION.FLAG_REJECTED',
+        category: 'SUBMISSION',
+        severity: 'WARNING',
+        actor: user,
+        resource: { type: 'CHALLENGE', id: canonicalChallengeId, challengeId: canonicalChallengeId },
+        result: 'FAILURE',
+        description: `Malformed flag rejected for mission "${challenge.title}"`,
+        network: { ip },
+        metadata: { challengeId: canonicalChallengeId, teamId, reason: 'MALFORMED_SYNTAX' }
+      }).catch(() => {});
+
       return {
         success: false,
         correct: false,
         status: 'MALFORMED',
-        message: `INVALID SYNTAX: Expected format ${prefix}...${suffix}`
+        message: 'FLAG REJECTED // CRYPTOGRAPHIC CHECKSUM MISMATCH'
       };
     }
 
     // 4. Match against stored flags for this challenge (Section 14)
     // Supports: STATIC, REGEX, DYNAMIC (HMAC), MULTIPLE_ACCEPTED_FLAGS
-    const challengeFlags = db.getFlags().filter(f => f.challenge_id === challenge.id);
+    const challengeFlags = db.getFlags().filter(f => challengeIds.includes(String(f.challenge_id).trim()));
     let isCorrect = false;
 
     const hmacSecret = process.env.FLAG_HMAC_SECRET || 'xploitx_dynamic_flag_hmac_secret_key_2026';
@@ -143,10 +176,22 @@ class SubmissionService {
         challengeId: challenge.id,
         teamId,
         userId: user.id,
-        flag: cleanFlag,
         status: 'INCORRECT',
         ip
       });
+
+      auditService.record({
+        action: 'SUBMISSION.FLAG_REJECTED',
+        category: 'SUBMISSION',
+        severity: 'WARNING',
+        actor: user,
+        resource: { type: 'CHALLENGE', id: canonicalChallengeId, challengeId: canonicalChallengeId },
+        result: 'FAILURE',
+        description: `Incorrect flag rejected for mission "${challenge.title}"`,
+        network: { ip },
+        metadata: { challengeId: canonicalChallengeId, teamId, status: 'INCORRECT' }
+      }).catch(() => {});
+
       return {
         success: false,
         correct: false,
@@ -157,7 +202,7 @@ class SubmissionService {
 
     // 6. Handle Correct Flag Capture with Race-Safe First Blood (Section 16)
     // Synchronous execution block or transactional check prevents simultaneous first-blood claims
-    const currentSolves = db.getSolves().filter(s => s.challenge_id === challenge.id);
+    const currentSolves = db.getSolves().filter(s => challengeIds.includes(String(s.challenge_id).trim()));
     const isFirstBlood = currentSolves.length === 0;
 
     // Recalculate dynamic points
@@ -167,7 +212,7 @@ class SubmissionService {
     // Save solve
     const solve = {
       id: crypto.randomUUID(),
-      challenge_id: challenge.id,
+      challenge_id: canonicalChallengeId,
       team_id: teamId,
       user_id: user.id,
       points_awarded: pointsAwarded,
@@ -180,7 +225,7 @@ class SubmissionService {
     if (isFirstBlood) {
       const fb = {
         id: crypto.randomUUID(),
-        challenge_id: challenge.id,
+        challenge_id: canonicalChallengeId,
         team_id: teamId,
         team_name: team ? team.name : user.username,
         user_id: user.id,
@@ -229,16 +274,27 @@ class SubmissionService {
       created_at: solve.solved_at
     });
 
-    // Record submission
+    // Record submission (zero plaintext flag stored)
     this.recordSubmission({
       challengeId: challenge.id,
       teamId,
       userId: user.id,
-      flag: cleanFlag,
       status: 'CORRECT',
       points: pointsAwarded,
       ip
     });
+
+    auditService.record({
+      action: isFirstBlood ? 'SUBMISSION.FIRST_BLOOD' : 'SUBMISSION.FLAG_ACCEPTED',
+      category: 'SUBMISSION',
+      severity: isFirstBlood ? 'CRITICAL' : 'INFO',
+      actor: user,
+      resource: { type: 'CHALLENGE', id: canonicalChallengeId, challengeId: canonicalChallengeId },
+      result: 'SUCCESS',
+      description: `${isFirstBlood ? 'FIRST BLOOD! ' : ''}Flag accepted for "${challenge.title}" (+${pointsAwarded} XP)`,
+      network: { ip },
+      metadata: { challengeId: canonicalChallengeId, teamId, isFirstBlood, pointsAwarded }
+    }).catch(() => {});
 
     // Broadcast live score update
     this.broadcast('SCORE_UPDATED', {
@@ -261,18 +317,19 @@ class SubmissionService {
       correct: true,
       status: 'CORRECT',
       pointsAwarded,
+      points_awarded: pointsAwarded,
       isFirstBlood,
+      is_first_blood: isFirstBlood,
       message: isFirstBlood ? 'FIRST BLOOD CAPTURED! EXCELLENT EXECUTION!' : 'MISSION COMPLETE // FLAG CONFIRMED'
     };
   }
 
-  recordSubmission({ challengeId, teamId, userId, flag, status, points = 0, ip }) {
+  recordSubmission({ challengeId, teamId, userId, status, points = 0, ip }) {
     const sub = {
       id: crypto.randomUUID(),
       challenge_id: challengeId,
       team_id: teamId,
       user_id: userId,
-      submitted_flag: flag,
       status,
       points_awarded: points,
       ip_address: ip,

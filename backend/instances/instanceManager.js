@@ -18,6 +18,7 @@ const dockerManager = require('./dockerManager');
 const dockerClient = require('./dockerClient');
 const instanceRouter = require('./instanceRouter');
 const realtimeService = require('../services/realtimeService');
+const auditService = require('../services/auditService');
 const Events = require('../realtime/events');
 
 // Lazy-load agentManager to avoid circular dependencies at startup
@@ -112,6 +113,17 @@ class InstanceManager {
       status: 'REQUESTED'
     });
 
+    auditService.record({
+      action: 'INSTANCE.REQUESTED',
+      category: 'INSTANCE',
+      severity: 'INFO',
+      actor: user,
+      resource: { type: 'INSTANCE', id: instanceId, challengeId: challenge.id },
+      result: 'SUCCESS',
+      description: `Container sandbox requested for mission "${challenge.title}" (${instanceId})`,
+      metadata: { instanceId, challengeId: challenge.id, teamId }
+    }).catch(() => {});
+
     // 3. Lifecycle: ALLOCATING & PORT_RESERVED
     await realtimeService.broadcastInstanceEvent('instance.allocating', {
       instanceId,
@@ -131,8 +143,29 @@ class InstanceManager {
         status: 'FAILED',
         error: err.message
       });
+      auditService.record({
+        action: 'INSTANCE.START_FAILED',
+        category: 'INSTANCE',
+        severity: 'HIGH',
+        actor: { type: 'SYSTEM', role: 'SYSTEM' },
+        resource: { type: 'INSTANCE', id: instanceId, challengeId: challenge.id },
+        result: 'FAILURE',
+        description: `Port allocation failed for sandbox: ${err.message}`,
+        metadata: { instanceId, challengeId: challenge.id, reason: 'PORT_ALLOCATION_FAILED' }
+      }).catch(() => {});
       throw err;
     }
+
+    auditService.record({
+      action: 'INSTANCE.PORT_ALLOCATED',
+      category: 'INSTANCE',
+      severity: 'INFO',
+      actor: { type: 'SYSTEM', role: 'SYSTEM' },
+      resource: { type: 'INSTANCE', id: instanceId, challengeId: challenge.id },
+      result: 'SUCCESS',
+      description: `Atomic host port ${allocatedPort} allocated for instance ${instanceId}`,
+      metadata: { instanceId, challengeId: challenge.id, port: allocatedPort }
+    }).catch(() => {});
 
     await realtimeService.broadcastInstanceEvent('instance.port_reserved', {
       instanceId,
@@ -263,10 +296,11 @@ class InstanceManager {
     const ttlMinutes = challenge.runtime?.durationMinutes || challenge.instance_ttl_minutes || env.INSTANCE_DEFAULT_TTL_MINUTES || 30;
     const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000).toISOString();
     const endpoints = instanceRouter.resolveEndpoints(instanceId, allocatedPort, containerInfo.protocol);
+    const canonicalChallengeId = challenge._id ? String(challenge._id) : challenge.id;
 
     const instanceRecord = {
       instanceId,
-      challengeId: challenge.id,
+      challengeId: canonicalChallengeId,
       competitionId: challenge.competition_id || null,
       teamId,
       ownerUserId: userId,
@@ -290,7 +324,7 @@ class InstanceManager {
 
       // Compatibility aliases
       id: instanceId,
-      challenge_id: challenge.id,
+      challenge_id: canonicalChallengeId,
       team_id: teamId,
       user_id: userId,
       container_id: containerInfo.containerId,
@@ -312,7 +346,7 @@ class InstanceManager {
     // 7. Broadcast RUNNING event
     await realtimeService.broadcastInstanceEvent(Events.INSTANCE_STARTED || 'instance.running', {
       instanceId,
-      challengeId: challenge.id,
+      challengeId: canonicalChallengeId,
       teamId,
       status: 'RUNNING',
       host: endpoints.host,
@@ -322,11 +356,24 @@ class InstanceManager {
       expiresAt
     });
 
+    auditService.record({
+      action: 'INSTANCE.STARTED',
+      category: 'INSTANCE',
+      severity: 'INFO',
+      actor: user,
+      resource: { type: 'INSTANCE', id: instanceId, challengeId: canonicalChallengeId },
+      result: 'SUCCESS',
+      description: `Container sandbox is active and operational on port ${allocatedPort}`,
+      metadata: { instanceId, challengeId: canonicalChallengeId, port: allocatedPort, status: 'RUNNING' }
+    }).catch(() => {});
+
     return {
       success: true,
       instance: {
         id: instanceId,
         instanceId,
+        challengeId: canonicalChallengeId,
+        teamId,
         status: 'RUNNING',
         url: endpoints.url,
         port: allocatedPort,
@@ -336,6 +383,8 @@ class InstanceManager {
       },
       // Flat fields for backward compatibility
       instanceId,
+      challengeId: canonicalChallengeId,
+      teamId,
       status: 'RUNNING',
       url: endpoints.url,
       port: allocatedPort,
@@ -458,6 +507,17 @@ class InstanceManager {
       : [cleanTargetId];
 
     const allInstances = db.getInstances ? db.getInstances() : [];
+    const directMatch = allInstances.find(i => i.instanceId === cleanTargetId || i.id === cleanTargetId);
+    if (directMatch && !isAdmin) {
+      const isOwner = (teamId && (directMatch.teamId === teamId || directMatch.team_id === teamId)) ||
+                      (userId && (directMatch.ownerUserId === userId || directMatch.userId === userId || directMatch.user_id === userId));
+      if (!isOwner) {
+        const err = new Error('FORBIDDEN: You do not have clearance to terminate another team or operative\'s instance.');
+        err.statusCode = 403;
+        throw err;
+      }
+    }
+
     const instance = allInstances.find(i =>
       (targetIds.includes(i.instanceId) || targetIds.includes(i.id) || targetIds.includes(i.challengeId) || targetIds.includes(i.challenge_id)) &&
       (isAdmin || (teamId && (i.teamId === teamId || i.team_id === teamId)) || (i.ownerUserId === userId || i.userId === userId || i.user_id === userId)) &&
@@ -506,6 +566,17 @@ class InstanceManager {
       status: 'STOPPED'
     });
 
+    auditService.record({
+      action: 'INSTANCE.STOPPED',
+      category: 'INSTANCE',
+      severity: 'INFO',
+      actor: user,
+      resource: { type: 'INSTANCE', id: instId, challengeId },
+      result: 'SUCCESS',
+      description: `Container sandbox neutralized and port ${instance.port} released`,
+      metadata: { instanceId: instId, challengeId, port: instance.port }
+    }).catch(() => {});
+
     return {
       success: true,
       message: 'Sandbox container neutralized and port released.'
@@ -521,6 +592,17 @@ class InstanceManager {
     const isAdmin = user && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN');
 
     const allInstances = db.getInstances ? db.getInstances() : [];
+    const directMatch = allInstances.find(i => i.instanceId === instanceIdOrChallengeId || i.id === instanceIdOrChallengeId);
+    if (directMatch && !isAdmin) {
+      const isOwner = (teamId && (directMatch.teamId === teamId || directMatch.team_id === teamId)) ||
+                      (userId && (directMatch.ownerUserId === userId || directMatch.userId === userId || directMatch.user_id === userId));
+      if (!isOwner) {
+        const err = new Error('FORBIDDEN: You do not have clearance to inspect another team or operative\'s instance.');
+        err.statusCode = 403;
+        throw err;
+      }
+    }
+
     const inst = allInstances.find(i =>
       (i.instanceId === instanceIdOrChallengeId || i.id === instanceIdOrChallengeId || i.challengeId === instanceIdOrChallengeId || i.challenge_id === instanceIdOrChallengeId) &&
       (isAdmin || (teamId && (i.teamId === teamId || i.team_id === teamId)) || (userId && (i.ownerUserId === userId || i.userId === userId || i.user_id === userId)))

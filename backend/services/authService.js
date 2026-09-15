@@ -10,39 +10,75 @@ dotenv.config();
  */
 
 const crypto = require('crypto');
+const argon2 = require('argon2');
 const db = require('../config/database');
 
+const revokedTokens = new Set();
+
 class AuthService {
+  revokeToken(token) {
+    if (token) {
+      revokedTokens.add(token);
+    }
+  }
+
+  isTokenRevoked(token) {
+    if (!token) return true;
+    return revokedTokens.has(token);
+  }
   /**
-   * Cryptographically hash password with random salt using scrypt
+   * Cryptographically hash password using Argon2id
    */
-  hashPassword(password) {
-    const salt = crypto.randomBytes(16).toString('hex');
-    const derivedKey = crypto.scryptSync(password, salt, 64).toString('hex');
-    return `${salt}:${derivedKey}`;
+  async hashPassword(password) {
+    return await argon2.hash(password, {
+      type: argon2.argon2id,
+      memoryCost: 65536,
+      timeCost: 3,
+      parallelism: 4
+    });
   }
 
   /**
-   * Timing-safe verification of password against stored hash
+   * Constant-time safe verification of password against stored Argon2id or legacy hash
    */
-  verifyPassword(password, storedHash) {
-    if (!storedHash) return false;
-    // Support salt:derivedKey format
-    if (storedHash.includes(':')) {
-      const [salt, key] = storedHash.split(':');
-      const derivedKey = crypto.scryptSync(password, salt, 64);
-      const keyBuffer = Buffer.from(key, 'hex');
-      if (keyBuffer.length !== derivedKey.length) return false;
-      return crypto.timingSafeEqual(keyBuffer, derivedKey);
+  async verifyPassword(password, storedHash) {
+    if (!storedHash || !password) return false;
+    if (storedHash.startsWith('$argon2')) {
+      try {
+        return await argon2.verify(storedHash, password);
+      } catch (e) {
+        return false;
+      }
     }
-    // Fallback for plain setup strings
+    // Backward compatibility for legacy salt:derivedKey format with seamless migration
+    if (storedHash.includes(':')) {
+      try {
+        const [salt, key] = storedHash.split(':');
+        const derivedKey = crypto.scryptSync(password, salt, 64);
+        const keyBuffer = Buffer.from(key, 'hex');
+        if (keyBuffer.length !== derivedKey.length) return false;
+        return crypto.timingSafeEqual(keyBuffer, derivedKey);
+      } catch (e) {
+        return false;
+      }
+    }
     return password === storedHash;
+  }
+
+  async comparePassword(password, storedHash) {
+    return this.verifyPassword(password, storedHash);
   }
 
   /**
    * Sign authentication session token using HMAC-SHA256
    */
-  generateToken(userId, username) {
+  generateToken(userIdOrUser, maybeUsername) {
+    let userId = userIdOrUser;
+    let username = maybeUsername;
+    if (typeof userIdOrUser === 'object' && userIdOrUser !== null) {
+      userId = userIdOrUser.id;
+      username = userIdOrUser.username;
+    }
     const timestamp = Date.now();
     const payload = `${userId}:${username}:${timestamp}`;
     const secret = process.env.JWT_SECRET || 'c2_command_jwt_super_secret_key_change_in_production';
@@ -50,7 +86,7 @@ class AuthService {
     return `${payload}:${signature}`;
   }
 
-  login(usernameOrEmail, password) {
+  async login(usernameOrEmail, password) {
     const term = (usernameOrEmail || '').trim().toLowerCase();
     const user = db.getUsers().find(u =>
       (u && u.username && u.username.toLowerCase() === term) ||
@@ -65,9 +101,18 @@ class AuthService {
       throw new Error('OPERATIVE ACCOUNT TERMINATED BY C2 COMMAND.');
     }
 
-    // Cryptographic Password Validation
-    if (!this.verifyPassword(password, user.password_hash)) {
+    // Cryptographic Password Validation using Argon2id
+    const isValid = await this.verifyPassword(password, user.password_hash);
+    if (!isValid) {
       throw new Error('Invalid operative callsign or passphrase.');
+    }
+
+    // Seamlessly rehash legacy passwords to Argon2id
+    if (!user.password_hash.startsWith('$argon2')) {
+      user.password_hash = await this.hashPassword(password);
+      if (db.isMongo && db.persistDoc) {
+        await db.persistDoc('users', user).catch(() => {});
+      }
     }
 
     const token = this.generateToken(user.id, user.username);
@@ -97,7 +142,7 @@ class AuthService {
     };
   }
 
-  register({ username, email, password, callsign, affiliation }) {
+  async register({ username, email, password, callsign, affiliation }) {
     const cleanUsername = (username || '').trim();
     const cleanEmail = (email || '').trim().toLowerCase();
 
@@ -105,8 +150,8 @@ class AuthService {
       throw new Error('Callsign/Username must be at least 3 characters.');
     }
 
-    if (!password || password.length < 6) {
-      throw new Error('Passphrase must be at least 6 characters.');
+    if (!password || password.length < 8) {
+      throw new Error('Passphrase must be at least 8 characters.');
     }
 
     const exists = db.getUsers().find(u =>
@@ -117,7 +162,7 @@ class AuthService {
       throw new Error('Operative with this username or email already registered in system registry.');
     }
 
-    const passwordHash = this.hashPassword(password);
+    const passwordHash = await this.hashPassword(password);
     const userId = crypto.randomUUID();
 
     const newUser = {

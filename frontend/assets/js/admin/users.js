@@ -33,10 +33,13 @@ document.addEventListener('DOMContentLoaded', async () => {
               ${u.is_banned ? 'BANNED' : 'ACTIVE'}
             </span>
           </td>
-          <td style="padding:12px 16px;">
+          <td style="padding:12px 16px; display:flex; gap:6px; align-items:center;">
             <button class="btn btn-sm btn-outline" style="${u.is_banned ? 'color:var(--accent); border-color:var(--accent);' : 'color:var(--danger); border-color:var(--danger);'}" onclick="toggleBan('${u.id}')">
               ${u.is_banned ? 'UNBAN' : 'BAN'}
             </button>
+            <a href="/admin/action-logs.html?userId=${encodeURIComponent(u.id)}" class="btn btn-sm btn-outline" style="text-decoration:none; font-size:11px; color:var(--text-secondary);">
+              ACTIVITY
+            </a>
           </td>
         </tr>
       `).join('');

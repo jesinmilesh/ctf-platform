@@ -56,6 +56,7 @@ const challengeSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
 }, {
+  strict: true,
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
 });
 

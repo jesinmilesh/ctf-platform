@@ -22,9 +22,7 @@ router.get('/', (req, res) => {
     competition: comp ? {
       id: comp.id,
       name: comp.name,
-      status: comp.status,
-      flagPrefix: settings.flagPrefix,
-      flagSuffix: settings.flagSuffix
+      status: comp.status
     } : null,
     totalSolves: solves.length,
     topScores: lb.teams.slice(0, 5),

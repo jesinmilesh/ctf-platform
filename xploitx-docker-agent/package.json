@@ -5,9 +5,7 @@
   "main": "src/agent.js",
   "scripts": {
     "start": "node src/agent.js",
-    "pair": "node src/agent.js pair",
-    "test": "node test/test-docker-agent-pipeline.js",
-    "test:pipeline": "node test/test-docker-agent-pipeline.js --backend http://localhost:4000"
+    "pair": "node src/agent.js pair"
   },
   "dependencies": {
     "ws": "^8.18.0"

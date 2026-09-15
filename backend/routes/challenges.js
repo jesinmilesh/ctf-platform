@@ -7,14 +7,15 @@ const express = require('express');
 const router = express.Router();
 const challengeController = require('../controllers/challengeController');
 const { submissionLimiter } = require('../middleware/rateLimit');
+const { validateIdParam } = require('../middleware/validation');
 
 router.get('/', challengeController.getAll);
-router.get('/:id', challengeController.getOne);
-router.get('/:id/files', challengeController.getChallengeFiles);
-router.get('/:id/files/:fileId/download', challengeController.downloadChallengeFile);
-router.post('/:id/submit', submissionLimiter, challengeController.submitFlag);
-router.post('/:id/hints/:hintId/reveal', challengeController.unlockHint);
-router.post('/:id/instance', challengeController.deployInstance);
-router.delete('/:id/instance', challengeController.terminateInstance);
+router.get('/:id', validateIdParam('id'), challengeController.getOne);
+router.get('/:id/files', validateIdParam('id'), challengeController.getChallengeFiles);
+router.get('/:id/files/:fileId/download', validateIdParam('id', 'fileId'), challengeController.downloadChallengeFile);
+router.post('/:id/submit', validateIdParam('id'), submissionLimiter, challengeController.submitFlag);
+router.post('/:id/hints/:hintId/reveal', validateIdParam('id', 'hintId'), challengeController.unlockHint);
+router.post('/:id/instance', validateIdParam('id'), challengeController.deployInstance);
+router.delete('/:id/instance', validateIdParam('id'), challengeController.terminateInstance);
 
 module.exports = router;

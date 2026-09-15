@@ -72,11 +72,11 @@ exports.terminate = async (req, res) => {
     const result = await instanceManager.terminateInstance(targetId, req.user);
     return res.json(result);
   } catch (err) {
-    const status = err.message.includes('NOT_FOUND') ? 404 : err.message.includes('AUTH') ? 403 : 400;
+    const status = err.statusCode || (err.message.includes('FORBIDDEN') ? 403 : err.message.includes('NOT_FOUND') ? 404 : err.message.includes('AUTH') ? 403 : 400);
     return res.status(status).json({
       success: false,
       error: {
-        code: 'INSTANCE_TERMINATE_FAILED',
+        code: status === 403 ? 'FORBIDDEN' : 'INSTANCE_TERMINATE_FAILED',
         message: err.message
       }
     });
@@ -106,9 +106,10 @@ exports.getStatus = async (req, res) => {
     }
     return res.json({ success: true, instance: status });
   } catch (err) {
-    return res.status(500).json({
+    const status = err.statusCode || (err.message.includes('FORBIDDEN') ? 403 : err.message.includes('AUTH') ? 401 : 500);
+    return res.status(status).json({
       success: false,
-      error: { code: 'STATUS_CHECK_FAILED', message: err.message }
+      error: { code: status === 403 ? 'FORBIDDEN' : 'STATUS_CHECK_FAILED', message: err.message }
     });
   }
 };

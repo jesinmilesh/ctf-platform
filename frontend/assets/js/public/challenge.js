@@ -72,22 +72,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  // Load Competition Flag Prefix & Suffix
-  let flagPrefix = 'XploitXβ{';
-  let flagSuffix = '}';
-  try {
-    const compRes = await window.api.getCompetition();
-    if (compRes && compRes.competition) {
-      flagPrefix = compRes.competition.flagPrefix || flagPrefix;
-      flagSuffix = compRes.competition.flagSuffix || flagSuffix;
-    }
-  } catch (e) {}
-
-  const prefixEl = document.getElementById('flagPrefixLabel');
-  if (prefixEl) prefixEl.textContent = flagPrefix;
-  const suffixEl = document.getElementById('flagSuffixLabel');
-  if (suffixEl) suffixEl.textContent = flagSuffix;
-
   function formatBytes(bytes) {
     if (!bytes || bytes === 0) return '0 B';
     const k = 1024;
@@ -375,23 +359,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     flagForm.addEventListener('submit', async (event) => {
       event.preventDefault();
 
-      const rawInput = document.getElementById('flagInput').value.trim();
-      let fullFlag = rawInput;
+      const flagInputEl = document.getElementById('flag') || document.getElementById('flagInput');
+      const submittedFlag = flagInputEl ? flagInputEl.value.trim() : '';
 
-      // Wrap prefix/suffix if entered without
-      if (!fullFlag.startsWith(flagPrefix) && !fullFlag.endsWith(flagSuffix)) {
-        fullFlag = `${flagPrefix}${fullFlag}${flagSuffix}`;
+      if (!submittedFlag) {
+        if (window.showError) window.showError('Please enter a flag payload.');
+        return;
       }
 
       const submitBtn = document.getElementById('flagSubmitBtn');
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'TRANSMITTING FLAG...';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'TRANSMITTING FLAG...';
+      }
 
       try {
-        const result = await window.api.submitFlag(challengeId, fullFlag);
+        const result = await window.api.submitFlag(challengeId, submittedFlag);
         if (result.correct) {
           window.showSuccess(result.isFirstBlood ? '🩸 FIRST BLOOD SECURED!' : 'FLAG CAPTURED // MISSION SECURED');
-          document.getElementById('flagInput').value = '';
+          if (flagInputEl) flagInputEl.value = '';
           await loadChallenge();
         } else {
           window.showError(result.message || 'INVALID FLAG PAYLOAD');
@@ -399,8 +385,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       } catch (error) {
         window.showError(error.message || 'INVALID FLAG PAYLOAD');
       } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'CAPTURE FLAG';
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'SUBMIT FLAG';
+        }
       }
     });
   }

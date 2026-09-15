@@ -14,7 +14,7 @@ const healthChecker = require('./healthChecker');
 
 class DockerManager {
   constructor() {
-    this.networkName = process.env.DOCKER_NETWORK || 'xploitx-instances';
+    this.networkName = process.env.DOCKER_NETWORK || 'ctf-sandbox';
   }
 
   get runtime() {

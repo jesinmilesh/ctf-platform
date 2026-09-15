@@ -247,6 +247,9 @@
           <td style="padding:12px 16px;">${healthBadge}</td>
           <td style="padding:12px 16px; color:var(--text-secondary);">${expiresAt ? relativeTime(new Date(expiresAt)) : '—'}</td>
           <td style="padding:12px 16px; text-align:right;">
+            <a href="/admin/action-logs.html?instanceId=${encodeURIComponent(inst.instanceId || inst.id || '')}" class="btn btn-xs btn-outline" style="text-decoration:none; margin-right:6px; font-size:10px; color:var(--cyan); border-color:var(--cyan); padding:4px 8px;">
+              LOG
+            </a>
             <button class="btn-danger-ghost" onclick="terminateInstance('${escHtml(inst.instanceId || inst.id || '')}')">
               ■ STOP
             </button>

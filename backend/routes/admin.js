@@ -41,6 +41,10 @@ router.get('/submissions', (req, res) => adminController.getSubmissions(req, res
 router.get('/analytics', (req, res) => adminController.getAnalytics(req, res));
 router.get('/instances', (req, res) => adminController.getInstances(req, res));
 router.get('/audit', (req, res) => adminController.getAuditLogs(req, res));
+router.get('/audit-logs', (req, res) => adminController.getAuditLogs(req, res));
+router.get('/audit-logs/stats', (req, res) => adminController.getAuditStats(req, res));
+router.get('/audit-logs/export', (req, res) => adminController.exportAuditLogs(req, res));
+router.get('/audit-logs/:id', (req, res) => adminController.getAuditLogEntry(req, res));
 router.post('/settings', (req, res) => adminController.updateSettings(req, res));
 router.post('/announcements', (req, res) => adminController.dispatchAnnouncement(req, res));
 

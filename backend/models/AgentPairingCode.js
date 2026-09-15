@@ -10,7 +10,7 @@ const pairingCodeSchema = new mongoose.Schema({
   code:        { type: String, required: true, unique: true, index: true },
   generatedBy: { type: String, required: true },   // Admin userId
   createdAt:   { type: Date, default: Date.now },
-  expiresAt:   { type: Date, required: true, index: true },
+  expiresAt:   { type: Date, required: true },
   used:        { type: Boolean, default: false, index: true },
   usedByAgentId: { type: String, default: null }
 });

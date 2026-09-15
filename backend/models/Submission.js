@@ -11,11 +11,37 @@ const submissionSchema = new mongoose.Schema({
   challenge_id: { type: String, required: true, index: true },
   user_id: { type: String, required: true, index: true },
   team_id: { type: String, default: null, index: true },
-  flag_submitted: { type: String, required: true },
+  status: { 
+    type: String, 
+    enum: ['CORRECT', 'INCORRECT', 'MALFORMED', 'ALREADY_SOLVED'], 
+    default: 'INCORRECT', 
+    index: true 
+  },
   is_correct: { type: Boolean, default: false, index: true },
   points_awarded: { type: Number, default: 0 },
   ip_address: { type: String, default: '127.0.0.1' },
   created_at: { type: Date, default: Date.now, index: true }
+}, {
+  strict: true,
+  timestamps: { createdAt: 'created_at', updatedAt: false },
+  toJSON: {
+    transform(doc, ret) {
+      delete ret.flag;
+      delete ret.submitted_flag;
+      delete ret.flag_submitted;
+      delete ret.__v;
+      return ret;
+    }
+  },
+  toObject: {
+    transform(doc, ret) {
+      delete ret.flag;
+      delete ret.submitted_flag;
+      delete ret.flag_submitted;
+      delete ret.__v;
+      return ret;
+    }
+  }
 });
 
 module.exports = mongoose.models.Submission || mongoose.model('Submission', submissionSchema);
