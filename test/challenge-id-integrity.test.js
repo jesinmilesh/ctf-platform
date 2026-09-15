@@ -265,24 +265,101 @@ async function runTestSuite() {
   const fileIdx = db.data.challengeFiles.findIndex(f => f.id === fileRecord.id);
   if (fileIdx !== -1) db.data.challengeFiles.splice(fileIdx, 1);
 
-  // 11. Admin authentication succeeds with callsign, username, or email
+  // 11. Admin authentication succeeds with callsign, username, or email (and enforces admin-only clearance)
   const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || 'Commander@Xploitx!Admin';
+  const adminEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || 'jesinmilesh@gmail.com').trim().toLowerCase();
+  const adminUsername = process.env.BOOTSTRAP_ADMIN_USERNAME || 'Admin';
+  const adminCallsign = process.env.BOOTSTRAP_ADMIN_CALLSIGN || 'COMMANDER';
+
+  // Ensure test admin exists in memory for CI runs where .env is not present
+  let existingAdmin = db.getUsers().find(u =>
+    (u.role === 'ADMIN' || u.role === 'SUPER_ADMIN') &&
+    (
+      (u.callsign && u.callsign.toUpperCase() === adminCallsign.toUpperCase()) ||
+      (u.username && u.username.toLowerCase() === adminUsername.toLowerCase()) ||
+      (u.email && u.email.toLowerCase() === adminEmail)
+    )
+  );
+
+  if (!existingAdmin) {
+    const crypto = require('crypto');
+    const adminSalt = crypto.randomBytes(16).toString('hex');
+    const adminKey = crypto.scryptSync(adminPassword, adminSalt, 64).toString('hex');
+    existingAdmin = {
+      id: 'u0000000-0000-0000-0000-000000000001',
+      competition_id: 'c0000000-0000-0000-0000-000000000001',
+      team_id: null,
+      username: adminUsername,
+      email: adminEmail,
+      password_hash: `${adminSalt}:${adminKey}`,
+      role: 'ADMIN',
+      callsign: adminCallsign,
+      affiliation: 'XploitX Operations Command',
+      is_banned: false,
+      created_at: new Date().toISOString()
+    };
+    db.getUsers().push(existingAdmin);
+  }
+
   let authPassCount = 0;
   try {
-    const r1 = await authService.login('COMMANDER', adminPassword);
+    const r1 = await authService.login(adminCallsign, adminPassword);
     if (r1.token && r1.user.role === 'ADMIN') authPassCount++;
   } catch (e) {}
   try {
-    const r2 = await authService.login('Admin', adminPassword);
+    const r2 = await authService.login(adminUsername, adminPassword);
     if (r2.token && r2.user.role === 'ADMIN') authPassCount++;
   } catch (e) {}
   try {
-    const r3 = await authService.login(process.env.BOOTSTRAP_ADMIN_EMAIL || 'jesinmilesh@gmail.com', adminPassword);
+    const r3 = await authService.login(adminEmail, adminPassword);
     if (r3.token && r3.user.role === 'ADMIN') authPassCount++;
   } catch (e) {}
+
+  // Verify participant rejection on admin portal (clearance check)
+  const authController = require('../backend/controllers/authController');
+  const participantUser = {
+    id: 'u-participant-test',
+    competition_id: 'c0000000-0000-0000-0000-000000000001',
+    team_id: null,
+    username: 'participant_test',
+    email: 'participant@test.local',
+    password_hash: existingAdmin.password_hash,
+    role: 'PARTICIPANT',
+    callsign: 'PARTICIPANT_01',
+    affiliation: 'Cadet Wing',
+    is_banned: false,
+    created_at: new Date().toISOString()
+  };
+  db.getUsers().push(participantUser);
+
+  let participantRejectedFromAdmin = false;
+  const mockReq = {
+    body: { username: 'participant_test', password: adminPassword, adminOnly: true },
+    headers: {},
+    originalUrl: '/api/v1/auth/admin-login',
+    socket: {}
+  };
+  const mockRes = {
+    statusCode: 200,
+    status(code) { this.statusCode = code; return this; },
+    json(data) {
+      if (this.statusCode === 403 && data.error === 'CLEARANCE_DENIED') {
+        participantRejectedFromAdmin = true;
+      }
+      return this;
+    },
+    cookie() {},
+    clearCookie() {}
+  };
+
+  await authController.login(mockReq, mockRes, () => {});
+  // Clean up participant test user
+  const pIdx = db.getUsers().findIndex(u => u.id === 'u-participant-test');
+  if (pIdx !== -1) db.getUsers().splice(pIdx, 1);
+
   assert(
-    authPassCount === 3,
-    'Admin authentication succeeds with callsign, username, or email'
+    authPassCount === 3 && participantRejectedFromAdmin,
+    'Admin authentication succeeds with callsign, username, or email and rejects participants from C2 portal'
   );
 
   console.log('===============================================================');

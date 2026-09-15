@@ -65,6 +65,7 @@ const api = {
   // 1. Authentication
   auth: {
     login: (credentials) => apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
+    adminLogin: (credentials) => apiRequest('/auth/admin-login', { method: 'POST', body: JSON.stringify(credentials) }),
     register: (userData) => apiRequest('/auth/register', { method: 'POST', body: JSON.stringify(userData) }),
     me: () => apiRequest('/auth/me'),
     getMe: () => apiRequest('/auth/me'),
@@ -219,6 +220,7 @@ const api = {
 
 // Flat aliases for 100% backward compatibility with existing UI page scripts
 api.login = api.auth.login;
+api.adminLogin = api.auth.adminLogin;
 api.register = api.auth.register;
 api.getMe = api.auth.getMe;
 api.logout = api.auth.logout;

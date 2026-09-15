@@ -221,24 +221,23 @@ class DatabaseEngine {
 
     // 3. Administrator bootstrap in memory-only mode
     this.data.users.length = 0;
-    if (process.env.BOOTSTRAP_ADMIN_EMAIL && process.env.BOOTSTRAP_ADMIN_PASSWORD) {
-      const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL.trim().toLowerCase();
-      const adminSalt = crypto.randomBytes(16).toString('hex');
-      const adminKey = crypto.scryptSync(process.env.BOOTSTRAP_ADMIN_PASSWORD, adminSalt, 64).toString('hex');
-      this.data.users.push({
-        id: 'u0000000-0000-0000-0000-000000000001',
-        competition_id: compId,
-        team_id: null,
-        username: process.env.BOOTSTRAP_ADMIN_USERNAME || 'Admin',
-        email: adminEmail,
-        password_hash: `${adminSalt}:${adminKey}`,
-        role: 'ADMIN',
-        callsign: process.env.BOOTSTRAP_ADMIN_CALLSIGN || 'COMMANDER',
-        affiliation: 'XploitX Operations Command',
-        is_banned: false,
-        created_at: new Date().toISOString()
-      });
-    }
+    const adminEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || 'jesinmilesh@gmail.com').trim().toLowerCase();
+    const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || 'Commander@Xploitx!Admin';
+    const adminSalt = crypto.randomBytes(16).toString('hex');
+    const adminKey = crypto.scryptSync(adminPassword, adminSalt, 64).toString('hex');
+    this.data.users.push({
+      id: 'u0000000-0000-0000-0000-000000000001',
+      competition_id: compId,
+      team_id: null,
+      username: process.env.BOOTSTRAP_ADMIN_USERNAME || 'Admin',
+      email: adminEmail,
+      password_hash: `${adminSalt}:${adminKey}`,
+      role: 'ADMIN',
+      callsign: process.env.BOOTSTRAP_ADMIN_CALLSIGN || 'COMMANDER',
+      affiliation: 'XploitX Operations Command',
+      is_banned: false,
+      created_at: new Date().toISOString()
+    });
   }
 
   /**

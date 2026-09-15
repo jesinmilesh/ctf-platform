@@ -9,6 +9,7 @@ const authController = require('../controllers/authController');
 const { loginLimiter } = require('../middleware/rateLimit');
 
 router.post('/login', loginLimiter, authController.login);
+router.post('/admin-login', loginLimiter, authController.adminLogin);
 router.post('/register', authController.register);
 router.get('/me', authController.getMe);
 router.post('/logout', authController.logout);

@@ -8,6 +8,11 @@ const authService = require('../services/authService');
 const auditService = require('../services/auditService');
 const auditLogger = require('../services/auditLogger');
 
+exports.adminLogin = async (req, res, next) => {
+  req.body.adminOnly = true;
+  return exports.login(req, res, next);
+};
+
 exports.login = async (req, res, next) => {
   const username = req.body.username || req.body.identifier || req.body.email;
   const password = req.body.password;
@@ -20,6 +25,33 @@ exports.login = async (req, res, next) => {
     const result = await authService.login(username, password);
 
     const isAdmin = result.user.role === 'ADMIN' || result.user.role === 'SUPER_ADMIN';
+    const adminOnly = req.body.adminOnly === true || req.headers['x-admin-portal'] === 'true' || (req.originalUrl && req.originalUrl.includes('/admin-login'));
+
+    if (adminOnly && !isAdmin) {
+      auditService.record({
+        action: 'AUTH.ADMIN_ACCESS_DENIED',
+        category: 'AUTH',
+        severity: 'WARNING',
+        actor: result.user,
+        resource: { type: 'USER', id: result.user.id },
+        result: 'DENIED',
+        description: `Participant operative ${result.user.username} rejected from C2 Command Center portal`,
+        request: { requestId: req.id, method: req.method, route: req.originalUrl },
+        network: { ip, userAgent: req.headers ? req.headers['user-agent'] : null },
+        metadata: { role: result.user.role }
+      }).catch(() => {});
+
+      if (typeof authService.revokeToken === 'function') {
+        authService.revokeToken(result.token);
+      }
+      res.clearCookie('xploitx_token');
+
+      return res.status(403).json({
+        error: 'CLEARANCE_DENIED',
+        message: 'Clearance denied. Administrative privileges required to access the C2 Operations Center.'
+      });
+    }
+
     auditService.record({
       action: isAdmin ? 'AUTH.ADMIN_LOGIN' : 'AUTH.LOGIN_SUCCESS',
       category: 'AUTH',
