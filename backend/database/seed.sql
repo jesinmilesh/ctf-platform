@@ -47,5 +47,5 @@ VALUES
 ('cat-05', 'c0000000-0000-0000-0000-000000000001', 'Digital Forensic', 'forensic', 'Memory artifact analysis, disk triage, and file carving', '#00ff9c', 5),
 ('cat-06', 'c0000000-0000-0000-0000-000000000001', 'OSINT', 'osint', 'Open source reconnaissance, asset intelligence, and threat actor tracking', '#4cc9f0', 6),
 ('cat-07', 'c0000000-0000-0000-0000-000000000001', 'Cryptography', 'crypto', 'Mathematical ciphers, PRNG state recovery, and cryptanalysis', '#c77dff', 7),
-('cat-08', 'c0000000-0000-0000-0000-000000000001', 'Steganograhy', 'stegano', 'Covert data exfiltration and concealed payload extraction', '#ffb020', 8)
+('cat-08', 'c0000000-0000-0000-0000-000000000001', 'Steganography', 'stegano', 'Covert data exfiltration and concealed payload extraction', '#ffb020', 8)
 ON CONFLICT (id) DO NOTHING;

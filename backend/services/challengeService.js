@@ -725,6 +725,11 @@ class ChallengeService {
       errors
     };
   }
+
+  getChallengeFiles(challengeId, ...altIds) {
+    const fileService = require('./fileService');
+    return fileService.getChallengeFiles(challengeId, ...altIds);
+  }
 }
 
 module.exports = new ChallengeService();

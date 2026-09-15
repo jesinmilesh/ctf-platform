@@ -80,8 +80,8 @@ const TRACK_SECTORS = [
   {
     id: 'stegano',
     num: 8,
-    name: 'Steganograhy',
-    category: 'Steganograhy',
+    name: 'Steganography',
+    category: 'Steganography',
     icon: 'STEG',
     color: '#ffb020',
     description: 'Covert communication channels, image/audio data hiding, and embedded payload recovery.'

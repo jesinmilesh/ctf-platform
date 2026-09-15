@@ -72,7 +72,7 @@ const DEFAULT_CATEGORIES = [
   { id: 'cat-05', competition_id: 'c0000000-0000-0000-0000-000000000001', name: 'Digital Forensic', slug: 'forensic', description: 'Memory dump analysis and artifact extraction', color_accent: '#00ff9c', display_order: 5 },
   { id: 'cat-06', competition_id: 'c0000000-0000-0000-0000-000000000001', name: 'OSINT', slug: 'osint', description: 'Open source intelligence and asset tracing', color_accent: '#4cc9f0', display_order: 6 },
   { id: 'cat-07', competition_id: 'c0000000-0000-0000-0000-000000000001', name: 'Cryptography', slug: 'crypto', description: 'Ciphers, discrete logarithms, and cryptanalysis', color_accent: '#c77dff', display_order: 7 },
-  { id: 'cat-08', competition_id: 'c0000000-0000-0000-0000-000000000001', name: 'Steganograhy', slug: 'stegano', description: 'Covert data channels and hidden payloads', color_accent: '#ffb020', display_order: 8 }
+  { id: 'cat-08', competition_id: 'c0000000-0000-0000-0000-000000000001', name: 'Steganography', slug: 'stegano', description: 'Covert data channels and hidden payloads', color_accent: '#ffb020', display_order: 8 }
 ];
 
 const DEFAULT_COMPETITION = {
@@ -271,18 +271,30 @@ async function run() {
 
   // 5. Optional Authorized Bootstrap Admin (Section 12)
   if (withBootstrapAdmin || (process.env.BOOTSTRAP_ADMIN_EMAIL && process.env.BOOTSTRAP_ADMIN_PASSWORD)) {
-    const crypto = require('crypto');
     const adminEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || 'admin@xploitxctf.me').trim().toLowerCase();
     const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || 'admin123';
-    const adminSalt = crypto.randomBytes(16).toString('hex');
-    const adminKey = crypto.scryptSync(adminPassword, adminSalt, 64).toString('hex');
+    let passwordHash;
+    try {
+      const argon2 = require('argon2');
+      passwordHash = await argon2.hash(adminPassword, {
+        type: argon2.argon2id,
+        memoryCost: 65536,
+        timeCost: 3,
+        parallelism: 4
+      });
+    } catch (err) {
+      const crypto = require('crypto');
+      const adminSalt = crypto.randomBytes(16).toString('hex');
+      const adminKey = crypto.scryptSync(adminPassword, adminSalt, 64).toString('hex');
+      passwordHash = `${adminSalt}:${adminKey}`;
+    }
     const adminDoc = {
       id: 'u0000000-0000-0000-0000-000000000001',
       competition_id: DEFAULT_COMPETITION.id,
       team_id: null,
-      username: process.env.BOOTSTRAP_ADMIN_USERNAME || 'admin',
+      username: process.env.BOOTSTRAP_ADMIN_USERNAME || 'Admin',
       email: adminEmail,
-      password_hash: `${adminSalt}:${adminKey}`,
+      password_hash: passwordHash,
       role: 'ADMIN',
       callsign: process.env.BOOTSTRAP_ADMIN_CALLSIGN || 'COMMANDER',
       affiliation: 'XploitX Operations Command',
@@ -290,7 +302,7 @@ async function run() {
       created_at: new Date().toISOString()
     };
     await db.collection('users').insertOne(adminDoc);
-    console.log(`[ADMIN] Provisioned authorized bootstrap administrator: ${adminEmail}`);
+    console.log(`[ADMIN] Provisioned authorized bootstrap administrator: ${adminEmail} (username: ${adminDoc.username}, callsign: ${adminDoc.callsign})`);
   }
 
   // 6. Reset Challenge Storage (Section 17 & 18)
@@ -311,7 +323,11 @@ async function run() {
     await tColl.createIndex({ name: 1 }, { unique: true }).catch(() => {});
 
     const cColl = db.collection('challenges');
-    await cColl.createIndex({ id: 1 }, { unique: true }).catch(() => {});
+    await cColl.createIndex({ id: 1 }, { unique: true, sparse: true }).catch(() => {});
+    await cColl.createIndex({ challengeId: 1 }, { unique: true, sparse: true }).catch(() => {});
+    await cColl.createIndex({ publicRouteId: 1 }, { unique: true, sparse: true }).catch(() => {});
+    await cColl.createIndex({ competitionId: 1 }).catch(() => {});
+    await cColl.createIndex({ domain: 1 }).catch(() => {});
     await cColl.createIndex({ slug: 1 }).catch(() => {});
 
     const sColl = db.collection('submissions');

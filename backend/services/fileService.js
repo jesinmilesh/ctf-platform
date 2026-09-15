@@ -168,11 +168,15 @@ class FileService {
         (c._id && ids.has(String(c._id))) ||
         (c.legacy_id && ids.has(String(c.legacy_id))) ||
         (c.mission_id && ids.has(String(c.mission_id))) ||
-        (c.slug && ids.has(String(c.slug)))
+        (c.slug && ids.has(String(c.slug))) ||
+        (c.challengeId && ids.has(String(c.challengeId))) ||
+        (c.publicRouteId && ids.has(String(c.publicRouteId)))
       );
       if (ch) {
         if (ch.id) ids.add(String(ch.id).trim());
         if (ch._id) ids.add(String(ch._id).trim());
+        if (ch.challengeId) ids.add(String(ch.challengeId).trim());
+        if (ch.publicRouteId) ids.add(String(ch.publicRouteId).trim());
         if (ch.legacy_id) ids.add(String(ch.legacy_id).trim());
         if (ch.mission_id) ids.add(String(ch.mission_id).trim());
         if (ch.slug) ids.add(String(ch.slug).trim());
