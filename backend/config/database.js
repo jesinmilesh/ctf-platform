@@ -221,23 +221,27 @@ class DatabaseEngine {
 
     // 3. Administrator bootstrap in memory-only mode
     this.data.users.length = 0;
-    const adminEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || 'jesinmilesh@gmail.com').trim().toLowerCase();
-    const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || 'Commander@Xploitx!Admin';
-    const adminSalt = crypto.randomBytes(16).toString('hex');
-    const adminKey = crypto.scryptSync(adminPassword, adminSalt, 64).toString('hex');
-    this.data.users.push({
-      id: 'u0000000-0000-0000-0000-000000000001',
-      competition_id: compId,
-      team_id: null,
-      username: process.env.BOOTSTRAP_ADMIN_USERNAME || 'Admin',
-      email: adminEmail,
-      password_hash: `${adminSalt}:${adminKey}`,
-      role: 'ADMIN',
-      callsign: process.env.BOOTSTRAP_ADMIN_CALLSIGN || 'COMMANDER',
-      affiliation: 'XploitX Operations Command',
-      is_banned: false,
-      created_at: new Date().toISOString()
-    });
+    const adminEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || '').trim().toLowerCase();
+    const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;
+    const adminUsername = process.env.BOOTSTRAP_ADMIN_USERNAME;
+    const adminCallsign = process.env.BOOTSTRAP_ADMIN_CALLSIGN;
+    if (adminPassword && adminUsername && adminEmail) {
+      const adminSalt = crypto.randomBytes(16).toString('hex');
+      const adminKey = crypto.scryptSync(adminPassword, adminSalt, 64).toString('hex');
+      this.data.users.push({
+        id: 'u0000000-0000-0000-0000-000000000001',
+        competition_id: compId,
+        team_id: null,
+        username: adminUsername,
+        email: adminEmail,
+        password_hash: `${adminSalt}:${adminKey}`,
+        role: 'ADMIN',
+        callsign: adminCallsign || 'ADMIN',
+        affiliation: 'XploitX Operations Command',
+        is_banned: false,
+        created_at: new Date().toISOString()
+      });
+    }
   }
 
   /**
@@ -397,32 +401,21 @@ class DatabaseEngine {
       // If Atlas has 0 users and environment credentials are provided, provision single authorized administrator.
       // ZERO automatic sample data creation. If Atlas is empty, it remains 100% clean across restarts.
       const usersInMongo = await this.mongoDb.collection('users').countDocuments();
-      if (usersInMongo === 0 && process.env.BOOTSTRAP_ADMIN_EMAIL && process.env.BOOTSTRAP_ADMIN_PASSWORD) {
+      if (usersInMongo === 0 && process.env.BOOTSTRAP_ADMIN_EMAIL && process.env.BOOTSTRAP_ADMIN_PASSWORD && process.env.BOOTSTRAP_ADMIN_USERNAME) {
         console.log('[DATABASE] Bootstrapping authorized administrator from environment credentials...');
         const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL.trim().toLowerCase();
-        let passwordHash;
-        try {
-          const argon2 = require('argon2');
-          passwordHash = await argon2.hash(process.env.BOOTSTRAP_ADMIN_PASSWORD, {
-            type: argon2.argon2id,
-            memoryCost: 65536,
-            timeCost: 3,
-            parallelism: 4
-          });
-        } catch (err) {
-          const adminSalt = crypto.randomBytes(16).toString('hex');
-          const adminKey = crypto.scryptSync(process.env.BOOTSTRAP_ADMIN_PASSWORD, adminSalt, 64).toString('hex');
-          passwordHash = `${adminSalt}:${adminKey}`;
-        }
+        const adminSalt = crypto.randomBytes(16).toString('hex');
+        const adminKey = crypto.scryptSync(process.env.BOOTSTRAP_ADMIN_PASSWORD, adminSalt, 64).toString('hex');
+        const passwordHash = `${adminSalt}:${adminKey}`;
         const adminDoc = {
           id: 'u0000000-0000-0000-0000-000000000001',
           competition_id: 'c0000000-0000-0000-0000-000000000001',
           team_id: null,
-          username: process.env.BOOTSTRAP_ADMIN_USERNAME || 'Admin',
+          username: process.env.BOOTSTRAP_ADMIN_USERNAME,
           email: adminEmail,
           password_hash: passwordHash,
           role: 'ADMIN',
-          callsign: process.env.BOOTSTRAP_ADMIN_CALLSIGN || 'COMMANDER',
+          callsign: process.env.BOOTSTRAP_ADMIN_CALLSIGN || 'ADMIN',
           affiliation: 'XploitX Operations Command',
           is_banned: false,
           created_at: new Date().toISOString()

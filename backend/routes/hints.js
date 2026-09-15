@@ -9,7 +9,7 @@ const challengeService = require('../services/challengeService');
 const db = require('../config/database');
 
 router.get('/', (req, res) => {
-  const isAdmin = req.user && (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN');
+  const isAdmin = req.user && req.user.role === 'ADMIN';
   const teamId = req.user ? (req.user.team_id || (req.user.team && req.user.team.id)) : null;
   const userId = req.user ? req.user.id : null;
 

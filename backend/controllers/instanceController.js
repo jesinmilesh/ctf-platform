@@ -29,7 +29,7 @@ exports.spawn = async (req, res) => {
   // 1. Check competition status
   const competitions = db.getCompetitions ? db.getCompetitions() : [];
   const currentComp = competitions[0];
-  if (currentComp && currentComp.status !== 'LIVE' && req.user.role !== 'ADMIN' && req.user.role !== 'SUPER_ADMIN') {
+  if (currentComp && currentComp.status !== 'LIVE' && req.user.role !== 'ADMIN') {
     return res.status(403).json({
       success: false,
       error: { code: 'COMPETITION_NOT_LIVE', message: 'Instances can only be launched while competition is active.' }
@@ -122,7 +122,7 @@ exports.getAll = (req, res) => {
     });
   }
 
-  const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN';
+  const isAdmin = req.user.role === 'ADMIN';
   const all = instanceManager.getAllInstances();
 
   if (isAdmin) {

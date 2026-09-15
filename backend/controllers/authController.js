@@ -37,22 +37,12 @@ exports.adminLogin = async (req, res, next) => {
       metadata: { role: result.user.role }
     }).catch(() => {});
 
-    res.cookie('xploitx_token', result.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 3600 * 1000,
-      path: '/'
-    });
-
     return res.json({
       success: true,
       token: result.token,
       user: result.user
     });
   } catch (err) {
-    res.clearCookie('xploitx_token');
-
     const isClearanceDenied = err.code === 'CLEARANCE_DENIED' || err.message === 'ADMIN ACCESS REQUIRED';
     const isInactive = err.code === 'ACCOUNT_INACTIVE';
 
@@ -106,14 +96,13 @@ exports.login = async (req, res, next) => {
     }
     const result = await authService.login(username, password);
 
-    const isAdmin = result.user.role === 'ADMIN' || result.user.role === 'SUPER_ADMIN';
+    const isAdmin = result.user.role === 'ADMIN';
     const adminOnly = req.body.adminOnly === true || req.headers['x-admin-portal'] === 'true' || (req.originalUrl && (req.originalUrl.includes('/admin-login') || req.originalUrl.includes('/admin/auth/login')));
 
     if (adminOnly && !isAdmin) {
       if (typeof authService.revokeToken === 'function') {
         authService.revokeToken(result.token);
       }
-      res.clearCookie('xploitx_token');
 
       return res.status(403).json({
         success: false,
@@ -134,14 +123,6 @@ exports.login = async (req, res, next) => {
       network: { ip, userAgent: req.headers ? req.headers['user-agent'] : null },
       metadata: { role: result.user.role, teamId: result.user.team_id || null }
     }).catch(() => {});
-
-    res.cookie('xploitx_token', result.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 3600 * 1000,
-      path: '/'
-    });
 
     res.json(result);
   } catch (err) {
@@ -180,13 +161,6 @@ exports.register = async (req, res, next) => {
       metadata: { role: result.user.role, affiliation: result.user.affiliation }
     }).catch(() => {});
 
-    res.cookie('xploitx_token', result.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 3600 * 1000
-    });
-
     res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ error: 'REGISTRATION_FAILED', message: err.message });
@@ -212,7 +186,7 @@ exports.logout = async (req, res) => {
   const ip = req.headers ? (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '127.0.0.1') : '127.0.0.1';
   const token = req.headers?.authorization?.startsWith('Bearer ')
     ? req.headers.authorization.split(' ')[1]
-    : req.cookies?.['xploitx_token'];
+    : null;
 
   if (token) {
     authService.revokeToken(token);
@@ -224,7 +198,7 @@ exports.logout = async (req, res) => {
   }
 
   if (req.user) {
-    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN';
+    const isAdmin = req.user.role === 'ADMIN';
     auditService.record({
       action: isAdmin ? 'AUTH.ADMIN_LOGOUT' : 'AUTH.LOGOUT',
       category: 'AUTH',
@@ -238,11 +212,5 @@ exports.logout = async (req, res) => {
     }).catch(() => {});
   }
 
-  res.clearCookie('xploitx_token', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/'
-  });
   res.json({ success: true, message: 'Operative signed off' });
 };

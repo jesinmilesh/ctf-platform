@@ -16,20 +16,9 @@ const authService = require('../services/authService');
 function authMiddleware(req, res, next) {
   let token = null;
 
-  // 1. Authorization header: Bearer <token>
   const authHeader = req.headers['authorization'];
   if (authHeader && authHeader.startsWith('Bearer ')) {
     token = authHeader.split(' ')[1];
-  }
-
-  // 2. Cookie fallback
-  if (!token && req.headers.cookie) {
-    const cookies = req.headers.cookie.split(';').reduce((acc, c) => {
-      const [k, v] = c.trim().split('=');
-      acc[k] = v;
-      return acc;
-    }, {});
-    token = cookies['xploitx_token'];
   }
 
   if (!token || authService.isTokenRevoked(token)) {

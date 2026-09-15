@@ -52,7 +52,7 @@ router.post('/auth/logout', authController.logout);
 // ── Authorization Guard ───────────────────────────────────────────────────────
 // Applied to ALL subsequent routes in this file — no exceptions.
 // requireAuth → 401 if not authenticated
-// requireAdmin → 403 if authenticated but not ADMIN/SUPER_ADMIN
+// requireAdmin → 403 if authenticated but not ADMIN
 router.use(requireAuth, requireAdmin);
 
 
@@ -61,7 +61,7 @@ router.get('/me', (req, res) => {
   const db = require('../config/database');
   // Always fetch fresh from database — never trust req.user.role alone
   const freshUser = db.getUsers().find(u => u.id === req.user.id);
-  if (!freshUser || (freshUser.role !== 'ADMIN' && freshUser.role !== 'SUPER_ADMIN')) {
+  if (!freshUser || freshUser.role !== 'ADMIN') {
     return res.status(403).json({ error: 'FORBIDDEN', message: 'Admin clearance required.' });
   }
   res.json({

@@ -266,14 +266,14 @@ async function runTestSuite() {
   if (fileIdx !== -1) db.data.challengeFiles.splice(fileIdx, 1);
 
   // 11. Admin authentication succeeds with callsign, username, or email (and enforces admin-only clearance)
-  const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || 'Commander@Xploitx!Admin';
-  const adminEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || 'jesinmilesh@gmail.com').trim().toLowerCase();
-  const adminUsername = process.env.BOOTSTRAP_ADMIN_USERNAME || 'Admin';
-  const adminCallsign = process.env.BOOTSTRAP_ADMIN_CALLSIGN || 'COMMANDER';
+  const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || 'ci_test_admin_pass!';
+  const adminEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || 'ci_admin@test.local').trim().toLowerCase();
+  const adminUsername = process.env.BOOTSTRAP_ADMIN_USERNAME || 'ci_admin';
+  const adminCallsign = process.env.BOOTSTRAP_ADMIN_CALLSIGN || 'CI_ADMIN';
 
   // Ensure test admin exists in memory for CI runs where .env is not present
   let existingAdmin = db.getUsers().find(u =>
-    (u.role === 'ADMIN' || u.role === 'SUPER_ADMIN') &&
+    u.role === 'ADMIN' &&
     (
       (u.callsign && u.callsign.toUpperCase() === adminCallsign.toUpperCase()) ||
       (u.username && u.username.toLowerCase() === adminUsername.toLowerCase()) ||

@@ -494,7 +494,7 @@ class InstanceManager {
 
     const teamId = user.team_id || user.teamId || null;
     const userId = user.id;
-    const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+    const isAdmin = user.role === 'ADMIN';
 
     const cleanTargetId = String(targetId).trim();
     const allChallenges = db.getChallenges ? db.getChallenges() : [];
@@ -591,7 +591,7 @@ class InstanceManager {
   async getAuthoritativeStatus(instanceIdOrChallengeId, user) {
     const teamId = user ? (user.team_id || user.teamId) : null;
     const userId = user ? user.id : null;
-    const isAdmin = user && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN');
+    const isAdmin = user && user.role === 'ADMIN';
 
     const allInstances = db.getInstances ? db.getInstances() : [];
     const directMatch = allInstances.find(i => i.instanceId === instanceIdOrChallengeId || i.id === instanceIdOrChallengeId);

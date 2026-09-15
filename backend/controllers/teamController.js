@@ -104,8 +104,7 @@ exports.getTeam = async (req, res) => {
 
   const isMemberOrAdmin = req.user && (
     req.user.team_id === team.id ||
-    req.user.role === 'ADMIN' ||
-    req.user.role === 'SUPER_ADMIN'
+    req.user.role === 'ADMIN'
   );
 
   const safeTeam = { ...team };

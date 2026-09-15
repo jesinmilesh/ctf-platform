@@ -11,16 +11,16 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 dotenv.config();
 
 const { MongoClient } = require('mongodb');
-const argon2 = require('argon2');
+const crypto = require('crypto');
 
 const RAW_URL = process.env.DATABASE_URL || process.env.MONGODB_URI;
 const DB_NAME = process.env.MONGODB_DB_NAME || 'xploitx_ctf';
 
-// Admin credentials — EXACT format, no transformations
-const ADMIN_USERNAME  = process.env.BOOTSTRAP_ADMIN_USERNAME  || 'Admin';
-const ADMIN_PASSWORD  = process.env.BOOTSTRAP_ADMIN_PASSWORD  || 'Commander@Xploitx!Admin';
-const ADMIN_EMAIL     = process.env.BOOTSTRAP_ADMIN_EMAIL     || 'jesinmilesh@gmail.com';
-const ADMIN_CALLSIGN  = process.env.BOOTSTRAP_ADMIN_CALLSIGN  || 'COMMANDER';
+// Admin credentials — strictly from environment variables
+const ADMIN_USERNAME  = process.env.BOOTSTRAP_ADMIN_USERNAME;
+const ADMIN_PASSWORD  = process.env.BOOTSTRAP_ADMIN_PASSWORD;
+const ADMIN_EMAIL     = process.env.BOOTSTRAP_ADMIN_EMAIL;
+const ADMIN_CALLSIGN  = process.env.BOOTSTRAP_ADMIN_CALLSIGN;
 
 const COMP_ID = 'c0000000-0000-0000-0000-000000000001';
 
@@ -72,10 +72,6 @@ async function run() {
   console.log('  XPLOITX // FRESH DATABASE RESET');
   console.log('=============================================================');
   console.log(`[DB]    Target: ${DB_NAME}`);
-  console.log(`[ADMIN] Username : ${ADMIN_USERNAME}`);
-  console.log(`[ADMIN] Callsign : ${ADMIN_CALLSIGN}`);
-  console.log(`[ADMIN] Email    : ${ADMIN_EMAIL}`);
-  console.log(`[ADMIN] Password : ${ADMIN_PASSWORD}`);
   console.log('-------------------------------------------------------------');
 
   const client = new MongoClient(RAW_URL);
@@ -102,33 +98,31 @@ async function run() {
   await db.collection('categories').insertMany(DEFAULT_CATEGORIES);
   console.log(`[SEED] ${DEFAULT_CATEGORIES.length} categories inserted.`);
 
-  // 4. Hash admin password with Argon2id (same params as authService)
-  console.log('[ADMIN] Hashing password with Argon2id...');
-  const passwordHash = await argon2.hash(ADMIN_PASSWORD, {
-    type: argon2.argon2id,
-    memoryCost: 65536,
-    timeCost: 3,
-    parallelism: 4
-  });
+  // 4. Hash admin password with native crypto scrypt (salt:key)
+  console.log('[ADMIN] Hashing password with scrypt (salt:key)...');
+  const adminSalt = crypto.randomBytes(16).toString('hex');
+  const adminKey = crypto.scryptSync(ADMIN_PASSWORD, adminSalt, 64).toString('hex');
+  const passwordHash = `${adminSalt}:${adminKey}`;
 
   // Verify the hash immediately
-  const verified = await argon2.verify(passwordHash, ADMIN_PASSWORD);
-  if (!verified) {
-    console.error('FATAL: Argon2 hash verification failed immediately after hashing!');
+  const derivedKey = crypto.scryptSync(ADMIN_PASSWORD, adminSalt, 64);
+  const keyBuffer = Buffer.from(adminKey, 'hex');
+  if (!crypto.timingSafeEqual(keyBuffer, derivedKey)) {
+    console.error('FATAL: Scrypt hash verification failed immediately after hashing!');
     process.exit(1);
   }
-  console.log('[ADMIN] Hash verified. Password hashes correctly.');
+  console.log('[ADMIN] Hash verified successfully.');
 
   // 5. Insert admin user — exact credentials as specified
   const adminDoc = {
     id: 'u0000000-0000-0000-0000-000000000001',
     competition_id: COMP_ID,
     team_id: null,
-    username: ADMIN_USERNAME,      // Exact: "Admin"
-    email: ADMIN_EMAIL,
-    password_hash: passwordHash,   // Argon2id of "Commander@Xploitx!Admin"
+    username: ADMIN_USERNAME,
+    email: (ADMIN_EMAIL || '').trim().toLowerCase(),
+    password_hash: passwordHash,
     role: 'ADMIN',
-    callsign: ADMIN_CALLSIGN,      // Exact: "COMMANDER"
+    callsign: ADMIN_CALLSIGN || 'ADMIN',
     affiliation: 'XploitX Operations Command',
     is_banned: false,
     created_at: new Date().toISOString()
@@ -158,9 +152,7 @@ async function run() {
   console.log(`  categories:   ${catCount} (expected: 8)`);
   console.log(`  competitions: ${compCount} (expected: 1)`);
   console.log('-------------------------------------------------------------');
-  console.log('  Admin login credentials:');
-  console.log(`    Username : ${ADMIN_USERNAME}`);
-  console.log(`    Password : ${ADMIN_PASSWORD}`);
+  console.log('  Administrator seeded with role: ADMIN (salt:key scrypt)');
   console.log('=============================================================');
 
   await client.close();

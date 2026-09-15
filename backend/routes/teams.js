@@ -12,7 +12,7 @@ const { validateIdParam } = require('../middleware/validation');
 
 // Public: list teams (strips access_code for non-members)
 router.get('/', (req, res) => {
-  const isPrivileged = req.user && (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN');
+  const isPrivileged = req.user && req.user.role === 'ADMIN';
   const teams = db.getTeams().map(t => {
     if (isPrivileged || (req.user && req.user.team_id === t.id)) {
       return t;

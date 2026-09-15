@@ -260,7 +260,7 @@ exports.getChallengeFiles = async (req, res) => {
     return res.status(404).json({ success: false, error: 'Challenge not found' });
   }
 
-  const isAdmin = req.user && (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN');
+  const isAdmin = req.user && req.user.role === 'ADMIN';
   if (challenge.status !== 'PUBLISHED' && challenge.status !== 'LIVE' && !isAdmin) {
     return res.status(403).json({ success: false, error: 'Mission classified. Asset access restricted.' });
   }
@@ -300,7 +300,7 @@ exports.downloadChallengeFile = async (req, res) => {
     return res.status(404).json({ error: 'CHALLENGE_NOT_FOUND', message: 'Mission dossier not found' });
   }
 
-  const isAdmin = req.user && (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN');
+  const isAdmin = req.user && req.user.role === 'ADMIN';
   if (challenge.status !== 'PUBLISHED' && challenge.status !== 'LIVE' && !isAdmin) {
     return res.status(403).json({ error: 'ACCESS_RESTRICTED', message: 'Mission classified. Asset access restricted.' });
   }

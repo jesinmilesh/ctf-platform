@@ -10,7 +10,6 @@ dotenv.config();
  */
 
 const crypto = require('crypto');
-const argon2 = require('argon2');
 const db = require('../config/database');
 
 const revokedTokens = new Set();
@@ -26,31 +25,22 @@ class AuthService {
     if (!token) return true;
     return revokedTokens.has(token);
   }
+
   /**
-   * Cryptographically hash password using Argon2id
+   * Cryptographically hash password using native Node.js crypto (salt:key format)
+   * 100% reliable across serverless and all runtime environments without external C++ bindings.
    */
   async hashPassword(password) {
-    return await argon2.hash(password, {
-      type: argon2.argon2id,
-      memoryCost: 65536,
-      timeCost: 3,
-      parallelism: 4
-    });
+    const salt = crypto.randomBytes(16).toString('hex');
+    const key = crypto.scryptSync(password, salt, 64).toString('hex');
+    return `${salt}:${key}`;
   }
 
   /**
-   * Constant-time safe verification of password against stored Argon2id or legacy hash
+   * Constant-time safe verification of password against stored cryptographic hash
    */
   async verifyPassword(password, storedHash) {
     if (!storedHash || !password) return false;
-    if (storedHash.startsWith('$argon2')) {
-      try {
-        return await argon2.verify(storedHash, password);
-      } catch (e) {
-        return false;
-      }
-    }
-    // Backward compatibility for legacy salt:derivedKey format with seamless migration
     if (storedHash.includes(':')) {
       try {
         const [salt, key] = storedHash.split(':');
@@ -90,9 +80,9 @@ class AuthService {
   /**
    * Strict Administrator Authentication:
    * 1. Exact username lookup (no lowercasing, no trimming)
-   * 2. Exact password comparison via Argon2id (no alteration)
+   * 2. Exact password comparison via native crypto scrypt (no alteration)
    * 3. Account active status check
-   * 4. Strict role check (ADMIN or SUPER_ADMIN required)
+   * 4. Strict role check (ADMIN required)
    * 5. Participant credentials return 403 CLEARANCE_DENIED (no session created)
    */
   async adminLogin(usernameOrEmail, password) {
@@ -142,7 +132,7 @@ class AuthService {
       throw err;
     }
 
-    // Strict Argon2id password verification using exact user-entered password
+    // Strict scrypt password verification using exact user-entered password
     const isValid = await this.verifyPassword(rawPassword, user.password_hash);
     if (!isValid) {
       const err = new Error('INVALID ADMIN CREDENTIALS');
@@ -157,8 +147,8 @@ class AuthService {
       throw err;
     }
 
-    // Strict Role Verification: Must explicitly be ADMIN or SUPER_ADMIN
-    const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+    // Strict Role Verification: Must explicitly be ADMIN
+    const isAdmin = user.role === 'ADMIN';
     if (!isAdmin) {
       const err = new Error('ADMIN ACCESS REQUIRED');
       err.code = 'CLEARANCE_DENIED';
@@ -236,7 +226,7 @@ class AuthService {
       throw new Error('OPERATIVE ACCOUNT TERMINATED BY C2 COMMAND.');
     }
 
-    // Cryptographic Password Validation using Argon2id
+    // Cryptographic Password Validation using scrypt
     const isValid = await this.verifyPassword(rawPw, user.password_hash);
     if (!isValid) {
       throw new Error('Invalid operative callsign or passphrase.');

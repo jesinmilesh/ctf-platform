@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error('No authentication token received from server.');
       }
 
-      if (res.user && res.user.role !== 'ADMIN' && res.user.role !== 'SUPER_ADMIN') {
+      if (res.user && res.user.role !== 'ADMIN') {
         throw new Error('ADMIN ACCESS REQUIRED');
       }
 

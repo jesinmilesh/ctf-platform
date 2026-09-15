@@ -33,7 +33,7 @@ class AuthManager {
   }
 
   isAdmin() {
-    return this.user && (this.user.role === 'ADMIN' || this.user.role === 'SUPER_ADMIN');
+    return this.user && this.user.role === 'ADMIN';
   }
 
   async requireAuth(redirectUrl = '/login.html') {
@@ -46,7 +46,7 @@ class AuthManager {
   async requireAdmin(redirectUrl = '/admin/login.html') {
     try {
       const res = await (window.api && window.api.admin && window.api.admin.me ? window.api.admin.me() : window.apiRequest('/admin/me'));
-      if (res && res.user && (res.user.role === 'ADMIN' || res.user.role === 'SUPER_ADMIN')) {
+      if (res && res.user && res.user.role === 'ADMIN') {
         this.user = res.user;
         this.initialized = true;
         this.updateNavUI();

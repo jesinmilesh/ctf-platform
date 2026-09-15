@@ -155,7 +155,7 @@ class ChallengeService {
     if (!c) return null;
 
     // Check if mission is draft/unpublished and operative is not admin
-    const isAdmin = user && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN');
+    const isAdmin = user && user.role === 'ADMIN';
     if ((c.status === 'DRAFT' || (c.status !== 'PUBLISHED' && c.status !== 'LIVE')) && !isAdmin) {
       return null;
     }

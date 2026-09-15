@@ -441,7 +441,7 @@ class AuditService {
     ).length;
 
     const adminActionsToday = todayLogs.filter(l =>
-      l.category === 'ADMIN' || (l.actor && ['ADMIN', 'SUPER_ADMIN'].includes(l.actor.role))
+      l.category === 'ADMIN' || (l.actor && l.actor.role === 'ADMIN')
     ).length;
 
     const participantActionsToday = todayLogs.filter(l =>

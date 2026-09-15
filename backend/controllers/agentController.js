@@ -19,7 +19,7 @@ const agentManager = require('../agents/agentManager');
 
 // ─── Generate pairing code (Admin only) ────────────────────────────────────
 exports.generateCode = async (req, res) => {
-  const isAdmin = req.user?.role === 'ADMIN' || req.user?.role === 'SUPER_ADMIN';
+  const isAdmin = req.user?.role === 'ADMIN';
   if (!isAdmin) {
     return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Admin access required.' } });
   }
@@ -129,7 +129,7 @@ exports.pair = async (req, res) => {
 
 // ─── List all agents ────────────────────────────────────────────────────────
 exports.list = async (req, res) => {
-  const isAdmin = req.user?.role === 'ADMIN' || req.user?.role === 'SUPER_ADMIN';
+  const isAdmin = req.user?.role === 'ADMIN';
   if (!isAdmin) {
     return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Admin access required.' } });
   }
@@ -163,7 +163,7 @@ exports.list = async (req, res) => {
 
 // ─── Get single agent ───────────────────────────────────────────────────────
 exports.getOne = async (req, res) => {
-  const isAdmin = req.user?.role === 'ADMIN' || req.user?.role === 'SUPER_ADMIN';
+  const isAdmin = req.user?.role === 'ADMIN';
   if (!isAdmin) {
     return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Admin access required.' } });
   }
@@ -190,7 +190,7 @@ exports.getOne = async (req, res) => {
 
 // ─── Revoke agent ────────────────────────────────────────────────────────────
 exports.revoke = async (req, res) => {
-  const isAdmin = req.user?.role === 'ADMIN' || req.user?.role === 'SUPER_ADMIN';
+  const isAdmin = req.user?.role === 'ADMIN';
   if (!isAdmin) {
     return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Admin access required.' } });
   }
@@ -219,7 +219,7 @@ exports.revoke = async (req, res) => {
 
 // ─── Get agent's active instances ───────────────────────────────────────────
 exports.getInstances = async (req, res) => {
-  const isAdmin = req.user?.role === 'ADMIN' || req.user?.role === 'SUPER_ADMIN';
+  const isAdmin = req.user?.role === 'ADMIN';
   if (!isAdmin) {
     return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Admin access required.' } });
   }

@@ -13,21 +13,20 @@ const ROLE_HIERARCHY = {
   CHALLENGE_AUTHOR: 3,
   AUTHOR: 3,
   MODERATOR: 4,
-  ADMIN: 5,
-  SUPER_ADMIN: 6
+  ADMIN: 5
 };
 
 const PERMISSIONS = {
-  'challenge.submit': ['PLAYER', 'TEAM_CAPTAIN', 'CHALLENGE_AUTHOR', 'AUTHOR', 'MODERATOR', 'ADMIN', 'SUPER_ADMIN'],
-  'instance.spawn': ['PLAYER', 'TEAM_CAPTAIN', 'CHALLENGE_AUTHOR', 'AUTHOR', 'MODERATOR', 'ADMIN', 'SUPER_ADMIN'],
-  'team.manage': ['TEAM_CAPTAIN', 'ADMIN', 'SUPER_ADMIN'],
-  'challenge.create': ['CHALLENGE_AUTHOR', 'AUTHOR', 'ADMIN', 'SUPER_ADMIN'],
-  'challenge.edit': ['CHALLENGE_AUTHOR', 'AUTHOR', 'ADMIN', 'SUPER_ADMIN'],
-  'challenge.publish': ['ADMIN', 'SUPER_ADMIN'],
-  'challenge.delete': ['ADMIN', 'SUPER_ADMIN'],
-  'admin.access': ['ADMIN', 'SUPER_ADMIN'],
-  'user.ban': ['MODERATOR', 'ADMIN', 'SUPER_ADMIN'],
-  'system.config': ['SUPER_ADMIN']
+  'challenge.submit': ['PLAYER', 'TEAM_CAPTAIN', 'CHALLENGE_AUTHOR', 'AUTHOR', 'MODERATOR', 'ADMIN'],
+  'instance.spawn': ['PLAYER', 'TEAM_CAPTAIN', 'CHALLENGE_AUTHOR', 'AUTHOR', 'MODERATOR', 'ADMIN'],
+  'team.manage': ['TEAM_CAPTAIN', 'ADMIN'],
+  'challenge.create': ['CHALLENGE_AUTHOR', 'AUTHOR', 'ADMIN'],
+  'challenge.edit': ['CHALLENGE_AUTHOR', 'AUTHOR', 'ADMIN'],
+  'challenge.publish': ['ADMIN'],
+  'challenge.delete': ['ADMIN'],
+  'admin.access': ['ADMIN'],
+  'user.ban': ['MODERATOR', 'ADMIN'],
+  'system.config': ['ADMIN']
 };
 
 function requireRole(minimumRole) {
@@ -47,7 +46,7 @@ function requireRole(minimumRole) {
     const requiredLevel = ROLE_HIERARCHY[minimumRole] || 99;
 
     if (userLevel < requiredLevel) {
-      const isAdminRoute = minimumRole === 'ADMIN' || minimumRole === 'SUPER_ADMIN';
+      const isAdminRoute = minimumRole === 'ADMIN';
       auditService.record({
         action: isAdminRoute ? 'SECURITY.FORBIDDEN_ADMIN_ACCESS' : 'SECURITY.FORBIDDEN_RESOURCE_ACCESS',
         category: 'SECURITY',
@@ -87,7 +86,7 @@ function requirePermission(permission) {
     const freshUser = db.getUsers().find(u => u.id === req.user.id);
     const activeRole = freshUser ? freshUser.role : req.user.role;
 
-    const allowedRoles = PERMISSIONS[permission] || ['ADMIN', 'SUPER_ADMIN'];
+    const allowedRoles = PERMISSIONS[permission] || ['ADMIN'];
     if (!allowedRoles.includes(activeRole)) {
       return res.status(403).json({
         success: false,
@@ -109,7 +108,7 @@ module.exports = {
   requireAdmin: requireRole('ADMIN'),
   requireAuthor: requireRole('AUTHOR'),
   requireModerator: requireRole('MODERATOR'),
-  requireSuperAdmin: requireRole('SUPER_ADMIN'),
+  requireSuperAdmin: requireRole('ADMIN'),
   ROLE_HIERARCHY,
   PERMISSIONS
 };

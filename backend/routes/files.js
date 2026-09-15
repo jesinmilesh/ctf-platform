@@ -9,7 +9,7 @@ const fileController = require('../controllers/fileController');
 const db = require('../config/database');
 
 router.get('/', (req, res) => {
-  const isAdmin = req.user && (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN');
+  const isAdmin = req.user && req.user.role === 'ADMIN';
   const challenges = db.getChallenges();
   const publishedChallengeIds = new Set(
     challenges.filter(c => c.status === 'PUBLISHED' || c.status === 'LIVE' || isAdmin).map(c => c.id)

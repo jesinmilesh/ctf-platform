@@ -76,12 +76,14 @@ async function runTests() {
     }
   }
 
+  const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;
+
   // -------------------------------------------------------------------------
   // Test 1: Admin correct credentials via canonical POST /api/v1/admin/auth/login
   // -------------------------------------------------------------------------
   const adminLoginRes = await post('/api/v1/admin/auth/login', {
     username: 'Admin',
-    password: 'Commander@Xploitx!Admin'
+    password: adminPassword
   });
   assert(
     adminLoginRes.status === 200 &&
@@ -110,7 +112,7 @@ async function runTests() {
   // -------------------------------------------------------------------------
   const wrongUserRes = await post('/api/v1/admin/auth/login', {
     username: 'NonExistentAdminUser',
-    password: 'Commander@Xploitx!Admin'
+    password: adminPassword
   });
   assert(
     wrongUserRes.status === 401 &&
@@ -123,7 +125,7 @@ async function runTests() {
   // -------------------------------------------------------------------------
   const lowerCaseRes = await post('/api/v1/admin/auth/login', {
     username: 'admin', // lowercase
-    password: 'Commander@Xploitx!Admin'
+    password: adminPassword
   });
   assert(
     lowerCaseRes.status === 401,
@@ -132,7 +134,7 @@ async function runTests() {
 
   const upperCaseRes = await post('/api/v1/admin/auth/login', {
     username: 'ADMIN', // all uppercase
-    password: 'Commander@Xploitx!Admin'
+    password: adminPassword
   });
   assert(
     upperCaseRes.status === 401,
@@ -245,12 +247,13 @@ async function runTests() {
   // -------------------------------------------------------------------------
   // Test 11: MongoDB Atlas database admin account integrity
   // -------------------------------------------------------------------------
-  const adminInDb = db.getUsers().find(u => u.username === 'Admin');
+  const adminInDb = db.getUsers().find(u => u.username === (process.env.BOOTSTRAP_ADMIN_USERNAME || 'Admin'));
   assert(
     adminInDb &&
     adminInDb.role === 'ADMIN' &&
-    adminInDb.password_hash.startsWith('$argon2'),
-    'Test 11: MongoDB Atlas Admin account preserved with role ADMIN and Argon2id hash'
+    adminInDb.password_hash &&
+    adminInDb.password_hash.includes(':'),
+    'Test 11: Admin account preserved with role ADMIN and native scrypt hash'
   );
 
   console.log(`\n================================================================`);

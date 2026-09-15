@@ -21,7 +21,7 @@ exports.downloadFile = async (req, res) => {
     return res.status(403).json({ error: 'FORBIDDEN', message: 'Unauthorized asset access' });
   }
 
-  const isAdmin = req.user && (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN');
+  const isAdmin = req.user && req.user.role === 'ADMIN';
   if (challenge.status !== 'PUBLISHED' && challenge.status !== 'LIVE' && !isAdmin) {
     return res.status(403).json({ error: 'ACCESS_RESTRICTED', message: 'Mission classified. Asset access restricted.' });
   }

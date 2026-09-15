@@ -80,7 +80,7 @@ function massAssignmentShield(req, res, next) {
     return next();
   }
 
-  const isAdmin = req.user && (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN');
+  const isAdmin = req.user && req.user.role === 'ADMIN';
   if (isAdmin) {
     return next(); // Administrators have elevated management clearance
   }

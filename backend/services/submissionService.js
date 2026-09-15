@@ -56,7 +56,7 @@ class SubmissionService {
     }
 
     // Verify challenge publication status
-    const isAdmin = user && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN');
+    const isAdmin = user && user.role === 'ADMIN';
     if (challenge.status !== 'PUBLISHED' && challenge.status !== 'LIVE' && !isAdmin) {
       return { success: false, correct: false, status: 'FORBIDDEN', message: 'Mission dossier classified or in draft status' };
     }

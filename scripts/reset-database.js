@@ -270,33 +270,22 @@ async function run() {
   await setColl.updateOne({ id: DEFAULT_SETTINGS.id }, { $set: DEFAULT_SETTINGS }, { upsert: true });
 
   // 5. Optional Authorized Bootstrap Admin (Section 12)
-  if (withBootstrapAdmin || (process.env.BOOTSTRAP_ADMIN_EMAIL && process.env.BOOTSTRAP_ADMIN_PASSWORD)) {
-    const adminEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || 'admin@xploitxctf.me').trim().toLowerCase();
-    const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || 'admin123';
-    let passwordHash;
-    try {
-      const argon2 = require('argon2');
-      passwordHash = await argon2.hash(adminPassword, {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-        parallelism: 4
-      });
-    } catch (err) {
-      const crypto = require('crypto');
-      const adminSalt = crypto.randomBytes(16).toString('hex');
-      const adminKey = crypto.scryptSync(adminPassword, adminSalt, 64).toString('hex');
-      passwordHash = `${adminSalt}:${adminKey}`;
-    }
+  if (withBootstrapAdmin || (process.env.BOOTSTRAP_ADMIN_EMAIL && process.env.BOOTSTRAP_ADMIN_PASSWORD && process.env.BOOTSTRAP_ADMIN_USERNAME)) {
+    const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL.trim().toLowerCase();
+    const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;
+    const crypto = require('crypto');
+    const adminSalt = crypto.randomBytes(16).toString('hex');
+    const adminKey = crypto.scryptSync(adminPassword, adminSalt, 64).toString('hex');
+    const passwordHash = `${adminSalt}:${adminKey}`;
     const adminDoc = {
       id: 'u0000000-0000-0000-0000-000000000001',
       competition_id: DEFAULT_COMPETITION.id,
       team_id: null,
-      username: process.env.BOOTSTRAP_ADMIN_USERNAME || 'Admin',
+      username: process.env.BOOTSTRAP_ADMIN_USERNAME,
       email: adminEmail,
       password_hash: passwordHash,
       role: 'ADMIN',
-      callsign: process.env.BOOTSTRAP_ADMIN_CALLSIGN || 'COMMANDER',
+      callsign: process.env.BOOTSTRAP_ADMIN_CALLSIGN || 'ADMIN',
       affiliation: 'XploitX Operations Command',
       is_banned: false,
       created_at: new Date().toISOString()

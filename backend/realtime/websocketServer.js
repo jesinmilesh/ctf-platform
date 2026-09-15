@@ -38,25 +38,40 @@ class TacticalWebSocketServer {
 
     try {
       const parts = token.split(':');
-      if (parts.length >= 4) {
-        const [userId, username, timestamp, signature] = parts;
-        const payload = `${userId}:${username}:${timestamp}`;
+      let validUserId = null;
+      if (parts.length === 5) {
+        const [userId, username, timestamp, nonce, signature] = parts;
+        const payload = `${userId}:${username}:${timestamp}:${nonce}`;
         const secret = process.env.JWT_SECRET || 'c2_command_jwt_super_secret_key_change_in_production';
         const expectedSignature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
-
         const tokenTime = parseInt(timestamp, 10);
         const isExpired = isNaN(tokenTime) || (Date.now() - tokenTime) > (7 * 24 * 3600 * 1000);
 
         if (!isExpired && crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expectedSignature, 'hex'))) {
-          const user = db.getUsers().find(u => u.id === userId && !u.is_banned);
-          if (user) {
-            return {
-              id: user.id,
-              username: user.username,
-              role: user.role,
-              team_id: user.team_id
-            };
-          }
+          validUserId = userId;
+        }
+      } else if (parts.length === 4) {
+        const [userId, username, timestamp, signature] = parts;
+        const payload = `${userId}:${username}:${timestamp}`;
+        const secret = process.env.JWT_SECRET || 'c2_command_jwt_super_secret_key_change_in_production';
+        const expectedSignature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+        const tokenTime = parseInt(timestamp, 10);
+        const isExpired = isNaN(tokenTime) || (Date.now() - tokenTime) > (7 * 24 * 3600 * 1000);
+
+        if (!isExpired && crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expectedSignature, 'hex'))) {
+          validUserId = userId;
+        }
+      }
+
+      if (validUserId) {
+        const user = db.getUsers().find(u => u.id === validUserId && !u.is_banned);
+        if (user) {
+          return {
+            id: user.id,
+            username: user.username,
+            role: user.role,
+            team_id: user.team_id
+          };
         }
       }
     } catch (err) {}
@@ -138,7 +153,7 @@ class TacticalWebSocketServer {
     for (const client of this.clients) {
       if (client.readyState === 1) { // OPEN
         const clientUser = client.user;
-        const isClientAdmin = clientUser && (clientUser.role === 'ADMIN' || clientUser.role === 'SUPER_ADMIN');
+        const isClientAdmin = clientUser && clientUser.role === 'ADMIN';
 
         // 1. Admin events only delivered to authenticated admins
         if (isAdminEvent && !isClientAdmin) {
