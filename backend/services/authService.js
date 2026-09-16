@@ -83,10 +83,10 @@ class AuthService {
    * 6. Participant credentials return 403 CLEARANCE_DENIED (no admin session created)
    */
   async adminLogin(usernameOrEmail, password) {
-    const rawUsername = String(usernameOrEmail || '');
+    const rawIdentifier = String(usernameOrEmail || '').trim();
     const rawPassword = String(password || '');
 
-    if (!rawUsername || !rawPassword) {
+    if (!rawIdentifier || !rawPassword) {
       const err = new Error('INVALID ADMIN CREDENTIALS');
       err.code = 'INVALID_CREDENTIALS';
       throw err;
@@ -94,14 +94,20 @@ class AuthService {
 
     let user = null;
 
-    // Direct MongoDB Atlas query with exact matching (authoritative source of truth)
+    // Direct MongoDB Atlas query with exact + case-insensitive matching (authoritative source of truth)
     if (db.isMongo && db.mongoDb) {
       try {
+        const escaped = rawIdentifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const ciRegex = new RegExp(`^${escaped}$`, 'i');
+
         const doc = await db.mongoDb.collection('users').findOne({
           $or: [
-            { username: rawUsername },
-            { email: rawUsername },
-            { callsign: rawUsername }
+            { username: rawIdentifier },
+            { email: rawIdentifier },
+            { callsign: rawIdentifier },
+            { username: { $regex: ciRegex } },
+            { email: { $regex: ciRegex } },
+            { callsign: { $regex: ciRegex } }
           ]
         });
         if (doc) {
@@ -123,10 +129,11 @@ class AuthService {
 
     // Check memory store if Atlas was not connected or document not found there
     if (!user) {
+      const lowerIdentifier = rawIdentifier.toLowerCase();
       user = db.getUsers().find(u =>
-        (u && u.username && u.username === rawUsername) ||
-        (u && u.email && u.email === rawUsername) ||
-        (u && u.callsign && u.callsign === rawUsername)
+        (u && u.username && (u.username === rawIdentifier || u.username.toLowerCase() === lowerIdentifier)) ||
+        (u && u.email && (u.email === rawIdentifier || u.email.toLowerCase() === lowerIdentifier)) ||
+        (u && u.callsign && (u.callsign === rawIdentifier || u.callsign.toLowerCase() === lowerIdentifier))
       );
     }
 
@@ -192,28 +199,36 @@ class AuthService {
   }
 
   async login(usernameOrEmail, password) {
-    const rawTerm = String(usernameOrEmail || '');
+    const rawTerm = String(usernameOrEmail || '').trim();
     const rawPw = String(password || '');
 
     if (!rawTerm || !rawPw) {
       throw new Error('Invalid operative callsign or passphrase.');
     }
 
-    // Exact match
+    const lowerTerm = rawTerm.toLowerCase();
+
+    // Exact + Case-insensitive match in memory
     let user = db.getUsers().find(u =>
-      (u && u.username && u.username === rawTerm) ||
-      (u && u.email && u.email === rawTerm) ||
-      (u && u.callsign && u.callsign === rawTerm)
+      (u && u.username && (u.username === rawTerm || u.username.toLowerCase() === lowerTerm)) ||
+      (u && u.email && (u.email === rawTerm || u.email.toLowerCase() === lowerTerm)) ||
+      (u && u.callsign && (u.callsign === rawTerm || u.callsign.toLowerCase() === lowerTerm))
     );
 
-    // Fallback: MongoDB Atlas query
+    // Fallback: MongoDB Atlas query with regex for case-insensitivity
     if (!user && db.isMongo && db.mongoDb) {
       try {
+        const escaped = rawTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const ciRegex = new RegExp(`^${escaped}$`, 'i');
+
         const doc = await db.mongoDb.collection('users').findOne({
           $or: [
             { username: rawTerm },
             { email: rawTerm },
-            { callsign: rawTerm }
+            { callsign: rawTerm },
+            { username: { $regex: ciRegex } },
+            { email: { $regex: ciRegex } },
+            { callsign: { $regex: ciRegex } }
           ]
         });
         if (doc) {

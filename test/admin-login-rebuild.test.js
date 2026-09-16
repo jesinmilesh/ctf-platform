@@ -151,14 +151,14 @@ async function runRebuildTestSuite() {
     'Admin login with non-existent username returns 401 INVALID_CREDENTIALS'
   );
 
-  // 8. Strict Case Sensitivity ('admin' vs 'Admin')
+  // 8. Case-Insensitive Identifier Resolution ('admin' and 'ADMIN' match 'Admin')
   const lowercaseRes = await post('/api/v1/admin/auth/login', {
     username: 'admin',
     password: adminPassword
   });
   assert(
-    lowercaseRes.status === 401,
-    'Case-sensitive username enforced: "admin" rejected when account is "Admin"'
+    lowercaseRes.status === 200 && lowercaseRes.body.success === true,
+    'Case-insensitive username supported: "admin" resolves cleanly to Admin'
   );
 
   const uppercaseRes = await post('/api/v1/admin/auth/login', {
@@ -166,8 +166,8 @@ async function runRebuildTestSuite() {
     password: adminPassword
   });
   assert(
-    uppercaseRes.status === 401,
-    'Case-sensitive username enforced: "ADMIN" rejected when account is "Admin"'
+    uppercaseRes.status === 200 && uppercaseRes.body.success === true,
+    'Case-insensitive username supported: "ADMIN" resolves cleanly to Admin'
   );
 
   // 9. Missing credentials

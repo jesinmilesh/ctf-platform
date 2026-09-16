@@ -11,8 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     errBox.style.display = 'none';
 
-    // Read credentials exactly as typed — do NOT trim or modify username or password
-    const username = document.getElementById('adminUsername').value;
+    // Trim username whitespace; keep password exactly as entered (never trim or modify passphrase)
+    const username = (document.getElementById('adminUsername').value || '').trim();
     const password = document.getElementById('adminPassword').value;
 
     if (!username || !password) {
