@@ -9,17 +9,30 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { BaseStorageProvider } = require('./storageProvider');
 
 class LocalStorageProvider extends BaseStorageProvider {
   constructor(customRoot) {
     super();
     const envRoot = process.env.STORAGE_LOCAL_ROOT;
-    this.rootDir = path.resolve(customRoot || envRoot || path.join(__dirname, '..', '..', 'challenge-storage'));
+    let targetDir = path.resolve(customRoot || envRoot || path.join(__dirname, '..', '..', 'challenge-storage'));
 
-    if (!fs.existsSync(this.rootDir)) {
-      fs.mkdirSync(this.rootDir, { recursive: true });
+    try {
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+    } catch (e) {
+      // In serverless / read-only filesystem environments (e.g. Vercel, AWS Lambda),
+      // fallback to the OS temporary directory
+      targetDir = path.join(os.tmpdir(), 'xploitx-challenge-storage');
+      try {
+        if (!fs.existsSync(targetDir)) {
+          fs.mkdirSync(targetDir, { recursive: true });
+        }
+      } catch (_) {}
     }
+    this.rootDir = targetDir;
   }
 
   /**

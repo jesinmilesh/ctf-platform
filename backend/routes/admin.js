@@ -19,27 +19,101 @@ const { requireAdmin } = require('../middleware/roles');
 const { adminLoginLimiter } = require('../middleware/rateLimit');
 
 // ── File Upload Config ────────────────────────────────────────────────────────
-const MAX_FILE_SIZE = parseInt(process.env.MAX_CHALLENGE_FILE_SIZE, 10) || (100 * 1024 * 1024);
+const MAX_FILE_SIZE = parseInt(process.env.MAX_CHALLENGE_FILE_SIZE, 10) || (50 * 1024 * 1024);
 
-const ALLOWED_MIME_TYPES = new Set([
-  'application/zip', 'application/x-zip', 'application/x-zip-compressed',
-  'application/octet-stream', 'application/x-tar', 'application/gzip',
-  'application/x-gzip', 'application/x-7z-compressed', 'application/x-rar-compressed',
-  'application/pdf', 'text/plain', 'text/x-python', 'text/javascript', 'text/html',
-  'image/png', 'image/jpeg', 'image/gif', 'binary/octet-stream'
+const BLOCKED_EXTENSIONS = new Set([
+  '.exe', '.dll', '.bat', '.cmd', '.vbs', '.js.exe', '.scr', '.com', '.msi'
 ]);
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE, files: 10 },
   fileFilter: (req, file, cb) => {
-    const dangerous = new Set(['application/x-msdownload', 'application/x-msdos-program']);
-    if (dangerous.has(file.mimetype)) {
-      return cb(new Error('FILE_TYPE_REJECTED: Executable file types are not allowed.'), false);
+    const dangerousMimes = new Set([
+      'application/x-msdownload',
+      'application/x-msdos-program',
+      'application/x-executable',
+      'application/x-dosexec'
+    ]);
+    if (dangerousMimes.has(file.mimetype)) {
+      return cb(new Error('FILE_TYPE_REJECTED: Windows/DOS executable files (.exe, .dll) are prohibited.'), false);
+    }
+    const ext = require('path').extname(file.originalname || '').toLowerCase();
+    if (BLOCKED_EXTENSIONS.has(ext)) {
+      return cb(new Error(`FILE_TYPE_REJECTED: File extension '${ext}' is prohibited.`), false);
     }
     cb(null, true);
   }
 });
+
+// Resilient Multer upload middleware that catches all errors and returns standardized JSON
+const challengeUploadMiddleware = (req, res, next) => {
+  const uploader = upload.fields([
+    { name: 'files', maxCount: 10 },
+    { name: 'file', maxCount: 1 }
+  ]);
+
+  uploader(req, res, (err) => {
+    if (err) {
+      if (err instanceof multer.MulterError || (typeof err.code === 'string' && err.code.startsWith('LIMIT_'))) {
+        let status = 400;
+        let code = err.code || 'UPLOAD_ERROR';
+        let message = err.message || 'File upload failed.';
+
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          status = 413;
+          code = 'FILE_TOO_LARGE';
+          message = `The uploaded file exceeds the allowed size limit of ${Math.round(MAX_FILE_SIZE / (1024 * 1024))}MB.`;
+        } else if (err.code === 'LIMIT_FILE_COUNT') {
+          status = 400;
+          code = 'TOO_MANY_FILES';
+          message = 'Maximum 10 files allowed per upload.';
+        } else if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+          status = 400;
+          code = 'UNEXPECTED_FIELD';
+          message = `Unexpected multipart field '${err.field || 'unknown'}'. Please use field 'files' or 'file'.`;
+        }
+
+        return res.status(status).json({
+          success: false,
+          code,
+          message,
+          error: { code, message },
+          requestId: req.id || 'req-unknown'
+        });
+      }
+
+      if (typeof err.message === 'string' && err.message.startsWith('FILE_TYPE_REJECTED')) {
+        const message = err.message.replace(/^FILE_TYPE_REJECTED:\s*/, '');
+        return res.status(415).json({
+          success: false,
+          code: 'FILE_TYPE_NOT_ALLOWED',
+          message,
+          error: { code: 'FILE_TYPE_NOT_ALLOWED', message },
+          requestId: req.id || 'req-unknown'
+        });
+      }
+
+      return res.status(400).json({
+        success: false,
+        code: 'UPLOAD_FAILED',
+        message: err.message || 'Unable to upload file.',
+        error: { code: 'UPLOAD_FAILED', message: err.message || 'Unable to upload file.' },
+        requestId: req.id || 'req-unknown'
+      });
+    }
+
+    // Normalize req.files to a flat array so controller can process identically
+    if (req.files) {
+      const allFiles = [];
+      if (Array.isArray(req.files.files)) allFiles.push(...req.files.files);
+      if (Array.isArray(req.files.file)) allFiles.push(...req.files.file);
+      req.files = allFiles;
+    }
+
+    next();
+  });
+};
 
 // ── Dedicated Public Admin Authentication Routes ──────────────────────────────
 // Canonical dedicated Admin login: POST /api/v1/admin/auth/login
@@ -91,7 +165,7 @@ router.get('/challenges/:id/files', (req, res) => adminController.getChallengeFi
 router.post('/challenges', (req, res) => adminController.createChallenge(req, res));
 router.put('/challenges/:id', (req, res) => adminController.updateChallenge(req, res));
 router.delete('/challenges/:id', (req, res) => adminController.deleteChallenge(req, res));
-router.post('/challenges/:id/files', upload.array('files', 10), (req, res) => adminController.uploadChallengeFiles(req, res));
+router.post('/challenges/:id/files', challengeUploadMiddleware, (req, res) => adminController.uploadChallengeFiles(req, res));
 router.delete('/challenges/:id/files/:fileId', (req, res) => adminController.deleteChallengeFile(req, res));
 router.post('/challenges/test-flag', (req, res) => adminController.testFlag?.(req, res) || res.json({ valid: false }));
 

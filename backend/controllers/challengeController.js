@@ -307,7 +307,16 @@ exports.downloadChallengeFile = async (req, res) => {
 
   const fileRecord = fileService.getFileRecord(fileId);
   const targetChallengeId = challenge.id;
-  const altChallengeIds = [challenge.id, String(challenge._id || ''), challenge.slug, challenge.mission_id, challenge.legacy_id].filter(Boolean);
+  const altChallengeIds = [
+    challenge.id,
+    challenge.challengeId,
+    challenge.publicRouteId,
+    String(challenge._id || ''),
+    challenge.slug,
+    challenge.mission_id,
+    challenge.legacy_id
+  ].filter(Boolean).map(s => String(s).trim());
+
   const fileBelongsToChallenge = fileRecord && (
     altChallengeIds.includes(String(fileRecord.challenge_id || '').trim()) ||
     altChallengeIds.includes(String(fileRecord.challengeId || '').trim()) ||

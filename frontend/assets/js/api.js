@@ -171,13 +171,74 @@ const api = {
       const token = localStorage.getItem('xploitx_token');
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch(`${API_BASE}/admin/challenges/${id}/files`, {
-        method: 'POST',
-        headers,
-        body: formData
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || data.message || 'Asset upload failed');
+
+      let res;
+      try {
+        res = await fetch(`${API_BASE}/admin/challenges/${id}/files`, {
+          method: 'POST',
+          credentials: 'include',
+          headers,
+          body: formData
+        });
+      } catch (networkErr) {
+        throw new Error('Network connection failure. Unable to reach mission upload service.');
+      }
+
+      // Safe response body decoding (never throw "Unexpected token 'R'")
+      let data = null;
+      let rawText = '';
+      const contentType = res.headers.get('content-type') || '';
+
+      if (contentType.includes('application/json')) {
+        try {
+          data = await res.json();
+        } catch (jsonErr) {
+          data = null;
+        }
+      } else {
+        try {
+          rawText = await res.text();
+        } catch (_) {}
+      }
+
+      if (!res.ok) {
+        // Map HTTP status codes to tactical, actionable messages
+        let userMessage = '';
+
+        if (res.status === 413) {
+          userMessage = 'FILE TOO LARGE: The uploaded file exceeds the allowed transfer limit (4.5 MB on serverless, 50 MB on dedicated).';
+        } else if (res.status === 415) {
+          userMessage = 'FILE TYPE NOT ALLOWED: Executable files (.exe, .dll, scripts) are prohibited.';
+        } else if (res.status === 401) {
+          userMessage = 'ADMIN LOGIN REQUIRED: Your session has expired. Please re-authenticate into C2 Control Room.';
+        } else if (res.status === 403) {
+          userMessage = 'ADMIN ACCESS REQUIRED: Insufficient clearance to upload challenge files.';
+        } else if (res.status === 404) {
+          userMessage = 'CHALLENGE NOT FOUND: The target mission could not be resolved.';
+        } else if (res.status === 429) {
+          userMessage = 'UPLOAD RATE LIMIT EXCEEDED: Stand by before transmitting additional assets.';
+        } else if (res.status >= 500) {
+          userMessage = 'STORAGE SERVICE UNAVAILABLE: Mission storage service temporarily unreachable. Please retry shortly.';
+        }
+
+        // If server provided structured JSON error, prioritize that message
+        const serverError = data && (
+          (data.error && typeof data.error === 'object' ? data.error.message : data.error) ||
+          data.message
+        );
+
+        const finalMessage = serverError || userMessage || (rawText && rawText.length < 120 ? rawText.trim() : `Upload failed (HTTP ${res.status}).`);
+        const err = new Error(finalMessage);
+        err.status = res.status;
+        err.code = (data && (data.code || (data.error && data.error.code))) || `HTTP_${res.status}`;
+        throw err;
+      }
+
+      // If success but not JSON (rare proxy edge case)
+      if (!data) {
+        return { success: true, message: 'Asset upload successful.' };
+      }
+
       return data;
     },
     deleteChallengeFile: (challengeId, fileId) => apiRequest(`/admin/challenges/${challengeId}/files/${fileId}`, { method: 'DELETE' }),

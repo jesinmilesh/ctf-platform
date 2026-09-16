@@ -11,6 +11,7 @@ const Events = {
   CHALLENGE_UPDATED: 'challenge.updated',
   CHALLENGE_DELETED: 'challenge.deleted',
   CHALLENGE_FILE_ADDED: 'challenge.file_added',
+  CHALLENGE_FILE_DELETED: 'challenge.file_deleted',
   CHALLENGE_FIRST_BLOOD: 'challenge.first_blood',
 
   // Scoreboard & Submissions

@@ -70,14 +70,20 @@ let activeProviderInstance = null;
 function getStorageProvider() {
   if (activeProviderInstance) return activeProviderInstance;
 
-  const providerType = (process.env.STORAGE_PROVIDER || 'local').toLowerCase();
+  const providerType = (process.env.STORAGE_PROVIDER || 'auto').toLowerCase();
 
   if (providerType === 'object' || providerType === 's3') {
     const ObjectStorageProvider = require('./objectStorageProvider');
     activeProviderInstance = new ObjectStorageProvider();
-  } else {
+  } else if (providerType === 'local') {
     const LocalStorageProvider = require('./localStorageProvider');
     activeProviderInstance = new LocalStorageProvider();
+  } else {
+    // Default / 'auto' / 'gridfs' / 'mongo':
+    // Use GridFSStorageProvider which persists to MongoDB Atlas when available
+    // and seamlessly falls back to LocalStorageProvider for offline development
+    const GridFSStorageProvider = require('./gridFsStorageProvider');
+    activeProviderInstance = new GridFSStorageProvider();
   }
 
   return activeProviderInstance;

@@ -132,43 +132,135 @@ class AdminController {
   }
 
   async uploadChallengeFiles(req, res) {
-    const challengeId = req.params.id ? String(req.params.id).trim() : '';
+    const rawId = req.params.id ? String(req.params.id).trim() : '';
 
     // Hydrate cache from Atlas if empty (important after server restart)
     if (db.isMongo && db.mongoDb && db.getChallenges().length === 0) {
       await db.syncFromMongo().catch(() => {});
     }
 
-    const challenge = db.getChallenges().find(c =>
-      c.id === challengeId ||
-      (c._id && String(c._id) === challengeId) ||
-      c.slug === challengeId ||
-      c.mission_id === challengeId
+    let challenge = db.getChallenges().find(c =>
+      c.id === rawId ||
+      c.challengeId === rawId ||
+      c.publicRouteId === rawId ||
+      (c._id && String(c._id) === rawId) ||
+      c.slug === rawId ||
+      c.mission_id === rawId
     );
+
+    // Direct Atlas lookup fallback
+    if (!challenge && db.isMongo && db.mongoDb && rawId) {
+      try {
+        const orConditions = [
+          { id: rawId },
+          { challengeId: rawId },
+          { publicRouteId: rawId },
+          { slug: rawId },
+          { mission_id: rawId }
+        ];
+        if (rawId.length === 24 && /^[0-9a-fA-F]{24}$/.test(rawId)) {
+          const { ObjectId } = require('mongodb');
+          orConditions.push({ _id: new ObjectId(rawId) });
+        }
+        const doc = await db.mongoDb.collection('challenges').findOne({ $or: orConditions });
+        if (doc) {
+          challenge = doc;
+          challenge.id = doc.id || (doc._id ? doc._id.toString() : rawId);
+          db.getChallenges().push(challenge);
+        }
+      } catch (_) {}
+    }
+
     if (!challenge) {
-      return res.status(404).json({ success: false, error: 'Challenge not found' });
+      return res.status(404).json({
+        success: false,
+        code: 'CHALLENGE_NOT_FOUND',
+        message: 'Challenge not found for target identifier.',
+        error: { code: 'CHALLENGE_NOT_FOUND', message: 'Challenge not found for target identifier.' }
+      });
     }
 
     const uploadedFiles = req.files || (req.file ? [req.file] : []);
     if (!uploadedFiles || uploadedFiles.length === 0) {
-      return res.status(400).json({ success: false, error: 'No files provided in multipart request' });
+      return res.status(400).json({
+        success: false,
+        code: 'NO_FILES_PROVIDED',
+        message: 'No files provided in multipart request. Please select files to upload.',
+        error: { code: 'NO_FILES_PROVIDED', message: 'No files provided in multipart request.' }
+      });
     }
 
     try {
-      // CANONICAL ID: use the public challenge.id for file association
+      // Authoritative Canonical challenge ID for database relationship
       const canonicalId = challenge.id;
       const savedRecords = [];
+
       for (const file of uploadedFiles) {
+        const originalName = file.originalname || file.name || 'asset.bin';
+        const buffer = file.buffer;
+
+        if (!buffer || buffer.length === 0) {
+          return res.status(400).json({
+            success: false,
+            code: 'EMPTY_FILE',
+            message: `Uploaded file '${originalName}' is empty (0 bytes).`,
+            error: { code: 'EMPTY_FILE', message: `Uploaded file '${originalName}' is empty.` }
+          });
+        }
+
+        // ZIP Archive Security Inspection (Section 10 & 11)
+        if (originalName.toLowerCase().endsWith('.zip') || file.mimetype === 'application/zip') {
+          // Verify ZIP magic bytes PK\x03\x04 or PK\x05\x06 (empty zip) or PK\x07\x08
+          if (buffer.length < 4 || buffer[0] !== 0x50 || buffer[1] !== 0x4B) {
+            return res.status(400).json({
+              success: false,
+              code: 'INVALID_ZIP_SIGNATURE',
+              message: `The file '${originalName}' is not a valid ZIP archive (missing PK signature).`,
+              error: { code: 'INVALID_ZIP_SIGNATURE', message: 'Invalid ZIP archive signature.' }
+            });
+          }
+
+          // Scan ZIP headers for path traversal (Zip Slip protection) without extracting
+          let offset = 0;
+          while (offset + 30 < buffer.length) {
+            if (buffer[offset] === 0x50 && buffer[offset+1] === 0x4B && buffer[offset+2] === 0x03 && buffer[offset+3] === 0x04) {
+              const fileNameLen = buffer.readUInt16LE(offset + 26);
+              const extraLen = buffer.readUInt16LE(offset + 28);
+              if (offset + 30 + fileNameLen <= buffer.length) {
+                const entryName = buffer.toString('utf8', offset + 30, offset + 30 + fileNameLen);
+                if (entryName.includes('../') || entryName.includes('..\\') || path.isAbsolute(entryName)) {
+                  return res.status(400).json({
+                    success: false,
+                    code: 'ZIP_SECURITY_VIOLATION',
+                    message: `Archive entry '${entryName}' contains path traversal sequences. Upload rejected.`,
+                    error: { code: 'ZIP_SECURITY_VIOLATION', message: 'Zip Slip path traversal entry detected.' }
+                  });
+                }
+              }
+              offset += 30 + fileNameLen + extraLen;
+            } else {
+              offset++;
+              if (offset > 50000 && offset % 5000 !== 0) {
+                const nextPK = buffer.indexOf(Buffer.from([0x50, 0x4B, 0x03, 0x04]), offset);
+                if (nextPK === -1) break;
+                offset = nextPK;
+              }
+            }
+          }
+        }
+
         const record = await fileService.saveChallengeFile({
           challengeId: canonicalId,
-          filename: file.originalname || file.name,
-          buffer: file.buffer,
+          filename: originalName,
+          buffer: buffer,
           mimeType: file.mimetype,
           user: req.user
         });
+
         savedRecords.push({
           id: record.id,
           filename: record.filename,
+          originalName: record.originalName || record.filename,
           name: record.filename,
           size: record.file_size_bytes,
           file_size_bytes: record.file_size_bytes,
@@ -178,42 +270,87 @@ class AdminController {
           downloadUrl: `/api/v1/challenges/${canonicalId}/files/${record.id}/download`
         });
       }
-      res.status(201).json({ success: true, files: savedRecords });
+
+      return res.status(201).json({
+        success: true,
+        files: savedRecords,
+        file: savedRecords[0] || null
+      });
     } catch (err) {
-      res.status(400).json({ success: false, error: err.message });
+      console.error('[ADMIN CONTROLLER] File upload error:', err);
+      return res.status(400).json({
+        success: false,
+        code: 'UPLOAD_FAILED',
+        message: err.message || 'Unable to store file asset.',
+        error: { code: 'UPLOAD_FAILED', message: err.message || 'Unable to store file asset.' }
+      });
     }
   }
-
 
   async deleteChallengeFile(req, res) {
     const { id: challengeId, fileId } = req.params;
     const cleanId = challengeId ? String(challengeId).trim() : '';
+
+    if (db.isMongo && db.mongoDb && db.getChallenges().length === 0) {
+      await db.syncFromMongo().catch(() => {});
+    }
+
     const challenge = db.getChallenges().find(c =>
       c.id === cleanId ||
+      c.challengeId === cleanId ||
+      c.publicRouteId === cleanId ||
       (c._id && String(c._id) === cleanId) ||
       c.slug === cleanId ||
       c.mission_id === cleanId
     );
     if (!challenge) {
-      return res.status(404).json({ success: false, error: 'Challenge not found' });
+      return res.status(404).json({
+        success: false,
+        code: 'CHALLENGE_NOT_FOUND',
+        message: 'Challenge not found.',
+        error: { code: 'CHALLENGE_NOT_FOUND', message: 'Challenge not found.' }
+      });
     }
 
     const fileRec = fileService.getFileRecord(fileId);
+    const altIds = [
+      challenge.id,
+      challenge.challengeId,
+      challenge.publicRouteId,
+      String(challenge._id || ''),
+      challenge.slug,
+      challenge.mission_id,
+      challenge.legacy_id
+    ].filter(Boolean).map(s => String(s).trim());
+
     const belongs = fileRec && (
-      fileRec.challenge_id === challenge.id ||
-      fileRec.challengeId === challenge.id ||
-      (challenge._id && (fileRec.challenge_id === String(challenge._id) || fileRec.challengeId === String(challenge._id))) ||
-      (challenge.mission_id && (fileRec.challenge_id === challenge.mission_id || fileRec.challengeId === challenge.mission_id))
+      altIds.includes(String(fileRec.challenge_id || '').trim()) ||
+      altIds.includes(String(fileRec.challengeId || '').trim()) ||
+      (fileRec.challengeObjectId && challenge._id && String(fileRec.challengeObjectId) === String(challenge._id))
     );
     if (!fileRec || !belongs) {
-      return res.status(404).json({ success: false, error: 'File not found or does not belong to this challenge' });
+      return res.status(404).json({
+        success: false,
+        code: 'FILE_NOT_FOUND',
+        message: 'File not found or does not belong to this challenge.',
+        error: { code: 'FILE_NOT_FOUND', message: 'File not found or does not belong to this challenge.' }
+      });
     }
 
     try {
       await fileService.deleteFile(fileId);
-      res.json({ success: true, message: 'Challenge file neutralized successfully' });
+      return res.json({
+        success: true,
+        code: 'FILE_DELETED',
+        message: 'Challenge file neutralized successfully.'
+      });
     } catch (err) {
-      res.status(400).json({ success: false, error: err.message });
+      return res.status(400).json({
+        success: false,
+        code: 'DELETE_FAILED',
+        message: err.message || 'Unable to delete file asset.',
+        error: { code: 'DELETE_FAILED', message: err.message }
+      });
     }
   }
 

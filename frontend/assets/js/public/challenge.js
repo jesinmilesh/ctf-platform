@@ -392,7 +392,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     window.tacticalSocket.on('challenge.updated', handleRefresh);
+    window.tacticalSocket.on('challenge.file_added', handleRefresh);
     window.tacticalSocket.on('challenge.file.added', handleRefresh);
+    window.tacticalSocket.on('challenge.file_deleted', handleRefresh);
+    window.tacticalSocket.on('challenge.file.deleted', handleRefresh);
+    window.tacticalSocket.on('CHALLENGE_FILE_UPLOADED', handleRefresh);
+    window.tacticalSocket.on('CHALLENGE_FILE_DELETED', handleRefresh);
     window.tacticalSocket.on('challenge.published', handleRefresh);
     window.tacticalSocket.on('INSTANCE_STARTED', handleRefresh);
     window.tacticalSocket.on('INSTANCE_STOPPED', handleRefresh);

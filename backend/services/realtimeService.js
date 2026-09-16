@@ -25,6 +25,10 @@ class RealtimeService {
     return eventBus.publish(Events.CHALLENGE_FILE_ADDED, { challengeId, filename: fileMeta.filename, sha256: fileMeta.sha256 }, competitionId);
   }
 
+  async broadcastChallengeFileDeleted(challengeId, fileId, competitionId = 1) {
+    return eventBus.publish(Events.CHALLENGE_FILE_DELETED, { challengeId, fileId }, competitionId);
+  }
+
   async broadcastFirstBlood({ challengeId, challengeTitle, teamName, points, capturedAt }) {
     return eventBus.publish(Events.CHALLENGE_FIRST_BLOOD, {
       challengeId,

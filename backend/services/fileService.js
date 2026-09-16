@@ -18,7 +18,11 @@ const auditService = require('./auditService');
 
 class FileService {
   constructor() {
-    this.storage = getStorageProvider();
+    this._storage = null;
+  }
+
+  get storage() {
+    return getStorageProvider();
   }
 
   /**
@@ -262,6 +266,7 @@ class FileService {
     }
 
     // 5. Real-time notification & cache invalidation (Section 20 & 21)
+    await realtimeService.broadcastChallengeFileDeleted(rec.challenge_id || rec.challengeId, rec.id).catch(() => {});
     await realtimeService.broadcastChallengeUpdated(rec.challenge_id || rec.challengeId).catch(() => {});
 
     // 6. Audit Record

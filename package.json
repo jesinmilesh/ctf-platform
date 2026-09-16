@@ -10,7 +10,7 @@
     "worker": "node instance-worker/server.js",
     "reset:database": "node scripts/reset-database.js",
     "bootstrap:admin": "node scripts/bootstrap-admin.js",
-    "test": "node scripts/ci-verify.js && node test/challenge-id-integrity.test.js"
+    "test": "node scripts/ci-verify.js && node test/challenge-id-integrity.test.js && node test/challenge-file-upload.test.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

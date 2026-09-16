@@ -113,17 +113,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
+      // Pre-flight size validation against deployment constraints (Section 12, 13, 52)
+      const isServerless = window.location.hostname.includes('vercel.app');
+      const maxBytes = isServerless ? (4.5 * 1024 * 1024) : (50 * 1024 * 1024);
+      const maxMbText = isServerless ? '4.5 MB' : '50 MB';
+
+      for (let i = 0; i < files.length; i++) {
+        if (files[i].size > maxBytes) {
+          window.showError(`FILE TOO LARGE: '${files[i].name}' (${(files[i].size / (1024 * 1024)).toFixed(2)} MB) exceeds allowed limit of ${maxMbText}.`);
+          return;
+        }
+      }
+
       const formData = new FormData();
       for (let i = 0; i < files.length; i++) {
         formData.append('files', files[i]);
       }
 
       uploadFilesBtn.disabled = true;
-      uploadFilesBtn.textContent = 'TRANSMITTING ASSETS...';
+      uploadFilesBtn.textContent = 'TRANSMITTING & STORING ASSETS...';
 
       try {
-        await window.api.admin.uploadChallengeFiles(editingId, formData);
-        window.showSuccess(`✓ ${files.length} asset(s) successfully secured in storage.`);
+        const uploadResult = await window.api.admin.uploadChallengeFiles(editingId, formData);
+        const uploadedCount = (uploadResult && uploadResult.files) ? uploadResult.files.length : files.length;
+        window.showSuccess(`✓ ${uploadedCount} asset(s) successfully secured in persistent storage with SHA-256 integrity.`);
         fileInput.value = '';
         if (previewBox) previewBox.style.display = 'none';
         uploadFilesBtn.style.display = 'none';
@@ -481,16 +494,31 @@ document.addEventListener('DOMContentLoaded', async () => {
       // If files were selected in input, upload them to the target challenge
       const stagedFiles = fileInput ? fileInput.files : null;
       if (stagedFiles && stagedFiles.length > 0 && targetChallengeId) {
-        submitBtn.textContent = 'TRANSMITTING ASSETS...';
-        const formData = new FormData();
+        const isServerless = window.location.hostname.includes('vercel.app');
+        const maxBytes = isServerless ? (4.5 * 1024 * 1024) : (50 * 1024 * 1024);
+        const maxMbText = isServerless ? '4.5 MB' : '50 MB';
+
+        let hasOversized = false;
         for (let i = 0; i < stagedFiles.length; i++) {
-          formData.append('files', stagedFiles[i]);
+          if (stagedFiles[i].size > maxBytes) {
+            window.showWarning(`Asset '${stagedFiles[i].name}' exceeds limit of ${maxMbText}. Upload skipped.`);
+            hasOversized = true;
+            break;
+          }
         }
-        try {
-          await window.api.admin.uploadChallengeFiles(targetChallengeId, formData);
-          window.showSuccess('✓ Staged assets attached and saved.');
-        } catch (uploadErr) {
-          window.showWarning(`Mission saved, but asset upload had warning: ${uploadErr.message}`);
+
+        if (!hasOversized) {
+          submitBtn.textContent = 'TRANSMITTING & STORING ASSETS...';
+          const formData = new FormData();
+          for (let i = 0; i < stagedFiles.length; i++) {
+            formData.append('files', stagedFiles[i]);
+          }
+          try {
+            await window.api.admin.uploadChallengeFiles(targetChallengeId, formData);
+            window.showSuccess('✓ Staged assets attached and secured in persistent storage.');
+          } catch (uploadErr) {
+            window.showWarning(`Mission saved, but asset upload had warning: ${uploadErr.message}`);
+          }
         }
       }
 
