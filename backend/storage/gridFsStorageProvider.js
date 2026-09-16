@@ -66,12 +66,12 @@ class GridFSStorageProvider extends BaseStorageProvider {
         reject(err);
       });
 
-      uploadStream.on('finish', (fileDoc) => {
+      uploadStream.on('finish', () => {
         resolve({
           storageKey,
           size: buffer.length,
           mimeType,
-          gridFsId: fileDoc._id
+          gridFsId: uploadStream.id
         });
       });
 
