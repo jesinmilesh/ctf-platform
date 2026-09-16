@@ -239,6 +239,7 @@ apiRouter.get('/status', (req, res) => {
     uptimeSeconds: Math.floor(process.uptime()),
     database: db.isMongo ? 'MongoDB Atlas' : (db.isPostgres ? 'PostgreSQL' : 'In-Memory'),
     databaseConnected: db.connected,
+    connectionError: db.lastConnectionError ? db.lastConnectionError.replace(/:[^:@]+@/, ':***@') : null,
     timestamp: new Date().toISOString(),
     liveOperativesConnected: wsServer ? wsServer.getConnectedCount() : 0
   });
