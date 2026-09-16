@@ -16,27 +16,27 @@
     },
     {
       "source": "/admin",
-      "destination": "/frontend/admin/index.html"
+      "destination": "/frontend/admin/index"
     },
     {
       "source": "/admin/",
-      "destination": "/frontend/admin/index.html"
+      "destination": "/frontend/admin/index"
     },
     {
       "source": "/admin/:match*",
       "destination": "/frontend/admin/:match*"
     },
     {
-      "source": "/challenge/:publicRouteId",
-      "destination": "/frontend/public/challenge.html"
+      "source": "/challenge/:match*",
+      "destination": "/frontend/public/challenge"
     },
     {
       "source": "/challenge",
-      "destination": "/frontend/public/challenge.html"
+      "destination": "/frontend/public/challenge"
     },
     {
       "source": "/",
-      "destination": "/frontend/public/index.html"
+      "destination": "/frontend/public/index"
     },
     {
       "source": "/((?!api|auth).*)",

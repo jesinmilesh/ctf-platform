@@ -437,7 +437,7 @@ app.get('/admin/*', (req, res) => {
 });
 
 // Challenge Public Dossier Route
-app.get(['/challenge/:publicRouteId', '/challenge'], (req, res) => {
+app.get(['/challenge', '/challenge/*', '/challenge/:publicRouteId', '/challenge.html'], (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'challenge.html'));
 });
 
