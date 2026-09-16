@@ -49,6 +49,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (editingId) {
     document.getElementById('editorTitleHeader').textContent = 'EDIT MISSION DOSSIER';
+    const submitBtn = document.getElementById('submitMissionBtn');
+    if (submitBtn) {
+      submitBtn.textContent = 'UPDATE MISSION';
+    }
     loadExistingChallenge(editingId);
     const auditBtn = document.getElementById('viewAuditHistoryBtn');
     if (auditBtn) {
@@ -708,9 +712,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    const submitBtn = form.querySelector('button[type="submit"]');
+    const submitBtn = document.getElementById('submitMissionBtn') || form.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
-    submitBtn.textContent = 'TRANSMITTING DOSSIER...';
+    submitBtn.textContent = editingId ? 'UPDATING MISSION...' : 'PUBLISHING MISSION...';
 
     try {
       let targetChallengeId = editingId;
@@ -762,7 +766,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       window.showError(err.message);
       displayValidationErrors([err.message]);
       submitBtn.disabled = false;
-      submitBtn.textContent = 'PUBLISH MISSION';
+      submitBtn.textContent = editingId ? 'UPDATE MISSION' : 'PUBLISH MISSION';
     }
   });
 });
