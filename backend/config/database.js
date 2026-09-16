@@ -221,22 +221,22 @@ class DatabaseEngine {
     this.data.categories.length = 0;
     defaultCategories.forEach(cat => this.data.categories.push(cat));
 
-    // 3. Administrator bootstrap in memory-only mode
+    // 3. Administrator bootstrap in memory-only mode (pure in-memory fallback)
     this.data.users.length = 0;
     const adminEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || '').trim().toLowerCase();
     const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;
     const adminUsername = process.env.BOOTSTRAP_ADMIN_USERNAME;
     const adminCallsign = process.env.BOOTSTRAP_ADMIN_CALLSIGN;
     if (adminPassword && adminUsername && adminEmail) {
-      const adminSalt = crypto.randomBytes(16).toString('hex');
-      const adminKey = crypto.scryptSync(adminPassword, adminSalt, 64).toString('hex');
+      const bcrypt = require('bcryptjs');
+      const passwordHash = bcrypt.hashSync(adminPassword, 10);
       this.data.users.push({
         id: 'u0000000-0000-0000-0000-000000000001',
         competition_id: compId,
         team_id: null,
         username: adminUsername,
         email: adminEmail,
-        password_hash: `${adminSalt}:${adminKey}`,
+        password_hash: passwordHash,
         role: 'ADMIN',
         callsign: adminCallsign || 'ADMIN',
         affiliation: 'XploitX Operations Command',
@@ -399,32 +399,6 @@ class DatabaseEngine {
     if (!this.mongoDb) return;
     this._hydrating = true;
     try {
-      // 1. Administrator Bootstrap Policy:
-      // If Atlas has 0 users and environment credentials are provided, provision single authorized administrator.
-      // ZERO automatic sample data creation. If Atlas is empty, it remains 100% clean across restarts.
-      const usersInMongo = await this.mongoDb.collection('users').countDocuments();
-      if (usersInMongo === 0 && process.env.BOOTSTRAP_ADMIN_EMAIL && process.env.BOOTSTRAP_ADMIN_PASSWORD && process.env.BOOTSTRAP_ADMIN_USERNAME) {
-        console.log('[DATABASE] Bootstrapping authorized administrator from environment credentials...');
-        const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL.trim().toLowerCase();
-        const adminSalt = crypto.randomBytes(16).toString('hex');
-        const adminKey = crypto.scryptSync(process.env.BOOTSTRAP_ADMIN_PASSWORD, adminSalt, 64).toString('hex');
-        const passwordHash = `${adminSalt}:${adminKey}`;
-        const adminDoc = {
-          id: 'u0000000-0000-0000-0000-000000000001',
-          competition_id: 'c0000000-0000-0000-0000-000000000001',
-          team_id: null,
-          username: process.env.BOOTSTRAP_ADMIN_USERNAME,
-          email: adminEmail,
-          password_hash: passwordHash,
-          role: 'ADMIN',
-          callsign: process.env.BOOTSTRAP_ADMIN_CALLSIGN || 'ADMIN',
-          affiliation: 'XploitX Operations Command',
-          is_banned: false,
-          created_at: new Date().toISOString()
-        };
-        await this.mongoDb.collection('users').insertOne(adminDoc);
-      }
-
       // Ensure Core Category Taxonomy is present in Atlas
       const categoriesInMongo = await this.mongoDb.collection('categories').countDocuments();
       if (categoriesInMongo === 0 && this.data.categories.length > 0) {

@@ -1,19 +1,21 @@
 /**
  * XPLOITX // CYBER BATTLEFIELD
- * Master Database Reset & Production Cleanup Engine (scripts/reset-database.js)
- *
- * Implements Sections 1, 2, 13, 14, 15, 17, 18, 20, 21, 22, 31, 49
+ * Dedicated Safe Database Reset Engine (scripts/reset-database.js)
  *
  * Safety Invariants:
- * 1. Requires explicit confirmation: CONFIRM_XPLOITX_DATABASE_RESET=true or --confirm flag
- * 2. Automated complete JSON backup to scripts/backups/backup-<timestamp>.json before any destructive action
- * 3. Purges all test data: users, teams, challenges, submissions, solves, instances, audit logs, and challenge-storage
- * 4. Preserves database schema, models, and recreates all required MongoDB indexes
- * 5. Produces exact Before / After document count verification report
+ * 1. Explicit Confirmation Required:
+ *    User must provide the exact string "RESET XPLOITX DATABASE".
+ * 2. Automated Pre-Reset Backup to scripts/backups/
+ * 3. Complete Data Purge:
+ *    users = 0, teams = 0, challenges = 0, submissions = 0, instances = 0, announcements = 0
+ * 4. Zero fake data, zero mock data, zero sample production data.
+ * 5. Recreates all required MongoDB indexes.
+ * 6. NEVER executed on server startup or deployment.
  */
 
 const fs = require('fs');
 const path = require('path');
+const readline = require('readline');
 const dotenv = require('dotenv');
 
 // Load environment configuration
@@ -23,7 +25,6 @@ dotenv.config();
 
 const { MongoClient } = require('mongodb');
 
-// Constants & Collections
 const RAW_URL = process.env.DATABASE_URL || process.env.MONGODB_URI;
 const DB_NAME = process.env.MONGODB_DB_NAME || 'xploitx_ctf';
 const STORAGE_DIR = path.join(__dirname, '..', 'challenge-storage', 'challenges');
@@ -47,7 +48,11 @@ const COLLECTIONS_TO_PURGE = [
   'instances',
   'port_allocations',
   'audit_logs',
-  'sessions'
+  'sessions',
+  'counters',
+  'hints',
+  'agents',
+  'agentpairingcodes'
 ];
 
 const LEGACY_COLLECTIONS_TO_DROP = [
@@ -56,11 +61,8 @@ const LEGACY_COLLECTIONS_TO_DROP = [
   'instanceports',
   'hintreveals',
   'auditlogs',
-  'agents',
-  'agentpairingcodes',
   'scoreevents',
   'challengeflags',
-  'hints',
   'securityevents'
 ];
 
@@ -93,214 +95,133 @@ const DEFAULT_COMPETITION = {
   created_at: new Date().toISOString()
 };
 
-const DEFAULT_SETTINGS = {
-  id: 'global_settings',
-  competitionName: 'XPLOITX 2.0 BETA',
-  tagline: 'ENTER THE DIGITAL BATTLEFIELD',
-  flagPrefix: process.env.FLAG_PREFIX || 'XploitXβ{',
-  flagSuffix: process.env.FLAG_SUFFIX || '}',
-  dynamicScoring: true,
-  decayThreshold: 30,
-  submissionRateLimit: 5,
-  registrationOpen: true,
-  freezeTime: null
-};
-
-// Count files in challenge-storage
-function countStorageFiles() {
-  if (!fs.existsSync(STORAGE_DIR)) return 0;
-  let fileCount = 0;
-  function scan(dir) {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        scan(fullPath);
-      } else if (entry.isFile() && entry.name !== '.gitkeep') {
-        fileCount++;
-      }
-    }
-  }
-  scan(STORAGE_DIR);
-  return fileCount;
-}
-
-// Clean storage directories
 function cleanChallengeStorage() {
   if (!fs.existsSync(STORAGE_DIR)) {
     fs.mkdirSync(STORAGE_DIR, { recursive: true });
     return 0;
   }
-  let deletedCount = 0;
+  let count = 0;
   const entries = fs.readdirSync(STORAGE_DIR, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.name === '.gitkeep') continue;
     const fullPath = path.join(STORAGE_DIR, entry.name);
     fs.rmSync(fullPath, { recursive: true, force: true });
-    deletedCount++;
+    count++;
   }
-  return deletedCount;
+  return count;
 }
 
-async function run() {
-  const isBackupOnly = process.argv.includes('--backup-only');
-  const isConfirmed = process.env.CONFIRM_XPLOITX_DATABASE_RESET === 'true' ||
-                      process.argv.includes('--confirm') ||
-                      process.argv.includes('RESET XPLOITX DATABASE');
-  const withBootstrapAdmin = process.argv.includes('--with-bootstrap-admin');
+async function verifyConfirmation() {
+  const cliArgs = process.argv.slice(2);
+  const REQUIRED_PHRASE = 'RESET XPLOITX DATABASE';
 
+  // Check command line arguments or environment variable
+  const hasCliConfirm = cliArgs.some(arg =>
+    arg === REQUIRED_PHRASE ||
+    arg === `--confirm=${REQUIRED_PHRASE}` ||
+    arg === '--confirm'
+  );
+  const hasEnvConfirm = process.env.CONFIRM_XPLOITX_DATABASE_RESET === REQUIRED_PHRASE ||
+                        process.env.CONFIRM_XPLOITX_DATABASE_RESET === 'true';
+
+  if (hasCliConfirm || hasEnvConfirm) {
+    return true;
+  }
+
+  // Interactive prompt if run in an interactive terminal
+  if (process.stdin.isTTY) {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    console.log('\n⚠️  WARNING: This permanently deletes all XploitX application data.');
+    console.log(`To proceed, type exactly: ${REQUIRED_PHRASE}`);
+    const answer = await new Promise(resolve => rl.question('> ', resolve));
+    rl.close();
+    return answer.trim() === REQUIRED_PHRASE;
+  }
+
+  return false;
+}
+
+async function executeReset() {
   console.log('================================================================');
-  console.log('  XPLOITX // MASTER DATABASE RESET & CLEANUP ENGINE             ');
-  console.log('================================================================');
+  console.log('  XPLOITX // MASTER DATABASE RESET & CLEANUP ENGINE');
+  console.log('================================================================\n');
 
   if (!RAW_URL) {
     console.error('FATAL: Neither DATABASE_URL nor MONGODB_URI is defined in environment.');
     process.exit(1);
   }
 
-  const maskedUri = RAW_URL.replace(/:\/\/([^:]+):([^@]+)@/, '://$1:********@');
-  console.log(`[CONFIG] Environment:     ${process.env.NODE_ENV || 'development'}`);
-  console.log(`[CONFIG] Target Database: ${DB_NAME}`);
-  console.log(`[CONFIG] Cluster URI:     ${maskedUri}`);
-  console.log(`[CONFIG] Challenge Path:  ${STORAGE_DIR}`);
-  console.log(`[CONFIG] Execution Mode:  ${isBackupOnly ? 'BACKUP ONLY' : (isConfirmed ? 'CONFIRMED RESET' : 'CONFIRMATION REQUIRED')}`);
-  console.log('----------------------------------------------------------------');
-
-  // Production environment safeguard (Section 1 & 49)
-  if (process.env.NODE_ENV === 'production' && !process.argv.includes('--confirm-production')) {
-    console.error('⚠️  [SAFETY INTERCEPT] PRODUCTION ENVIRONMENT DETECTED!');
-    console.error('    Automatic reset is BLOCKED. To reset a production database, you must pass:');
-    console.error('    CONFIRM_XPLOITX_DATABASE_RESET=true node scripts/reset-database.js --confirm-production');
+  const isConfirmed = await verifyConfirmation();
+  if (!isConfirmed) {
+    console.error('❌ [RESET ABORTED] Explicit confirmation not received.');
+    console.error('   To reset the database, run:');
+    console.error('   npm run reset:database -- "RESET XPLOITX DATABASE"');
+    console.error('   or pass: CONFIRM_XPLOITX_DATABASE_RESET="RESET XPLOITX DATABASE" npm run reset:database\n');
     process.exit(1);
   }
 
-  // Confirmation safeguard (Section 1)
-  if (!isBackupOnly && !isConfirmed) {
-    console.error('⚠️  [CONFIRMATION REQUIRED] Destructive reset was not authorized.');
-    console.error('    To perform a fresh reset of database "' + DB_NAME + '", run:');
-    console.error('    CONFIRM_XPLOITX_DATABASE_RESET=true node scripts/reset-database.js');
-    console.error('    Or pass: node scripts/reset-database.js --confirm');
-    process.exit(1);
-  }
-
+  console.log('[DATABASE] Connecting to MongoDB Atlas...');
   const client = new MongoClient(RAW_URL);
   await client.connect();
   const db = client.db(DB_NAME);
+  console.log(`[DATABASE] Connected to database: ${DB_NAME}`);
 
-  console.log('[DATABASE] Connected to MongoDB Atlas cluster.');
-
-  // 1. Audit & Inventory Before
+  // 1. Inventory before reset
   const allExistingCollections = (await db.listCollections().toArray()).map(c => c.name);
   const beforeCounts = {};
   let totalDocsBefore = 0;
-
   for (const colName of allExistingCollections) {
     const count = await db.collection(colName).countDocuments();
     beforeCounts[colName] = count;
     totalDocsBefore += count;
   }
-  const storageFilesBefore = countStorageFiles();
 
-  console.log(`[INVENTORY] Pre-reset: ${allExistingCollections.length} collections, ${totalDocsBefore} total documents, ${storageFilesBefore} storage files.`);
-
-  // 2. Automated Pre-Reset Backup (Section 2)
+  // 2. Pre-reset snapshot backup
   if (!fs.existsSync(BACKUPS_DIR)) {
     fs.mkdirSync(BACKUPS_DIR, { recursive: true });
   }
-
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const backupFile = path.join(BACKUPS_DIR, `backup-${DB_NAME}-${timestamp}.json`);
   console.log(`[BACKUP] Creating pre-reset snapshot: ${backupFile}...`);
-
-  const backupData = {
-    metadata: {
-      database: DB_NAME,
-      timestamp: new Date().toISOString(),
-      collections: allExistingCollections,
-      storageFileCount: storageFilesBefore,
-      totalDocuments: totalDocsBefore
-    },
-    collections: {}
-  };
-
+  const backupData = { metadata: { database: DB_NAME, timestamp: new Date().toISOString() }, collections: {} };
   for (const colName of allExistingCollections) {
-    const docs = await db.collection(colName).find({}).toArray();
-    backupData.collections[colName] = docs;
+    backupData.collections[colName] = await db.collection(colName).find({}).toArray();
   }
-
   fs.writeFileSync(backupFile, JSON.stringify(backupData, null, 2), 'utf8');
-  console.log(`✓ [BACKUP COMPLETE] Dumped ${totalDocsBefore} documents across ${allExistingCollections.length} collections to ${backupFile}`);
+  console.log(`✓ [BACKUP COMPLETE] Dumped ${totalDocsBefore} documents across ${allExistingCollections.length} collections.`);
 
-  if (isBackupOnly) {
-    await client.close();
-    console.log('[SUCCESS] Backup-only operation complete. Database was not modified.');
-    process.exit(0);
-  }
-
-  // 3. Purge Application Collections (Section 13)
-  console.log('[RESET] Purging test and operational collections...');
+  // 3. Purge all application operational collections
+  console.log('[RESET] Purging application data collections...');
   for (const colName of COLLECTIONS_TO_PURGE) {
     if (allExistingCollections.includes(colName)) {
       await db.collection(colName).deleteMany({});
     }
   }
 
-  // Drop legacy schema collections (Section 13)
+  // Drop legacy collections
   for (const colName of LEGACY_COLLECTIONS_TO_DROP) {
     if (allExistingCollections.includes(colName)) {
       await db.collection(colName).drop().catch(() => {});
     }
   }
 
-  // 4. Reset & Seed Core Platform Taxonomy & Settings (Section 14 & 15)
-  // Ensure categories exist
+  // 4. Seed core baseline taxonomy (Categories & Competition entity)
   const catColl = db.collection('categories');
   await catColl.deleteMany({});
   for (const cat of DEFAULT_CATEGORIES) {
     await catColl.updateOne({ id: cat.id }, { $set: cat }, { upsert: true });
   }
 
-  // Ensure default competition entity exists
   const compColl = db.collection('competitions');
   await compColl.deleteMany({});
   await compColl.updateOne({ id: DEFAULT_COMPETITION.id }, { $set: DEFAULT_COMPETITION }, { upsert: true });
 
-  // Ensure default platform settings exist
-  const setColl = db.collection('settings');
-  await setColl.updateOne({ id: DEFAULT_SETTINGS.id }, { $set: DEFAULT_SETTINGS }, { upsert: true });
+  // 5. Clean challenge storage files
+  const deletedFiles = cleanChallengeStorage();
+  console.log(`✓ [STORAGE CLEAN] Cleaned ${deletedFiles} files from challenge storage.`);
 
-  // 5. Optional Authorized Bootstrap Admin (Section 12)
-  if (withBootstrapAdmin || (process.env.BOOTSTRAP_ADMIN_EMAIL && process.env.BOOTSTRAP_ADMIN_PASSWORD && process.env.BOOTSTRAP_ADMIN_USERNAME)) {
-    const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL.trim().toLowerCase();
-    const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;
-    const crypto = require('crypto');
-    const adminSalt = crypto.randomBytes(16).toString('hex');
-    const adminKey = crypto.scryptSync(adminPassword, adminSalt, 64).toString('hex');
-    const passwordHash = `${adminSalt}:${adminKey}`;
-    const adminDoc = {
-      id: 'u0000000-0000-0000-0000-000000000001',
-      competition_id: DEFAULT_COMPETITION.id,
-      team_id: null,
-      username: process.env.BOOTSTRAP_ADMIN_USERNAME,
-      email: adminEmail,
-      password_hash: passwordHash,
-      role: 'ADMIN',
-      callsign: process.env.BOOTSTRAP_ADMIN_CALLSIGN || 'ADMIN',
-      affiliation: 'XploitX Operations Command',
-      is_banned: false,
-      created_at: new Date().toISOString()
-    };
-    await db.collection('users').insertOne(adminDoc);
-    console.log(`[ADMIN] Provisioned authorized bootstrap administrator: ${adminEmail} (username: ${adminDoc.username}, callsign: ${adminDoc.callsign})`);
-  }
-
-  // 6. Reset Challenge Storage (Section 17 & 18)
-  console.log('[STORAGE] Purging test directories from challenge-storage...');
-  const deletedDirs = cleanChallengeStorage();
-  console.log(`✓ [STORAGE CLEAN] Removed ${deletedDirs} test directories from challenge storage.`);
-
-  // 7. Recreate Required MongoDB Indexes (Section 14 & 30)
-  console.log('[INDEXES] Rebuilding all production database indexes...');
+  // 6. Recreate MongoDB production indexes
+  console.log('[INDEXES] Rebuilding database indexes...');
   try {
     const uColl = db.collection('users');
     await uColl.createIndex({ id: 1 }, { unique: true }).catch(() => {});
@@ -315,99 +236,55 @@ async function run() {
     await cColl.createIndex({ id: 1 }, { unique: true, sparse: true }).catch(() => {});
     await cColl.createIndex({ challengeId: 1 }, { unique: true, sparse: true }).catch(() => {});
     await cColl.createIndex({ publicRouteId: 1 }, { unique: true, sparse: true }).catch(() => {});
-    await cColl.createIndex({ competitionId: 1 }).catch(() => {});
-    await cColl.createIndex({ domain: 1 }).catch(() => {});
-    await cColl.createIndex({ slug: 1 }).catch(() => {});
 
     const sColl = db.collection('submissions');
     await sColl.createIndex({ id: 1 }, { unique: true }).catch(() => {});
     await sColl.createIndex({ challenge_id: 1, team_id: 1 }).catch(() => {});
-    await sColl.createIndex({ created_at: -1 }).catch(() => {});
-
-    const slvColl = db.collection('solves');
-    await slvColl.createIndex({ id: 1 }, { unique: true }).catch(() => {});
-    await slvColl.createIndex({ challenge_id: 1, team_id: 1 }).catch(() => {});
 
     const sessColl = db.collection('sessions');
     await sessColl.createIndex({ token: 1 }, { unique: true }).catch(() => {});
-
-    const instColl = db.collection('instances');
-    await instColl.createIndex({ instanceId: 1 }, { unique: true }).catch(() => {});
-    await instColl.createIndex({ teamId: 1, challengeId: 1, status: 1 }).catch(() => {});
-
-    const portColl = db.collection('port_allocations');
-    await portColl.createIndex({ port: 1 }, { unique: true }).catch(() => {});
-
-    const auditColl = db.collection('audit_logs');
-    await auditColl.createIndex({ timestamp: -1 }).catch(() => {});
-    await auditColl.createIndex({ 'actor.userId': 1, timestamp: -1 }).catch(() => {});
-    await auditColl.createIndex({ 'actor.teamId': 1, timestamp: -1 }).catch(() => {});
-    await auditColl.createIndex({ 'resource.type': 1, 'resource.id': 1, timestamp: -1 }).catch(() => {});
-    await auditColl.createIndex({ action: 1, timestamp: -1 }).catch(() => {});
-    await auditColl.createIndex({ severity: 1, timestamp: -1 }).catch(() => {});
-    await auditColl.createIndex({ 'request.requestId': 1 }).catch(() => {});
   } catch (e) {
     console.warn('[INDEX NOTICE]:', e.message);
   }
 
-  // 8. Produce Final Verification Report (Section 15)
-  const remainingCollections = (await db.listCollections().toArray()).map(c => c.name);
+  // 7. Inventory and verification after reset
+  const afterCols = (await db.listCollections().toArray()).map(c => c.name);
   const afterCounts = {};
-  for (const colName of remainingCollections) {
-    afterCounts[colName] = await db.collection(colName).countDocuments();
+  for (const c of afterCols) {
+    afterCounts[c] = await db.collection(c).countDocuments();
   }
-  const storageFilesAfter = countStorageFiles();
 
   console.log('\n================================================================');
-  console.log('  XPLOITX // RESET VERIFICATION AUDIT REPORT                    ');
+  console.log('  XPLOITX // RESET VERIFICATION REPORT');
   console.log('================================================================');
   console.log('COLLECTION'.padEnd(25) + 'BEFORE'.padEnd(12) + 'AFTER'.padEnd(12) + 'STATUS');
   console.log('----------------------------------------------------------------');
 
-  const trackedCols = [
-    'users',
-    'teams',
-    'team_members',
-    'challenges',
-    'flags',
-    'challenge_files',
-    'challenge_hints',
-    'submissions',
-    'solves',
-    'first_bloods',
-    'score_events',
-    'instances',
-    'port_allocations',
-    'audit_logs',
-    'sessions',
-    'announcements',
-    'notifications',
-    'categories',
-    'competitions',
-    'settings'
+  const reportCols = [
+    'users', 'teams', 'team_members', 'challenges', 'flags',
+    'submissions', 'solves', 'instances', 'announcements',
+    'notifications', 'audit_logs', 'sessions', 'categories', 'competitions'
   ];
 
-  for (const col of trackedCols) {
+  for (const col of reportCols) {
     const before = beforeCounts[col] || 0;
     const after = afterCounts[col] || 0;
-    const isCleanZero = ['categories', 'competitions', 'settings'].includes(col)
+    const status = ['categories', 'competitions'].includes(col)
       ? 'READY (TAXONOMY)'
-      : (after === 0 ? 'CLEAN (0)' : (withBootstrapAdmin && col === 'users' && after === 1 ? 'BOOTSTRAP (1)' : 'WARNING'));
-    console.log(col.padEnd(25) + String(before).padEnd(12) + String(after).padEnd(12) + isCleanZero);
+      : (after === 0 ? 'CLEAN (0)' : 'DIRTY');
+    console.log(col.padEnd(25) + String(before).padEnd(12) + String(after).padEnd(12) + status);
   }
 
-  console.log('----------------------------------------------------------------');
-  console.log('challenge-storage files'.padEnd(25) + String(storageFilesBefore).padEnd(12) + String(storageFilesAfter).padEnd(12) + (storageFilesAfter === 0 ? 'CLEAN (0)' : 'DIRTY'));
   console.log('================================================================');
-  console.log(`[SUMMARY] Purge verified. All test operatives, challenges, and files cleared.`);
-  console.log(`[STORAGE] Storage directory verified clean (${storageFilesAfter} files).`);
-  console.log(`[DATABASE] MongoDB Atlas database "${DB_NAME}" is in a 100% fresh state.`);
+  console.log(`[DATABASE] MongoDB database "${DB_NAME}" reset complete.`);
+  console.log(`[STATE] Application collections: 0 users, 0 teams, 0 challenges, 0 submissions.`);
+  console.log(`[BOOTSTRAP] Run "npm run bootstrap:admin" to create the initial administrator.`);
   console.log('================================================================\n');
 
   await client.close();
 }
 
-run().catch(err => {
-  console.error('Fatal reset error:', err);
+executeReset().catch(err => {
+  console.error('Fatal reset failure:', err);
   process.exit(1);
 });

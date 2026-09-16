@@ -10,6 +10,7 @@ dotenv.config();
  */
 
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const db = require('../config/database');
 
 const revokedTokens = new Set();
@@ -27,56 +28,27 @@ class AuthService {
   }
 
   /**
-   * Cryptographically hash password using native Node.js crypto (salt:key format)
-   * 100% reliable across serverless and all runtime environments without external C++ bindings.
+   * Cryptographically hash password using single standard bcryptjs implementation (cost factor 10)
    */
   async hashPassword(password) {
-    const salt = crypto.randomBytes(16).toString('hex');
-    const key = crypto.scryptSync(password, salt, 64).toString('hex');
-    return `${salt}:${key}`;
+    if (!password || typeof password !== 'string') {
+      throw new Error('Password must be a valid string');
+    }
+    return await bcrypt.hash(password, 10);
   }
 
   /**
-   * Constant-time safe verification of password against stored cryptographic hash
-   * Strictly matches the existing hash format stored in MongoDB without adding extra hashing layers.
+   * Constant-time safe verification of password using bcryptjs
    */
   async verifyPassword(password, storedHash) {
-    if (!storedHash || !password) return false;
-
-    // 1. Existing MongoDB Atlas stored hash format: salt:key (Native Node.js crypto scryptSync)
-    if (storedHash.includes(':')) {
-      try {
-        const [salt, key] = storedHash.split(':');
-        const derivedKey = crypto.scryptSync(password, salt, 64);
-        const keyBuffer = Buffer.from(key, 'hex');
-        if (keyBuffer.length !== derivedKey.length) return false;
-        return crypto.timingSafeEqual(keyBuffer, derivedKey);
-      } catch (e) {
-        return false;
-      }
+    if (!storedHash || !password || typeof password !== 'string' || typeof storedHash !== 'string') {
+      return false;
     }
-
-    // 2. Standard bcrypt format ($2a$, $2b$, $2y$) if encountered
-    if (storedHash.startsWith('$2a$') || storedHash.startsWith('$2b$') || storedHash.startsWith('$2y$')) {
-      try {
-        const bcrypt = require('bcryptjs');
-        return await bcrypt.compare(password, storedHash);
-      } catch (e) {
-        return false;
-      }
+    try {
+      return await bcrypt.compare(password, storedHash);
+    } catch (e) {
+      return false;
     }
-
-    // 3. SHA-256 hex format if encountered
-    if (/^[a-f0-9]{64}$/i.test(storedHash)) {
-      try {
-        const derived = crypto.createHash('sha256').update(password).digest('hex');
-        return crypto.timingSafeEqual(Buffer.from(storedHash, 'hex'), Buffer.from(derived, 'hex'));
-      } catch (e) {
-        return false;
-      }
-    }
-
-    return false;
   }
 
   async comparePassword(password, storedHash) {

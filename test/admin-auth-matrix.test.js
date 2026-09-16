@@ -252,8 +252,8 @@ async function runTests() {
     adminInDb &&
     adminInDb.role === 'ADMIN' &&
     adminInDb.password_hash &&
-    adminInDb.password_hash.includes(':'),
-    'Test 11: Admin account preserved with role ADMIN and native scrypt hash'
+    adminInDb.password_hash.startsWith('$2'),
+    'Test 11: Admin account preserved with role ADMIN and secure bcrypt hash'
   );
 
   console.log(`\n================================================================`);

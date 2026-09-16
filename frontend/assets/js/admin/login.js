@@ -58,10 +58,21 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       localStorage.removeItem('xploitx_token');
       sessionStorage.removeItem('xploitx_token');
-      const msg = err.message || 'INVALID ADMIN CREDENTIALS';
-      errBox.textContent = msg.includes('ADMIN ACCESS REQUIRED')
-        ? 'LOGIN DENIED: ADMIN ACCESS REQUIRED'
-        : (msg.includes('CLEARANCE_DENIED') ? 'LOGIN DENIED: ADMIN ACCESS REQUIRED' : msg);
+
+      let displayText = 'INVALID ADMIN CREDENTIALS';
+      if (err.status === 403 || err.code === 'CLEARANCE_DENIED' || (err.message && err.message.includes('ADMIN ACCESS REQUIRED'))) {
+        displayText = 'ADMIN ACCESS REQUIRED';
+      } else if (err.status === 401 || err.code === 'INVALID_CREDENTIALS') {
+        displayText = 'INVALID ADMIN CREDENTIALS';
+      } else if (err.status >= 500) {
+        displayText = 'CONTROL ROOM TEMPORARILY UNAVAILABLE';
+      } else if (err.status === 429) {
+        displayText = 'SECURITY RATE LIMIT EXCEEDED. STAND BY.';
+      } else {
+        displayText = 'INVALID ADMIN CREDENTIALS';
+      }
+
+      errBox.textContent = displayText;
       errBox.style.display = 'block';
       btn.disabled = false;
       btn.textContent = 'ACCESS CONTROL ROOM';
