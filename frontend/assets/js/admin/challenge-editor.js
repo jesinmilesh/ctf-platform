@@ -61,6 +61,155 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderEmptyFilesTable('Save or publish the mission to activate live asset uploads, or select assets below to upload upon creation.');
   }
 
+  // ── Authoritative Multiple Hints State (Sections 2, 3, 4, 5) ─────────────
+  let hintsState = [];
+
+  function renderHintsUI() {
+    const container = document.getElementById('hintsListContainer');
+    if (!container) return;
+
+    if (!Array.isArray(hintsState) || hintsState.length === 0) {
+      container.innerHTML = `
+        <div style="font-family:var(--font-mono); font-size:12px; color:var(--text-muted); background:var(--bg-secondary); border:1px dashed var(--border); padding:24px; border-radius:var(--radius-sm); text-align:center;">
+          No tactical hints configured for this mission. Click <strong style="color:var(--accent);">+ ADD HINT</strong> above to create one.
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = hintsState.map((hint, idx) => {
+      const hintNum = String(idx + 1).padStart(2, '0');
+      const order = hint.order !== undefined ? hint.order : (idx + 1);
+      const cost = hint.cost !== undefined ? hint.cost : 25;
+      const text = hint.text || hint.content || '';
+      const enabled = hint.enabled !== false;
+
+      return `
+        <div class="hint-editor-card" data-index="${idx}" style="background:var(--bg-secondary); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:var(--radius-sm); padding:18px; display:flex; flex-direction:column; gap:14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:10px;">
+            <div style="display:flex; align-items:center; gap:14px;">
+              <span style="font-family:var(--font-mono); font-size:12px; font-weight:800; color:var(--accent); letter-spacing:0.06em;">
+                HINT ${hintNum}
+              </span>
+              <label style="display:flex; align-items:center; gap:6px; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); cursor:pointer;">
+                <input type="checkbox" class="hint-field-enabled" data-index="${idx}" ${enabled ? 'checked' : ''} style="accent-color:var(--accent); width:14px; height:14px;">
+                <span>ENABLED</span>
+              </label>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline hint-delete-btn" data-index="${idx}" style="color:#ff3366; border-color:rgba(255,51,102,0.4); font-size:11px; padding:4px 10px; font-weight:700;">
+              🗑 DELETE HINT
+            </button>
+          </div>
+
+          <div>
+            <label style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">
+              HINT INTEL / CLUE TEXT *
+            </label>
+            <textarea rows="2" class="hint-field-text" data-index="${idx}" placeholder="Enter specific clue or guidance for operatives..." style="width:100%; background:var(--bg-card); border:1px solid var(--border); color:#fff; padding:10px 12px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px; resize:vertical; line-height:1.5;">${window.Utils.escapeHTML(text)}</textarea>
+          </div>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+            <div>
+              <label style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">
+                XP UNLOCK COST (POINTS DEDUCTED)
+              </label>
+              <input type="number" min="0" class="hint-field-cost" data-index="${idx}" value="${cost}" style="width:100%; background:var(--bg-card); border:1px solid var(--border); color:#fff; padding:8px 12px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;">
+            </div>
+            <div>
+              <label style="display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); margin-bottom:6px;">
+                DISPLAY / UNLOCK ORDER
+              </label>
+              <input type="number" min="1" class="hint-field-order" data-index="${idx}" value="${order}" style="width:100%; background:var(--bg-card); border:1px solid var(--border); color:#fff; padding:8px 12px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:13px;">
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Attach event listeners to card controls
+    container.querySelectorAll('.hint-delete-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.index, 10);
+        if (!isNaN(idx) && idx >= 0 && idx < hintsState.length) {
+          syncHintsFromDOM();
+          hintsState.splice(idx, 1);
+          hintsState.forEach((h, i) => { h.order = i + 1; });
+          renderHintsUI();
+        }
+      });
+    });
+
+    container.querySelectorAll('.hint-field-text').forEach(input => {
+      input.addEventListener('input', () => {
+        const idx = parseInt(input.dataset.index, 10);
+        if (hintsState[idx]) hintsState[idx].text = input.value;
+      });
+    });
+
+    container.querySelectorAll('.hint-field-cost').forEach(input => {
+      input.addEventListener('input', () => {
+        const idx = parseInt(input.dataset.index, 10);
+        if (hintsState[idx]) hintsState[idx].cost = parseInt(input.value, 10) || 0;
+      });
+    });
+
+    container.querySelectorAll('.hint-field-order').forEach(input => {
+      input.addEventListener('input', () => {
+        const idx = parseInt(input.dataset.index, 10);
+        if (hintsState[idx]) hintsState[idx].order = parseInt(input.value, 10) || (idx + 1);
+      });
+    });
+
+    container.querySelectorAll('.hint-field-enabled').forEach(input => {
+      input.addEventListener('change', () => {
+        const idx = parseInt(input.dataset.index, 10);
+        if (hintsState[idx]) hintsState[idx].enabled = input.checked;
+      });
+    });
+  }
+
+  function syncHintsFromDOM() {
+    const container = document.getElementById('hintsListContainer');
+    if (!container) return;
+    container.querySelectorAll('.hint-editor-card').forEach(card => {
+      const idx = parseInt(card.dataset.index, 10);
+      if (hintsState[idx]) {
+        const textEl = card.querySelector('.hint-field-text');
+        const costEl = card.querySelector('.hint-field-cost');
+        const orderEl = card.querySelector('.hint-field-order');
+        const enabledEl = card.querySelector('.hint-field-enabled');
+
+        if (textEl) hintsState[idx].text = textEl.value;
+        if (costEl) hintsState[idx].cost = parseInt(costEl.value, 10) || 0;
+        if (orderEl) hintsState[idx].order = parseInt(orderEl.value, 10) || (idx + 1);
+        if (enabledEl) hintsState[idx].enabled = enabledEl.checked;
+      }
+    });
+  }
+
+  const addHintBtn = document.getElementById('addHintBtn');
+  if (addHintBtn) {
+    addHintBtn.addEventListener('click', () => {
+      syncHintsFromDOM();
+      hintsState.push({
+        id: `temp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        text: '',
+        content: '',
+        cost: 25,
+        order: hintsState.length + 1,
+        enabled: true
+      });
+      renderHintsUI();
+      const newCardTextarea = document.querySelector(`.hint-field-text[data-index="${hintsState.length - 1}"]`);
+      if (newCardTextarea) newCardTextarea.focus();
+    });
+  }
+
+  // Initial render of empty hints for new mission
+  if (!editingId) {
+    renderHintsUI();
+  }
+
   // Runtime Panel toggle
   const hasInstanceCheckbox = document.getElementById('editHasInstance');
   const runtimePanel = document.getElementById('sandboxRuntimeConfigPanel');
@@ -314,21 +463,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         flagInput.value = storedFlag;
       }
 
-      // Authoritative Hint pre-fill (Sections 2, 3, 13, 17, 18, 19, 53)
-      const hintInput = document.getElementById('editHint');
-      const hintCostInput = document.getElementById('editHintCost');
-      if (hintInput) {
-        const firstHint = (Array.isArray(c.hints) && c.hints[0])
-          ? (c.hints[0].content || c.hints[0].text || '')
-          : (c.hint || '');
-        hintInput.value = firstHint;
+      // Authoritative Hints pre-fill (Sections 2, 3, 4, 14, 16)
+      if (Array.isArray(c.hints) && c.hints.length > 0) {
+        hintsState = c.hints.map((h, i) => ({
+          id: h.id,
+          text: h.text || h.content || '',
+          content: h.content || h.text || '',
+          cost: h.cost !== undefined ? h.cost : 50,
+          order: h.order || h.order_index || (i + 1),
+          enabled: h.enabled !== false
+        }));
+      } else if (c.hint) {
+        hintsState = [{
+          id: `h-init-0`,
+          text: c.hint,
+          content: c.hint,
+          cost: c.hint_cost !== undefined ? c.hint_cost : 50,
+          order: 1,
+          enabled: true
+        }];
+      } else {
+        hintsState = [];
       }
-      if (hintCostInput) {
-        const firstCost = (Array.isArray(c.hints) && c.hints[0] && c.hints[0].cost !== undefined)
-          ? c.hints[0].cost
-          : (c.hint_cost !== undefined ? c.hint_cost : 50);
-        hintCostInput.value = firstCost;
-      }
+      renderHintsUI();
       
       const hasInst = !!(c.requiresInstance || c.runtime?.enabled || c.has_instance);
       document.getElementById('editHasInstance').checked = hasInst;
@@ -376,7 +533,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       requiresInstance: !!hasInst,
       is_solved: false,
       files: [],
-      hints: []
+      hints: hintsState.map((h, idx) => ({
+        id: h.id || `h-preview-${idx}`,
+        content: h.text || h.content || '',
+        cost: h.cost || 0,
+        index: idx + 1,
+        isUnlocked: false
+      }))
     };
 
     try {
@@ -475,9 +638,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     const memoryLimit = document.getElementById('editMemoryLimit')?.value.trim() || '256m';
     const pidLimit = parseInt(document.getElementById('editPidLimit')?.value || 128, 10);
 
-    const flagVal = document.getElementById('editFlag').value.trim();
-    const hintVal = document.getElementById('editHint').value.trim();
-    const hintCostVal = parseInt(document.getElementById('editHintCost')?.value || 50, 10);
+    syncHintsFromDOM();
+    const hintsPayload = hintsState
+      .map((h, idx) => ({
+        id: (h.id && !h.id.startsWith('temp_')) ? h.id : undefined,
+        text: (h.text || h.content || '').trim(),
+        content: (h.text || h.content || '').trim(),
+        cost: isNaN(parseInt(h.cost, 10)) || parseInt(h.cost, 10) < 0 ? 0 : parseInt(h.cost, 10),
+        order: isNaN(parseInt(h.order, 10)) ? (idx + 1) : parseInt(h.order, 10),
+        order_index: isNaN(parseInt(h.order, 10)) ? (idx + 1) : parseInt(h.order, 10),
+        enabled: h.enabled !== false
+      }))
+      .filter(h => h.text.length > 0);
+
+    const firstHintText = hintsPayload[0]?.text || '';
+    const firstHintCost = hintsPayload[0]?.cost !== undefined ? hintsPayload[0].cost : 50;
 
     return {
       title: document.getElementById('editTitle').value.trim(),
@@ -495,16 +670,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       points: parseInt(document.getElementById('editPoints').value, 10),
       minimum_points: parseInt(document.getElementById('editMinPoints').value, 10),
       decay_threshold: parseInt(document.getElementById('editDecay').value, 10),
-      hint: hintVal,
-      hint_cost: isNaN(hintCostVal) ? 50 : hintCostVal,
-      hints: hintVal ? [{
-        content: hintVal,
-        text: hintVal,
-        cost: isNaN(hintCostVal) ? 50 : hintCostVal,
-        order: 1,
-        order_index: 1,
-        enabled: true
-      }] : [],
+      hint: firstHintText,
+      hint_cost: firstHintCost,
+      hints: hintsPayload,
       has_instance: hasInstance,
       requiresInstance: hasInstance,
       docker_image: hasInstance ? (dockerImage || 'xploitx/vault:latest') : null,

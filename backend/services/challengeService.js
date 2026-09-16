@@ -214,31 +214,39 @@ class ChallengeService {
       altIds.includes(String(h.challenge_id).trim()) || altIds.includes(String(h.challengeId || '').trim())
     );
 
-    const formattedHints = storedHints.length > 0 ? storedHints.map((h, idx) => ({
-      id: h.id,
-      text: h.content,
-      content: h.content,
-      cost: h.cost !== undefined ? h.cost : 50,
-      order: h.order_index || (idx + 1),
-      order_index: h.order_index || (idx + 1),
-      enabled: h.enabled !== false
-    })) : (Array.isArray(c.hints) && c.hints.length > 0 ? c.hints.map((h, idx) => ({
-      id: h.id || `h-${idx}`,
-      text: h.content || h.text || '',
-      content: h.content || h.text || '',
-      cost: h.cost !== undefined ? h.cost : 50,
-      order: h.order || h.order_index || (idx + 1),
-      order_index: h.order || h.order_index || (idx + 1),
-      enabled: h.enabled !== false
-    })) : (c.hint ? [{
-      id: `h-${c.id}-0`,
-      text: c.hint,
-      content: c.hint,
-      cost: c.hint_cost !== undefined ? c.hint_cost : 50,
-      order: 1,
-      order_index: 1,
-      enabled: true
-    }] : []));
+    let formattedHints = [];
+    if (storedHints.length > 0) {
+      formattedHints = storedHints.map((h, idx) => ({
+        id: h.id,
+        text: h.content || h.text || '',
+        content: h.content || h.text || '',
+        cost: h.cost !== undefined ? h.cost : 50,
+        order: h.order_index || h.order || (idx + 1),
+        order_index: h.order_index || h.order || (idx + 1),
+        enabled: h.enabled !== false
+      }));
+    } else if (Array.isArray(c.hints) && c.hints.length > 0) {
+      formattedHints = c.hints.map((h, idx) => ({
+        id: h.id || `h-${idx}`,
+        text: h.content || h.text || '',
+        content: h.content || h.text || '',
+        cost: h.cost !== undefined ? h.cost : 50,
+        order: h.order || h.order_index || (idx + 1),
+        order_index: h.order || h.order_index || (idx + 1),
+        enabled: h.enabled !== false
+      }));
+    } else if (c.hint) {
+      formattedHints = [{
+        id: `h-${c.id}-0`,
+        text: c.hint,
+        content: c.hint,
+        cost: c.hint_cost !== undefined ? c.hint_cost : 50,
+        order: 1,
+        order_index: 1,
+        enabled: true
+      }];
+    }
+    formattedHints.sort((a, b) => (a.order || a.order_index || 0) - (b.order || b.order_index || 0));
 
     const primaryHint = formattedHints[0]?.text || c.hint || '';
     const primaryCost = formattedHints[0]?.cost !== undefined ? formattedHints[0].cost : (c.hint_cost !== undefined ? c.hint_cost : 50);
@@ -346,14 +354,28 @@ class ChallengeService {
     const hintReveals = db.getHintReveals().filter(r => (teamId && r.team_id === teamId) || (userId && r.user_id === userId));
     const unlockedHintIds = new Set(hintReveals.map(r => r.hint_id));
 
-    const hints = db.getHints().filter(h => altIds.includes(String(h.challenge_id).trim()) && h.enabled).map((h, index) => {
+    let candidateHints = db.getHints().filter(h => altIds.includes(String(h.challenge_id).trim()) && h.enabled);
+    if (candidateHints.length === 0 && Array.isArray(c.hints) && c.hints.length > 0) {
+      candidateHints = c.hints.filter(h => h.enabled !== false).map((h, idx) => ({
+        id: h.id || `h-${idx}`,
+        content: h.content || h.text || '',
+        cost: h.cost !== undefined ? h.cost : 50,
+        order_index: h.order || h.order_index || (idx + 1),
+        enabled: true
+      }));
+    }
+    candidateHints.sort((a, b) => (a.order_index || a.order || 0) - (b.order_index || b.order || 0));
+
+    const hints = candidateHints.map((h, index) => {
       const isUnlocked = unlockedHintIds.has(h.id) || h.cost === 0;
       return {
         id: h.id,
         index: index + 1,
+        order: h.order_index || (index + 1),
         cost: h.cost,
         content: isUnlocked ? h.content : null,
-        isUnlocked
+        isUnlocked,
+        unlocked: isUnlocked
       };
     });
 
@@ -418,7 +440,20 @@ class ChallengeService {
     if (!challenge) throw new Error('Challenge not found');
 
     const altIds = this.getChallengeAltIds(challenge);
-    const hint = db.getHints().find(h => h.id === hintId && (altIds.includes(String(h.challenge_id).trim()) || altIds.includes(String(h.challengeId || '').trim())) && h.enabled);
+    let hint = db.getHints().find(h => h.id === hintId && (altIds.includes(String(h.challenge_id).trim()) || altIds.includes(String(h.challengeId || '').trim())) && h.enabled);
+    if (!hint && Array.isArray(challenge.hints)) {
+      const embedded = challenge.hints.find(h => h.id === hintId && h.enabled !== false);
+      if (embedded) {
+        hint = {
+          id: embedded.id,
+          challenge_id: challenge.id,
+          challengeId: challenge.challengeId || challenge.id,
+          content: embedded.content || embedded.text,
+          cost: embedded.cost || 0,
+          enabled: true
+        };
+      }
+    }
     if (!hint) throw new Error('Tactical hint not found or disabled');
 
     const teamId = user.team_id || (user.team && user.team.id);
@@ -621,36 +656,56 @@ class ChallengeService {
       }
     }
 
-    // Save Hint (authoritative synchronization)
-    if (data.hint) {
-      const hintText = String(data.hint).trim();
-      const hintCost = parseInt(data.hint_cost || 50, 10);
+    // Save Hints (authoritative synchronization)
+    const rawHintsList = Array.isArray(data.hints)
+      ? data.hints
+      : (data.hint ? [{ text: data.hint, content: data.hint, cost: data.hint_cost || 50, order: 1, enabled: true }] : []);
+
+    const createdHints = [];
+    rawHintsList.forEach((h, idx) => {
+      const hintText = String(h.text || h.content || '').trim();
+      if (!hintText) return;
+      const parsedCost = parseInt(h.cost, 10);
+      const hintCost = isNaN(parsedCost) || parsedCost < 0 ? 0 : parsedCost;
+      const parsedOrder = parseInt(h.order || h.order_index, 10);
+      const hintOrder = isNaN(parsedOrder) || parsedOrder < 1 ? (idx + 1) : parsedOrder;
+      const hintId = (h.id && !String(h.id).startsWith('temp_'))
+        ? String(h.id)
+        : `h-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+
       const hintRec = {
-        id: `h-${Date.now()}`,
+        id: hintId,
         challenge_id: newChallenge.id,
         challengeId: newChallenge.id,
+        title: `HINT #${hintOrder}`,
         content: hintText,
         text: hintText,
-        cost: isNaN(hintCost) ? 50 : hintCost,
-        order_index: 1,
-        enabled: true
+        cost: hintCost,
+        order: hintOrder,
+        order_index: hintOrder,
+        enabled: h.enabled !== false
       };
+
       db.getHints().push(hintRec);
-      newChallenge.hint = hintText;
-      newChallenge.hint_cost = isNaN(hintCost) ? 50 : hintCost;
-      newChallenge.hints = [{
-        id: hintRec.id,
-        content: hintText,
-        text: hintText,
-        cost: isNaN(hintCost) ? 50 : hintCost,
-        order: 1,
-        order_index: 1,
-        enabled: true
-      }];
       if (db.isMongo && db.persistDoc) {
         db.persistDoc('challengeHints', hintRec).catch(() => {});
       }
-    }
+
+      createdHints.push({
+        id: hintId,
+        content: hintText,
+        text: hintText,
+        cost: hintCost,
+        order: hintOrder,
+        order_index: hintOrder,
+        enabled: h.enabled !== false
+      });
+    });
+
+    createdHints.sort((a, b) => a.order - b.order);
+    newChallenge.hints = createdHints;
+    newChallenge.hint = createdHints[0]?.text || '';
+    newChallenge.hint_cost = createdHints[0]?.cost !== undefined ? createdHints[0].cost : 50;
 
     // Record audit log
     auditService.record({
@@ -790,65 +845,86 @@ class ChallengeService {
     }
 
     // ── Authoritative Hint Update (Sections 17, 18, 19, 67, 68, 69) ─────────────
-    if (data.hint !== undefined && data.hint !== null) {
-      const hintText = String(data.hint).trim();
-      const hintCost = data.hint_cost !== undefined ? parseInt(data.hint_cost, 10) : (c.hint_cost !== undefined ? c.hint_cost : 50);
+    // Partial update protection: Only mutate hints if data.hints or data.hint was explicitly provided!
+    if (data.hints !== undefined || data.hint !== undefined) {
+      let rawHintsList = null;
+      if (Array.isArray(data.hints)) {
+        rawHintsList = data.hints;
+      } else if (data.hint !== undefined) {
+        const hText = String(data.hint).trim();
+        rawHintsList = hText ? [{
+          text: hText,
+          content: hText,
+          cost: data.hint_cost !== undefined ? data.hint_cost : 50,
+          order: 1,
+          enabled: true
+        }] : [];
+      }
 
-      let existingHint = db.getHints().find(h =>
-        altIds.includes(String(h.challenge_id).trim()) || altIds.includes(String(h.challengeId || '').trim())
-      );
+      if (rawHintsList !== null) {
+        // 1. Clear previous hints associated with this challenge
+        const prevHints = db.getHints().filter(h =>
+          altIds.includes(String(h.challenge_id).trim()) || altIds.includes(String(h.challengeId || '').trim())
+        );
+        for (const ph of prevHints) {
+          const pIdx = db.getHints().findIndex(h => h.id === ph.id);
+          if (pIdx !== -1) db.getHints().splice(pIdx, 1);
+        }
+        if (db.isMongo && db.mongoDb) {
+          db.mongoDb.collection('challenge_hints').deleteMany({
+            $or: [
+              { challenge_id: { $in: altIds } },
+              { challengeId: { $in: altIds } }
+            ]
+          }).catch(() => {});
+        }
 
-      if (hintText) {
-        c.hint = hintText;
-        c.hint_cost = isNaN(hintCost) ? 50 : hintCost;
-        if (existingHint) {
-          existingHint.content = hintText;
-          existingHint.cost = c.hint_cost;
-          existingHint.challenge_id = c.id;
-          existingHint.challengeId = c.challengeId || c.id;
-          existingHint.enabled = true;
-          if (db.isMongo && db.persistDoc) db.persistDoc('challengeHints', existingHint).catch(() => {});
-        } else {
-          const newHintRec = {
-            id: `h-${Date.now()}`,
+        // 2. Validate and insert new hints
+        const updatedHints = [];
+        rawHintsList.forEach((h, idx) => {
+          const hintText = String(h.text || h.content || '').trim();
+          if (!hintText) return;
+          const parsedCost = parseInt(h.cost, 10);
+          const hintCost = isNaN(parsedCost) || parsedCost < 0 ? 0 : parsedCost;
+          const parsedOrder = parseInt(h.order || h.order_index, 10);
+          const hintOrder = isNaN(parsedOrder) || parsedOrder < 1 ? (idx + 1) : parsedOrder;
+          const hintId = (h.id && !String(h.id).startsWith('temp_'))
+            ? String(h.id)
+            : `h-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+
+          const hintRec = {
+            id: hintId,
             challenge_id: c.id,
             challengeId: c.challengeId || c.id,
+            title: `HINT #${hintOrder}`,
             content: hintText,
-            cost: c.hint_cost,
-            order_index: 1,
-            enabled: true
+            text: hintText,
+            cost: hintCost,
+            order: hintOrder,
+            order_index: hintOrder,
+            enabled: h.enabled !== false
           };
-          db.getHints().push(newHintRec);
-          if (db.isMongo && db.persistDoc) db.persistDoc('challengeHints', newHintRec).catch(() => {});
-        }
-        c.hints = [{
-          id: existingHint?.id || `h-${Date.now()}`,
-          content: hintText,
-          text: hintText,
-          cost: c.hint_cost,
-          order: 1,
-          order_index: 1,
-          enabled: true
-        }];
-      } else if (data.hint === '') {
-        // Explicit hint deletion requested by admin
-        if (existingHint) {
-          const idx = db.getHints().findIndex(h => h.id === existingHint.id);
-          if (idx !== -1) db.getHints().splice(idx, 1);
-          if (db.isMongo && db.mongoDb) {
-            db.mongoDb.collection('challenge_hints').deleteOne({ id: existingHint.id }).catch(() => {});
-          }
-        }
-        c.hint = '';
-        c.hints = [];
-      }
-    }
 
-    if (Array.isArray(data.hints)) {
-      c.hints = data.hints;
-      if (data.hints.length > 0) {
-        c.hint = data.hints[0].content || data.hints[0].text || '';
-        c.hint_cost = data.hints[0].cost !== undefined ? data.hints[0].cost : 50;
+          db.getHints().push(hintRec);
+          if (db.isMongo && db.persistDoc) {
+            db.persistDoc('challengeHints', hintRec).catch(() => {});
+          }
+
+          updatedHints.push({
+            id: hintId,
+            content: hintText,
+            text: hintText,
+            cost: hintCost,
+            order: hintOrder,
+            order_index: hintOrder,
+            enabled: h.enabled !== false
+          });
+        });
+
+        updatedHints.sort((a, b) => a.order - b.order);
+        c.hints = updatedHints;
+        c.hint = updatedHints[0]?.text || '';
+        c.hint_cost = updatedHints[0]?.cost !== undefined ? updatedHints[0].cost : 50;
       }
     }
 
