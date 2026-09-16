@@ -74,9 +74,38 @@ document.addEventListener('DOMContentLoaded', async () => {
   const chooseFilesBtn = document.getElementById('chooseFilesBtn');
   const fileInput = document.getElementById('challengeFiles');
   const uploadFilesBtn = document.getElementById('uploadFilesBtn');
-  const selectedCountEl = document.getElementById('selectedFileCount');
   const previewBox = document.getElementById('selectedFilesPreview');
   const refreshFilesBtn = document.getElementById('refreshFilesBtn');
+
+  // Single authoritative frontend selection state (Section 4 & 5)
+  let selectedFiles = [];
+
+  function updateSelectedFilesUI() {
+    const count = selectedFiles.length;
+
+    if (previewBox) {
+      if (count > 0) {
+        previewBox.style.display = 'block';
+        previewBox.innerHTML = `
+          <strong>Selected for transmission (${count}):</strong><br>
+          ${selectedFiles.map(f => `• ${window.Utils.escapeHTML(f.name)} (${formatFileSize(f.size)})`).join('<br>')}
+        `;
+      } else {
+        previewBox.style.display = 'none';
+        previewBox.innerHTML = '';
+      }
+    }
+
+    if (uploadFilesBtn) {
+      uploadFilesBtn.disabled = (count === 0);
+      uploadFilesBtn.innerHTML = `⬆ UPLOAD SELECTED (${count})`;
+      if (editingId && count > 0) {
+        uploadFilesBtn.style.display = 'inline-block';
+      } else if (count === 0) {
+        uploadFilesBtn.style.display = 'none';
+      }
+    }
+  }
 
   if (chooseFilesBtn && fileInput) {
     chooseFilesBtn.addEventListener('click', () => fileInput.click());
@@ -84,31 +113,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (fileInput) {
     fileInput.addEventListener('change', () => {
-      const files = Array.from(fileInput.files || []);
-      if (files.length > 0) {
-        if (selectedCountEl) selectedCountEl.textContent = files.length;
-        if (previewBox) {
-          previewBox.style.display = 'block';
-          previewBox.innerHTML = `
-            <strong>Selected for transmission (${files.length}):</strong><br>
-            ${files.map(f => `• ${window.Utils.escapeHTML(f.name)} (${formatFileSize(f.size)})`).join('<br>')}
-          `;
-        }
-        if (uploadFilesBtn && editingId) {
-          uploadFilesBtn.style.display = 'inline-block';
-        }
-      } else {
-        if (previewBox) previewBox.style.display = 'none';
-        if (uploadFilesBtn) uploadFilesBtn.style.display = 'none';
-      }
+      selectedFiles = Array.from(fileInput.files || []);
+      updateSelectedFilesUI();
     });
   }
 
   if (uploadFilesBtn) {
     uploadFilesBtn.addEventListener('click', async () => {
       if (!editingId) return;
-      const files = fileInput.files;
-      if (!files || files.length === 0) {
+      if (!selectedFiles || selectedFiles.length === 0) {
         window.showWarning('Please select assets to upload.');
         return;
       }
@@ -118,34 +131,32 @@ document.addEventListener('DOMContentLoaded', async () => {
       const maxBytes = isServerless ? (4.5 * 1024 * 1024) : (50 * 1024 * 1024);
       const maxMbText = isServerless ? '4.5 MB' : '50 MB';
 
-      for (let i = 0; i < files.length; i++) {
-        if (files[i].size > maxBytes) {
-          window.showError(`FILE TOO LARGE: '${files[i].name}' (${(files[i].size / (1024 * 1024)).toFixed(2)} MB) exceeds allowed limit of ${maxMbText}.`);
+      for (let i = 0; i < selectedFiles.length; i++) {
+        if (selectedFiles[i].size > maxBytes) {
+          window.showError(`FILE TOO LARGE: '${selectedFiles[i].name}' (${(selectedFiles[i].size / (1024 * 1024)).toFixed(2)} MB) exceeds allowed limit of ${maxMbText}.`);
           return;
         }
       }
 
       const formData = new FormData();
-      for (let i = 0; i < files.length; i++) {
-        formData.append('files', files[i]);
-      }
+      selectedFiles.forEach(file => {
+        formData.append('files', file);
+      });
 
       uploadFilesBtn.disabled = true;
-      uploadFilesBtn.textContent = 'TRANSMITTING & STORING ASSETS...';
+      uploadFilesBtn.innerHTML = `⏳ TRANSMITTING & STORING ASSETS...`;
 
       try {
         const uploadResult = await window.api.admin.uploadChallengeFiles(editingId, formData);
-        const uploadedCount = (uploadResult && uploadResult.files) ? uploadResult.files.length : files.length;
+        const uploadedCount = (uploadResult && uploadResult.files) ? uploadResult.files.length : selectedFiles.length;
         window.showSuccess(`✓ ${uploadedCount} asset(s) successfully secured in persistent storage with SHA-256 integrity.`);
-        fileInput.value = '';
-        if (previewBox) previewBox.style.display = 'none';
-        uploadFilesBtn.style.display = 'none';
+        selectedFiles = [];
+        if (fileInput) fileInput.value = '';
+        updateSelectedFilesUI();
         await loadChallengeFiles(editingId);
       } catch (err) {
         window.showError(`UPLOAD FAILED: ${err.message}`);
-      } finally {
-        uploadFilesBtn.disabled = false;
-        uploadFilesBtn.innerHTML = `⬆ UPLOAD SELECTED (<span id="selectedFileCount">0</span>)`;
+        updateSelectedFilesUI();
       }
     });
   }

@@ -3,6 +3,7 @@
  * Admin C2 Controller (backend/controllers/adminController.js)
  */
 
+const path = require('path');
 const db = require('../config/database');
 const challengeService = require('../services/challengeService');
 const instanceService = require('../services/instanceService');
