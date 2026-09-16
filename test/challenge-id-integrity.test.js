@@ -222,11 +222,17 @@ async function runTestSuite() {
 
   // Clean up created test challenges from database
   async function cleanupChallenge(id) {
+    if (!id) return;
     const idx = db.getChallenges().findIndex(c => c.id === id || c.challengeId === id);
     if (idx !== -1) {
       const rem = db.getChallenges().splice(idx, 1)[0];
       if (db.isMongo && db.mongoDb) {
-        await db.mongoDb.collection('challenges').deleteOne({ id: rem.id }).catch(() => {});
+        await db.mongoDb.collection('challenges').deleteMany({
+          $or: [
+            { id: rem.id },
+            { challengeId: rem.challengeId || rem.id }
+          ]
+        }).catch(() => {});
       }
     }
   }
@@ -265,6 +271,13 @@ async function runTestSuite() {
   const fileIdx = db.data.challengeFiles.findIndex(f => f.id === fileRecord.id);
   if (fileIdx !== -1) db.data.challengeFiles.splice(fileIdx, 1);
 
+  // Ensure any orphaned test challenges are purged from Atlas & memory
+  if (db.isMongo && db.mongoDb) {
+    await db.mongoDb.collection('challenges').deleteMany({
+      title: { $in: ['Test Cryptography Challenge', 'Test Web Challenge', 'Test Steganography Challenge', 'Legacy Legacy Challenge', 'File Resolution Challenge'] }
+    }).catch(() => {});
+  }
+
   // 11. Admin authentication succeeds with callsign, username, or email (and enforces admin-only clearance)
   const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || 'ci_test_admin_pass!';
   const adminEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || 'ci_admin@test.local').trim().toLowerCase();
@@ -272,26 +285,16 @@ async function runTestSuite() {
   const adminCallsign = process.env.BOOTSTRAP_ADMIN_CALLSIGN || 'CI_ADMIN';
 
   // Ensure test admin exists in memory for CI runs where .env is not present
-  let existingAdmin = db.getUsers().find(u =>
-    u.role === 'ADMIN' &&
-    (
-      (u.callsign && u.callsign.toUpperCase() === adminCallsign.toUpperCase()) ||
-      (u.username && u.username.toLowerCase() === adminUsername.toLowerCase()) ||
-      (u.email && u.email.toLowerCase() === adminEmail)
-    )
-  );
+  let existingAdmin = db.getUsers().find(u => u.role === 'ADMIN');
 
   if (!existingAdmin) {
-    const crypto = require('crypto');
-    const adminSalt = crypto.randomBytes(16).toString('hex');
-    const adminKey = crypto.scryptSync(adminPassword, adminSalt, 64).toString('hex');
     existingAdmin = {
       id: 'u0000000-0000-0000-0000-000000000001',
       competition_id: 'c0000000-0000-0000-0000-000000000001',
       team_id: null,
       username: adminUsername,
       email: adminEmail,
-      password_hash: `${adminSalt}:${adminKey}`,
+      password_hash: await authService.hashPassword(adminPassword),
       role: 'ADMIN',
       callsign: adminCallsign,
       affiliation: 'XploitX Operations Command',
@@ -301,29 +304,34 @@ async function runTestSuite() {
     db.getUsers().push(existingAdmin);
   }
 
+  const targetCallsign = existingAdmin.callsign || adminCallsign;
+  const targetUsername = existingAdmin.username || adminUsername;
+  const targetEmail = existingAdmin.email || adminEmail;
+
   let authPassCount = 0;
   try {
-    const r1 = await authService.login(adminCallsign, adminPassword);
+    const r1 = await authService.login(targetCallsign, adminPassword);
     if (r1.token && r1.user.role === 'ADMIN') authPassCount++;
   } catch (e) {}
   try {
-    const r2 = await authService.login(adminUsername, adminPassword);
+    const r2 = await authService.login(targetUsername, adminPassword);
     if (r2.token && r2.user.role === 'ADMIN') authPassCount++;
   } catch (e) {}
   try {
-    const r3 = await authService.login(adminEmail, adminPassword);
+    const r3 = await authService.login(targetEmail, adminPassword);
     if (r3.token && r3.user.role === 'ADMIN') authPassCount++;
   } catch (e) {}
 
   // Verify participant rejection on admin portal (clearance check)
   const authController = require('../backend/controllers/authController');
+  const participantPassword = 'ParticipantPass123!';
   const participantUser = {
     id: 'u-participant-test',
     competition_id: 'c0000000-0000-0000-0000-000000000001',
     team_id: null,
     username: 'participant_test',
     email: 'participant@test.local',
-    password_hash: existingAdmin.password_hash,
+    password_hash: await authService.hashPassword(participantPassword),
     role: 'PARTICIPANT',
     callsign: 'PARTICIPANT_01',
     affiliation: 'Cadet Wing',
@@ -334,7 +342,7 @@ async function runTestSuite() {
 
   let participantRejectedFromAdmin = false;
   const mockReq = {
-    body: { username: 'participant_test', password: adminPassword, adminOnly: true },
+    body: { username: 'participant_test', password: participantPassword, adminOnly: true },
     headers: {},
     originalUrl: '/api/v1/auth/admin-login',
     socket: {}
@@ -356,6 +364,7 @@ async function runTestSuite() {
   // Clean up participant test user
   const pIdx = db.getUsers().findIndex(u => u.id === 'u-participant-test');
   if (pIdx !== -1) db.getUsers().splice(pIdx, 1);
+  await new Promise(r => setTimeout(r, 100));
 
   assert(
     authPassCount === 3 && participantRejectedFromAdmin,
@@ -369,6 +378,20 @@ async function runTestSuite() {
   } else {
     console.error(`  TEST SUITE COMPLETED WITH FAILURES: ${passed}/${total} PASSED`);
     console.log('===============================================================');
+  }
+
+  // Ensure all test challenges, files, and users created during this test run are cleaned up
+  await new Promise(r => setTimeout(r, 400));
+  if (db.isMongo && db.mongoDb) {
+    await db.mongoDb.collection('challenges').deleteMany({
+      title: { $in: ['Test Cryptography Challenge', 'Test Web Challenge', 'Test Steganography Challenge', 'Legacy Legacy Challenge', 'File Resolution Challenge', 'Updated Challenge Title'] }
+    }).catch(() => {});
+    await db.mongoDb.collection('challenge_files').deleteMany({
+      id: 'f0000000-0000-0000-0000-000000000001'
+    }).catch(() => {});
+    await db.mongoDb.collection('users').deleteMany({
+      id: 'u-participant-test'
+    }).catch(() => {});
   }
 
   if (typeof db.close === 'function') {

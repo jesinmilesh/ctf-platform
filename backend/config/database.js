@@ -128,6 +128,9 @@ class DatabaseEngine {
       const result = originalPush.apply(this, items);
       if (self.isMongo && self.mongoDb && !self._hydrating) {
         self._persistInsertMany(collectionKey, items).catch(err => {
+          if (err.message && (err.message.includes('client was closed') || err.message.includes('session that has ended') || err.message.includes('interrupted'))) {
+            return;
+          }
           console.error(`[MONGO_REPLICATION_ERROR] ${collectionKey}.push:`, err.message);
         });
       }
@@ -140,11 +143,17 @@ class DatabaseEngine {
       if (self.isMongo && self.mongoDb && !self._hydrating) {
         if (removed.length > 0) {
           self._persistDeleteMany(collectionKey, removed).catch(err => {
+            if (err.message && (err.message.includes('client was closed') || err.message.includes('session that has ended') || err.message.includes('interrupted'))) {
+              return;
+            }
             console.error(`[MONGO_REPLICATION_ERROR] ${collectionKey}.delete:`, err.message);
           });
         }
         if (items.length > 0) {
           self._persistInsertMany(collectionKey, items).catch(err => {
+            if (err.message && (err.message.includes('client was closed') || err.message.includes('session that has ended') || err.message.includes('interrupted'))) {
+              return;
+            }
             console.error(`[MONGO_REPLICATION_ERROR] ${collectionKey}.insert:`, err.message);
           });
         }
@@ -726,7 +735,7 @@ class DatabaseEngine {
           await coll.insertOne(toSave);
         }
       } catch (err) {
-        if (err.code !== 11000) {
+        if (err.code !== 11000 && !err.message?.includes('client was closed') && !err.message?.includes('session that has ended') && !err.message?.includes('interrupted')) {
           console.warn(`[DATABASE] Replication notice for ${colName}:`, err.message);
         }
       }
@@ -735,11 +744,17 @@ class DatabaseEngine {
 
   async _persistDeleteMany(collectionKey, items) {
     if (!this.isMongo || !this.mongoDb || !items || items.length === 0) return;
-    const colName = COLLECTION_MAP[collectionKey] || collectionKey;
-    const coll = this.mongoDb.collection(colName);
-    const ids = items.map(i => i.id || i.instanceId).filter(Boolean);
-    if (ids.length > 0) {
-      await coll.deleteMany({ id: { $in: ids } });
+    try {
+      const colName = COLLECTION_MAP[collectionKey] || collectionKey;
+      const coll = this.mongoDb.collection(colName);
+      const ids = items.map(i => i.id || i.instanceId).filter(Boolean);
+      if (ids.length > 0) {
+        await coll.deleteMany({ id: { $in: ids } });
+      }
+    } catch (err) {
+      if (!err.message?.includes('client was closed') && !err.message?.includes('session that has ended') && !err.message?.includes('interrupted')) {
+        throw err;
+      }
     }
   }
 
