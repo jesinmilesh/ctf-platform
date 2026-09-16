@@ -498,7 +498,7 @@ class ChallengeService {
 
     // Record hint reveal
     const crypto = require('crypto');
-    db.getHintReveals().push({
+    const revealDoc = {
       id: crypto.randomUUID(),
       hint_id: hint.id,
       challenge_id: challenge.id,
@@ -506,7 +506,16 @@ class ChallengeService {
       user_id: userId,
       points_deducted: hint.cost,
       revealed_at: new Date().toISOString()
-    });
+    };
+    db.getHintReveals().push(revealDoc);
+
+    if (db.isMongo && db.mongoDb) {
+      db.mongoDb.collection('hint_reveals').updateOne(
+        { hint_id: hint.id, $or: [{ team_id: teamId }, { user_id: userId }] },
+        { $setOnInsert: revealDoc },
+        { upsert: true }
+      ).catch(e => console.warn('[HINT] Atlas reveal write warning:', e.message));
+    }
 
     auditService.record({
       action: 'HINT.UNLOCKED',

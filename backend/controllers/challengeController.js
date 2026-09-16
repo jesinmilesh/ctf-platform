@@ -76,6 +76,25 @@ exports.getOne = async (req, res) => {
     }
   }
 
+  // Synchronize operative's unlocked hint reveals from MongoDB Atlas
+  if (req.user && db.isMongo && db.mongoDb) {
+    try {
+      const teamId = req.user.team_id || (req.user.team && req.user.team.id);
+      const userId = req.user.id;
+      const orClauses = [];
+      if (teamId) orClauses.push({ team_id: teamId });
+      if (userId) orClauses.push({ user_id: userId });
+      if (orClauses.length > 0) {
+        const liveReveals = await db.mongoDb.collection('hint_reveals').find({ $or: orClauses }).toArray();
+        for (const lr of liveReveals) {
+          if (!db.getHintReveals().some(r => r.id === lr.id || (r.hint_id === lr.hint_id && (r.team_id === lr.team_id || r.user_id === lr.user_id)))) {
+            Array.prototype.push.call(db.getHintReveals(), lr);
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   let challenge = challengeService.getChallengeDetails(challengeId, req.user);
 
   // Fallback: direct Atlas lookup if not found in memory cache.
