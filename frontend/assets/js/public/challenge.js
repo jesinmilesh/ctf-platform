@@ -301,7 +301,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           const targetFileId = f.id || f.fileId;
           const downloadUrl = f.downloadUrl || `/api/v1/challenges/${targetChallengeId}/files/${targetFileId}/download`;
           const fileName = f.name || f.filename || 'asset.bin';
-          const shaHash = f.sha256 ? `${f.sha256.substring(0, 8)}...` : null;
 
           return `
             <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-secondary); border:1px solid var(--border); padding:12px 16px; border-radius:var(--radius-sm); margin-bottom:10px; flex-wrap:wrap; gap:12px;">
@@ -312,7 +311,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ${window.Utils.escapeHTML(fileName)}
                   </div>
                   <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted); margin-top:2px;">
-                    SIZE: ${sizeStr} ${shaHash ? `• SHA-256: <span title="${f.sha256}" style="color:var(--cyan); cursor:pointer;" onclick="navigator.clipboard.writeText('${f.sha256}'); window.showSuccess('SHA-256 hash copied');">${shaHash} 📋</span>` : ''}
+                    SIZE: ${sizeStr}
                   </div>
                 </div>
               </div>
