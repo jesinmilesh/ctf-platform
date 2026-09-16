@@ -35,6 +35,38 @@
       "destination": "/frontend/public/challenge"
     },
     {
+      "source": "/feed",
+      "destination": "/frontend/public/activity"
+    },
+    {
+      "source": "/feed.html",
+      "destination": "/frontend/public/activity"
+    },
+    {
+      "source": "/intel",
+      "destination": "/frontend/public/announcements"
+    },
+    {
+      "source": "/intel.html",
+      "destination": "/frontend/public/announcements"
+    },
+    {
+      "source": "/missions",
+      "destination": "/frontend/public/challenges"
+    },
+    {
+      "source": "/missions.html",
+      "destination": "/frontend/public/challenges"
+    },
+    {
+      "source": "/squad",
+      "destination": "/frontend/public/team"
+    },
+    {
+      "source": "/squad.html",
+      "destination": "/frontend/public/team"
+    },
+    {
       "source": "/",
       "destination": "/frontend/public/index"
     },
