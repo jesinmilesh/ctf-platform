@@ -12,6 +12,8 @@ router.get('/', async (req, res) => {
   try {
     const dbHealth = await db.checkHealth();
     res.json({
+      success: true,
+      service: 'xploitx-api',
       status: 'ok',
       platform: 'XPLOITX // CYBER BATTLEFIELD',
       version: '2.0.0',
@@ -26,12 +28,13 @@ router.get('/', async (req, res) => {
     });
   } catch (err) {
     res.status(503).json({
+      success: false,
+      service: 'xploitx-api',
       status: 'degraded',
       platform: 'XPLOITX // CYBER BATTLEFIELD',
       services: {
         api: 'ok',
-        database: 'error',
-        error: err.message
+        database: 'error'
       },
       timestamp: new Date().toISOString()
     });

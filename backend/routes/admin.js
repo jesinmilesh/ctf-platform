@@ -57,14 +57,15 @@ router.use(requireAuth, requireAdmin);
 
 
 // ── Admin Identity ────────────────────────────────────────────────────────────
-router.get('/me', (req, res) => {
+const adminIdentityHandler = (req, res) => {
   const db = require('../config/database');
   // Always fetch fresh from database — never trust req.user.role alone
   const freshUser = db.getUsers().find(u => u.id === req.user.id);
   if (!freshUser || freshUser.role !== 'ADMIN') {
-    return res.status(403).json({ error: 'FORBIDDEN', message: 'Admin clearance required.' });
+    return res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Admin clearance required.' });
   }
   res.json({
+    success: true,
     user: {
       id: freshUser.id,
       username: freshUser.username,
@@ -73,7 +74,10 @@ router.get('/me', (req, res) => {
       callsign: freshUser.callsign
     }
   });
-});
+};
+
+router.get('/me', adminIdentityHandler);
+router.get('/auth/me', adminIdentityHandler);
 
 // ── Dashboard Overview ────────────────────────────────────────────────────────
 router.get('/overview', (req, res) => adminController.getOverview(req, res));

@@ -57,17 +57,20 @@ const COLLECTION_MAP = {
 
 class DatabaseEngine {
   constructor() {
-    const rawUrl = process.env.DATABASE_URL || process.env.MONGODB_URI || '';
+    const FALLBACK_MONGO_URI = 'mongodb+srv://jesinmilesh_db_user:BzrMyDFa51EmIh7Z@cluster0.pi4ys06.mongodb.net/?appName=Cluster0';
+    const FALLBACK_DB_NAME = 'xploitx_ctf';
+
+    const rawUrl = (process.env.DATABASE_URL || process.env.MONGODB_URI || '').trim() || FALLBACK_MONGO_URI;
     const isMongoUri = rawUrl.startsWith('mongodb://') || rawUrl.startsWith('mongodb+srv://');
     
     this.dbType = process.env.DB_TYPE || (isMongoUri ? 'mongodb' : 'memory');
     this.isMongo = this.dbType === 'mongodb';
     this.isPostgres = this.dbType === 'postgres' || rawUrl.startsWith('postgres://') || rawUrl.startsWith('postgresql://');
     
-    this.mongoUrl = isMongoUri ? rawUrl : (process.env.MONGODB_URI || process.env.DATABASE_URL);
+    this.mongoUrl = isMongoUri ? rawUrl : (process.env.MONGODB_URI || process.env.DATABASE_URL || FALLBACK_MONGO_URI);
     const urlDbMatch = rawUrl ? rawUrl.match(/mongodb(?:\+srv)?:\/\/[^\/]+\/([^?]+)/) : null;
     const urlDb = urlDbMatch ? urlDbMatch[1] : null;
-    this.mongoDbName = process.env.MONGODB_DB_NAME || urlDb || 'xploitx_ctf';
+    this.mongoDbName = process.env.MONGODB_DB_NAME || process.env.DATABASE_NAME || urlDb || FALLBACK_DB_NAME;
     this.mongoClient = null;
     this.mongoDb = null;
     this.mongoose = mongoose;
@@ -75,6 +78,8 @@ class DatabaseEngine {
     this.pool = null;
     this.connected = false;
     this.initPromise = null;
+    this.lastConnectionError = null;
+    this._indexesEnsured = false;
 
     // Production Data Store - Authoritative Source of Truth
     this.data = {
@@ -274,10 +279,10 @@ class DatabaseEngine {
       try {
         console.log('[DATABASE] Initializing connection to MongoDB Atlas...');
         const mongoOptions = {
-          maxPoolSize: 20,
-          minPoolSize: 2,
-          serverSelectionTimeoutMS: 8000,
-          connectTimeoutMS: 10000,
+          maxPoolSize: 10,
+          minPoolSize: 0,
+          serverSelectionTimeoutMS: 5000,
+          connectTimeoutMS: 8000,
           socketTimeoutMS: 30000,
           maxIdleTimeMS: 60000
         };
@@ -287,6 +292,7 @@ class DatabaseEngine {
         await this.mongoClient.connect();
         this.mongoDb = this.mongoClient.db(this.mongoDbName);
         this.connected = true;
+        this.lastConnectionError = null;
         console.log(`[DATABASE] Connected to MongoDB Atlas cluster (Database: ${this.mongoDbName})`);
 
         // Connect Mongoose
@@ -300,7 +306,7 @@ class DatabaseEngine {
         }
 
         // Configure indexes for rapid queries
-        await this._ensureIndexes();
+        this._ensureIndexes().catch(e => console.warn('[DATABASE] Indexing notice:', e.message));
 
         // Hydrate from Atlas into memory cache
         await this.syncFromMongo();
@@ -308,6 +314,10 @@ class DatabaseEngine {
         // Start debounced periodic sync for in-place modifications
         this._startPeriodicSync();
       } catch (err) {
+        this.connected = false;
+        this.mongoDb = null;
+        this.lastConnectionError = err.message;
+        this.initPromise = null;
         console.error('[DATABASE] MongoDB Atlas connection error:', err.message);
         console.warn('[DATABASE] Operating in authoritative in-memory mode with fallback.');
       }
@@ -317,7 +327,8 @@ class DatabaseEngine {
   }
 
   async _ensureIndexes() {
-    if (!this.mongoDb) return;
+    if (!this.mongoDb || this._indexesEnsured) return;
+    this._indexesEnsured = true;
     try {
       const uColl = this.mongoDb.collection('users');
       await uColl.createIndex({ id: 1 }, { unique: true, sparse: true });

@@ -102,8 +102,8 @@ app.use(helmet({
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1000,
-  standardHeaders: true, 
-  legacyHeaders: false, 
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 app.use(limiter);
 
@@ -114,12 +114,10 @@ const TRUSTED_ORIGINS = new Set();
 if (process.env.CORS_ORIGIN) {
   process.env.CORS_ORIGIN.split(',').map(s => s.trim()).filter(Boolean).forEach(o => TRUSTED_ORIGINS.add(o));
 }
-
-
-app.use(cors({ 
+app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    if (process.env.NODE_ENV !== 'production' && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
       return callback(null, true);
     }
     if (TRUSTED_ORIGINS.has(origin)) {

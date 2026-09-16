@@ -138,14 +138,18 @@ class AuthService {
     }
 
     if (!user) {
+      console.log('[AUTH:DIAGNOSTIC] Account found: false');
       const err = new Error('INVALID ADMIN CREDENTIALS');
       err.code = 'INVALID_CREDENTIALS';
       throw err;
     }
 
+    console.log(`[AUTH:DIAGNOSTIC] Account found: true, role: ${user.role || 'UNKNOWN'}`);
+
     // Retrieve stored password hash from the authentic record (supports password_hash, passwordHash, password)
     const storedHash = user.password_hash || user.passwordHash || user.password;
     if (!storedHash) {
+      console.log('[AUTH:DIAGNOSTIC] Password hash missing on account');
       const err = new Error('INVALID ADMIN CREDENTIALS');
       err.code = 'INVALID_CREDENTIALS';
       throw err;
@@ -153,6 +157,7 @@ class AuthService {
 
     // Verify password against stored hash without any modifications or re-hashing
     const isValid = await this.verifyPassword(rawPassword, storedHash);
+    console.log(`[AUTH:DIAGNOSTIC] Password verification: ${isValid ? 'success' : 'failure'}`);
     if (!isValid) {
       const err = new Error('INVALID ADMIN CREDENTIALS');
       err.code = 'INVALID_CREDENTIALS';
@@ -161,6 +166,7 @@ class AuthService {
 
     // Verify account active status
     if (user.is_banned || user.status === 'disabled' || user.status === 'suspended') {
+      console.log('[AUTH:DIAGNOSTIC] Account inactive or suspended');
       const err = new Error('ADMIN ACCOUNT IS SUSPENDED OR INACTIVE');
       err.code = 'ACCOUNT_INACTIVE';
       throw err;
@@ -169,12 +175,14 @@ class AuthService {
     // Strict Role Verification: Must explicitly be ADMIN server-side
     const isAdmin = user.role === 'ADMIN';
     if (!isAdmin) {
+      console.log(`[AUTH:DIAGNOSTIC] Role rejection: participant ${user.username} (role: ${user.role}) denied admin access`);
       const err = new Error('ADMIN ACCESS REQUIRED');
       err.code = 'CLEARANCE_DENIED';
       throw err;
     }
 
     const token = this.generateToken(user.id, user.username);
+    console.log(`[AUTH:DIAGNOSTIC] Session creation: ${Boolean(token) ? 'success' : 'failure'}`);
 
     // Register active session
     const sessionObj = {

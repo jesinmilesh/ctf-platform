@@ -13,6 +13,9 @@ exports.adminLogin = async (req, res, next) => {
   const password = req.body.password;
   const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '127.0.0.1';
 
+  const requestId = req.id || req.headers['x-request-id'] || 'N/A';
+  console.log(`[AUTH:DIAGNOSTIC] Admin login attempt - requestId: "${requestId}", route: "${req.originalUrl}", username lookup attempted: "${String(username || '').slice(0, 32)}"`);
+
   try {
     if (!username || !password) {
       return res.status(401).json({
@@ -32,7 +35,7 @@ exports.adminLogin = async (req, res, next) => {
       resource: { type: 'PORTAL', id: 'ADMIN_C2' },
       result: 'SUCCESS',
       description: `Administrator ${result.user.username} authenticated successfully`,
-      request: { requestId: req.id, method: req.method, route: req.originalUrl },
+      request: { requestId, method: req.method, route: req.originalUrl },
       network: { ip, userAgent: req.headers ? req.headers['user-agent'] : null },
       metadata: { role: result.user.role }
     }).catch(() => {});
@@ -54,6 +57,7 @@ exports.adminLogin = async (req, res, next) => {
   } catch (err) {
     const isClearanceDenied = err.code === 'CLEARANCE_DENIED' || err.message === 'ADMIN ACCESS REQUIRED';
     const isInactive = err.code === 'ACCOUNT_INACTIVE';
+    const isInvalidCreds = err.code === 'INVALID_CREDENTIALS';
 
     auditService.record({
       action: isClearanceDenied ? 'AUTH.ADMIN_ACCESS_DENIED' : 'AUTH.ADMIN_LOGIN_FAILURE',
@@ -65,7 +69,7 @@ exports.adminLogin = async (req, res, next) => {
       description: isClearanceDenied
         ? `Participant ${username} denied access to C2 admin portal: ADMIN ACCESS REQUIRED`
         : `Admin authentication failed for identifier: ${String(username || 'unknown').slice(0, 64)}`,
-      request: { requestId: req.id, method: req.method, route: req.originalUrl },
+      request: { requestId, method: req.method, route: req.originalUrl },
       network: { ip, userAgent: req.headers ? req.headers['user-agent'] : null },
       metadata: { reason: err.message, code: err.code }
     }).catch(() => {});
@@ -86,10 +90,20 @@ exports.adminLogin = async (req, res, next) => {
       });
     }
 
-    return res.status(401).json({
+    if (isInvalidCreds) {
+      return res.status(401).json({
+        success: false,
+        error: 'INVALID_CREDENTIALS',
+        message: 'INVALID ADMIN CREDENTIALS'
+      });
+    }
+
+    // 503 for unexpected server or database errors
+    console.error('[AUTH:ERROR] Admin login server error:', err.message);
+    return res.status(503).json({
       success: false,
-      error: 'INVALID_CREDENTIALS',
-      message: 'INVALID ADMIN CREDENTIALS'
+      error: 'SERVICE_UNAVAILABLE',
+      message: 'CONTROL ROOM TEMPORARILY UNAVAILABLE'
     });
   }
 };
