@@ -10,6 +10,7 @@ const instanceService = require('../services/instanceService');
 const fileService = require('../services/fileService');
 const realtimeService = require('../services/realtimeService');
 const auditService = require('../services/auditService');
+const flagVerificationService = require('../services/flagVerificationService');
 
 class AdminController {
   constructor() {
@@ -61,6 +62,25 @@ class AdminController {
       };
     });
     res.json({ challenges });
+  }
+
+  async getChallenge(req, res) {
+    const rawId = req.params.id ? String(req.params.id).trim() : '';
+    if (!rawId) {
+      return res.status(400).json({ success: false, error: 'CHALLENGE_ID_REQUIRED', message: 'Challenge identifier is required.' });
+    }
+
+    // Hydrate from Atlas if empty
+    if (db.isMongo && db.mongoDb && db.getChallenges().length === 0) {
+      await db.syncFromMongo().catch(() => {});
+    }
+
+    const challenge = challengeService.getAdminChallengeDetails(rawId);
+    if (!challenge) {
+      return res.status(404).json({ success: false, error: 'CHALLENGE_NOT_FOUND', message: 'Challenge dossier not found in database.' });
+    }
+
+    res.json({ success: true, challenge });
   }
 
   createChallenge(req, res) {
@@ -370,11 +390,20 @@ class AdminController {
     }
 
     if (challengeId) {
-      const flags = db.getFlags().filter(f => f.challenge_id === challengeId);
-      const match = flags.some(f => f.flag_value === cleanFlag);
+      const challenge = challengeService.resolveChallenge(challengeId);
+      if (!challenge) {
+        return res.json({
+          valid: false,
+          message: 'FLAG INVALID: Target mission dossier not found in database.'
+        });
+      }
+
+      const verification = flagVerificationService.verifySubmission(challenge, cleanFlag, req.user);
       return res.json({
-        valid: match,
-        message: match ? 'FLAG VERIFIED: Exact cryptographic match!' : 'FLAG INVALID: Does not match mission database.'
+        valid: verification.correct,
+        message: verification.correct
+          ? 'FLAG VERIFIED: Exact cryptographic match with mission database!'
+          : 'FLAG INVALID: Does not match mission database.'
       });
     }
 

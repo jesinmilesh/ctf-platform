@@ -163,6 +163,7 @@ const api = {
     me: () => apiRequest('/admin/me'),
     getOverview: () => apiRequest('/admin/overview'),
     getChallenges: () => apiRequest('/admin/challenges'),
+    getChallenge: (id) => apiRequest(`/admin/challenges/${encodeURIComponent(id)}`),
     createChallenge: (data) => apiRequest('/admin/challenges', { method: 'POST', body: JSON.stringify(data) }),
     updateChallenge: (id, data) => apiRequest(`/admin/challenges/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     deleteChallenge: (id) => apiRequest(`/admin/challenges/${id}`, { method: 'DELETE' }),

@@ -281,20 +281,52 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function loadExistingChallenge(id) {
     try {
-      const c = await window.api.getChallenge(id);
+      let res;
+      try {
+        res = await window.api.admin.getChallenge(id);
+      } catch (adminErr) {
+        console.warn('Admin challenge fetch fallback:', adminErr.message);
+        res = await window.api.getChallenge(id);
+      }
+      const c = (res && res.challenge) ? res.challenge : res;
+      if (!c) return;
+
       document.getElementById('editTitle').value = c.title || '';
       const missionIdEl = document.getElementById('editMissionId');
       if (missionIdEl) {
-        missionIdEl.value = c.challengeId || c.mission_id || '';
+        missionIdEl.value = c.challengeId || c.mission_id || c.id || '';
         missionIdEl.readOnly = true;
         missionIdEl.style.opacity = '0.7';
       }
       document.getElementById('editCategory').value = c.category || c.category_name || 'PWN';
       document.getElementById('editDifficulty').value = c.difficulty || 'MEDIUM';
       document.getElementById('editDescription').value = c.description || '';
-      document.getElementById('editPoints').value = c.points || 500;
+      document.getElementById('editPoints').value = c.points || c.current_points || c.base_points || 500;
       document.getElementById('editMinPoints').value = c.minimum_points || 100;
       document.getElementById('editDecay').value = c.decay_threshold || 30;
+
+      // Authoritative Flag pre-fill (Sections 1, 3, 5, 13, 53)
+      const flagInput = document.getElementById('editFlag');
+      if (flagInput) {
+        const storedFlag = c.flag || (Array.isArray(c.flags) && c.flags[0] ? (c.flags[0].value || c.flags[0].flag_value) : '') || '';
+        flagInput.value = storedFlag;
+      }
+
+      // Authoritative Hint pre-fill (Sections 2, 3, 13, 17, 18, 19, 53)
+      const hintInput = document.getElementById('editHint');
+      const hintCostInput = document.getElementById('editHintCost');
+      if (hintInput) {
+        const firstHint = (Array.isArray(c.hints) && c.hints[0])
+          ? (c.hints[0].content || c.hints[0].text || '')
+          : (c.hint || '');
+        hintInput.value = firstHint;
+      }
+      if (hintCostInput) {
+        const firstCost = (Array.isArray(c.hints) && c.hints[0] && c.hints[0].cost !== undefined)
+          ? c.hints[0].cost
+          : (c.hint_cost !== undefined ? c.hint_cost : 50);
+        hintCostInput.value = firstCost;
+      }
       
       const hasInst = !!(c.requiresInstance || c.runtime?.enabled || c.has_instance);
       document.getElementById('editHasInstance').checked = hasInst;
@@ -381,7 +413,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!payload.difficulty) errors.push('Difficulty rating must be designated.');
     if (!payload.points || isNaN(payload.points) || payload.points <= 0) errors.push('Base reward XP must be a positive integer.');
     if (payload.minimum_points && payload.minimum_points > payload.points) errors.push('Floor XP cannot exceed base XP.');
-    if (!payload.flag && !editingId) errors.push('Cryptographic flag configuration is required.');
+    if (!payload.flag) errors.push('Cryptographic flag configuration is required.');
     if (payload.requiresInstance && !payload.docker_image) errors.push('Docker image is required when sandbox is enabled.');
     return errors;
   }
@@ -441,18 +473,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     const memoryLimit = document.getElementById('editMemoryLimit')?.value.trim() || '256m';
     const pidLimit = parseInt(document.getElementById('editPidLimit')?.value || 128, 10);
 
+    const flagVal = document.getElementById('editFlag').value.trim();
+    const hintVal = document.getElementById('editHint').value.trim();
+    const hintCostVal = parseInt(document.getElementById('editHintCost')?.value || 50, 10);
+
     return {
       title: document.getElementById('editTitle').value.trim(),
       mission_id: document.getElementById('editMissionId').value.trim(),
       category: document.getElementById('editCategory').value,
       difficulty: document.getElementById('editDifficulty').value,
       description: document.getElementById('editDescription').value.trim(),
-      flag: document.getElementById('editFlag').value.trim(),
+      flag: flagVal,
+      flags: flagVal ? [{
+        type: 'STATIC',
+        value: flagVal,
+        case_sensitive: true,
+        enabled: true
+      }] : [],
       points: parseInt(document.getElementById('editPoints').value, 10),
       minimum_points: parseInt(document.getElementById('editMinPoints').value, 10),
       decay_threshold: parseInt(document.getElementById('editDecay').value, 10),
-      hint: document.getElementById('editHint').value.trim(),
-      hint_cost: parseInt(document.getElementById('editHintCost').value || 50, 10),
+      hint: hintVal,
+      hint_cost: isNaN(hintCostVal) ? 50 : hintCostVal,
+      hints: hintVal ? [{
+        content: hintVal,
+        text: hintVal,
+        cost: isNaN(hintCostVal) ? 50 : hintCostVal,
+        order: 1,
+        order_index: 1,
+        enabled: true
+      }] : [],
       has_instance: hasInstance,
       requiresInstance: hasInstance,
       docker_image: hasInstance ? (dockerImage || 'xploitx/vault:latest') : null,

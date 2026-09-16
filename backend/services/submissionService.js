@@ -8,6 +8,8 @@ const db = require('../config/database');
 const scoringService = require('./scoringService');
 const realtimeService = require('./realtimeService');
 const auditService = require('./auditService');
+const flagVerificationService = require('./flagVerificationService');
+const challengeService = require('./challengeService');
 
 class SubmissionService {
   constructor() {
@@ -39,18 +41,8 @@ class SubmissionService {
       };
     }
 
-    // 1. Find challenge with flexible normalization (ch-01 <-> ch-001, id, _id, slug, mission_id)
-    const cleanChallengeId = String(challengeId || '').trim();
-    const challenge = db.getChallenges().find(c =>
-      c.id === cleanChallengeId ||
-      c.slug === cleanChallengeId ||
-      c.mission_id === cleanChallengeId ||
-      (c._id && String(c._id) === cleanChallengeId) ||
-      (c.title && c.title.toLowerCase() === cleanChallengeId.toLowerCase()) ||
-      c.id === cleanChallengeId.replace(/^ch-0*(\d+)$/, (m, p) => 'ch-' + (parseInt(p, 10) < 10 ? '0' + parseInt(p, 10) : p)) ||
-      c.id.replace(/^ch-0*(\d+)$/, 'ch-$1') === cleanChallengeId
-    );
-
+    // 1. Authoritative Challenge Resolution (Sections 3, 4, 23, 24)
+    const challenge = challengeService.resolveChallenge(challengeId);
     if (!challenge) {
       return { success: false, correct: false, status: 'NOT_FOUND', message: 'Mission dossier not found' };
     }
@@ -64,9 +56,9 @@ class SubmissionService {
     const teamId = user.team_id || (user.team && user.team.id);
     const team = db.getTeams().find(t => t.id === teamId);
     const canonicalChallengeId = challenge.id;
-    const challengeIds = [challenge.id, String(challenge._id || ''), challenge.slug, challenge.mission_id].filter(Boolean);
+    const challengeIds = challengeService.getChallengeAltIds(challenge);
 
-    // 2. Check if already solved
+    // 2. Check if already solved (Sections 35, 36)
     const existingSolve = db.getSolves().find(s =>
       challengeIds.includes(String(s.challenge_id).trim()) &&
       ((teamId && s.team_id === teamId) || (user.id && s.user_id === user.id))
@@ -92,15 +84,16 @@ class SubmissionService {
       };
     }
 
-    // 3. Verify Flag Syntax Prefix & Suffix
-    const prefix = settings.flagPrefix || 'XploitXβ{';
-    const suffix = settings.flagSuffix || '}';
-    if (!cleanFlag.startsWith(prefix) || !cleanFlag.endsWith(suffix)) {
+    // 3. Verify Flag using central FlagVerificationService (Sections 25, 26, 27, 28, 32)
+    const verification = flagVerificationService.verifySubmission(challenge, cleanFlag, user);
+
+    if (!verification.correct) {
+      const isMalformed = verification.reason === 'MALFORMED_SYNTAX';
       this.recordSubmission({
         challengeId: canonicalChallengeId,
         teamId,
         userId: user.id,
-        status: 'MALFORMED',
+        status: isMalformed ? 'MALFORMED' : 'INCORRECT',
         ip
       });
 
@@ -111,64 +104,20 @@ class SubmissionService {
         actor: user,
         resource: { type: 'CHALLENGE', id: canonicalChallengeId, challengeId: canonicalChallengeId },
         result: 'FAILURE',
-        description: `Malformed flag rejected for mission "${challenge.title}"`,
+        description: `${isMalformed ? 'Malformed' : 'Incorrect'} flag rejected for mission "${challenge.title}"`,
         network: { ip },
-        metadata: { challengeId: canonicalChallengeId, teamId, reason: 'MALFORMED_SYNTAX' }
+        metadata: { challengeId: canonicalChallengeId, teamId, reason: verification.reason || 'INCORRECT' }
       }).catch(() => {});
 
       return {
         success: false,
         correct: false,
-        status: 'MALFORMED',
+        status: isMalformed ? 'MALFORMED' : 'INCORRECT',
         message: 'FLAG REJECTED // CRYPTOGRAPHIC CHECKSUM MISMATCH'
       };
     }
 
-    // 4. Match against stored flags for this challenge (Section 14)
-    // Supports: STATIC, REGEX, DYNAMIC (HMAC), MULTIPLE_ACCEPTED_FLAGS
-    const challengeFlags = db.getFlags().filter(f => challengeIds.includes(String(f.challenge_id).trim()));
-    let isCorrect = false;
-
-    const hmacSecret = process.env.FLAG_HMAC_SECRET || 'xploitx_dynamic_flag_hmac_secret_key_2026';
-
-    for (const fl of challengeFlags) {
-      if (fl.flag_type === 'REGEX') {
-        const regex = new RegExp(fl.flag_value, fl.case_sensitive ? '' : 'i');
-        if (regex.test(cleanFlag)) {
-          isCorrect = true;
-          break;
-        }
-      } else if (fl.flag_type === 'DYNAMIC') {
-        // Dynamic HMAC generation based on team ID or user ID
-        const seedId = teamId || user.id || 'operative';
-        const hmacHash = crypto.createHmac('sha256', hmacSecret).update(`${challenge.id}:${seedId}`).digest('hex').substring(0, 16);
-        const expectedDynamicFlag = `${prefix}dyn_${hmacHash}${suffix}`;
-        if (cleanFlag === expectedDynamicFlag) {
-          isCorrect = true;
-          break;
-        }
-      } else if (fl.flag_type === 'MULTIPLE_ACCEPTED_FLAGS') {
-        // Comma or newline separated accepted flags
-        const accepted = fl.flag_value.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
-        if (accepted.some(a => fl.case_sensitive ? a === cleanFlag : a.toLowerCase() === cleanFlag.toLowerCase())) {
-          isCorrect = true;
-          break;
-        }
-      } else {
-        // Standard STATIC match
-        if (fl.case_sensitive) {
-          if (cleanFlag === fl.flag_value) {
-            isCorrect = true;
-            break;
-          }
-        } else {
-          if (cleanFlag.toLowerCase() === fl.flag_value.toLowerCase()) {
-            isCorrect = true;
-            break;
-          }
-        }
-      }
-    }
+    const isCorrect = true;
 
     // 5. Handle Incorrect Flag
     if (!isCorrect) {
@@ -316,6 +265,7 @@ class SubmissionService {
       success: true,
       correct: true,
       status: 'CORRECT',
+      points: pointsAwarded,
       pointsAwarded,
       points_awarded: pointsAwarded,
       isFirstBlood,

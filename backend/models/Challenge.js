@@ -57,10 +57,34 @@ const challengeSchema = new mongoose.Schema({
   },
 
   author: { type: String, default: 'C2 Intelligence' },
+
+  // Authoritative Flags & Hints Schema (Sections 5, 17, 49)
+  flag: { type: String, default: null },
+  flags: [{
+    id: { type: String },
+    type: { type: String, default: 'STATIC' },
+    flag_type: { type: String, default: 'STATIC' },
+    value: { type: String },
+    flag_value: { type: String },
+    case_sensitive: { type: Boolean, default: true },
+    enabled: { type: Boolean, default: true }
+  }],
+  hint: { type: String, default: null },
+  hint_cost: { type: Number, default: 50 },
+  hints: [{
+    id: { type: String },
+    content: { type: String },
+    text: { type: String },
+    cost: { type: Number, default: 0 },
+    order: { type: Number, default: 1 },
+    order_index: { type: Number, default: 1 },
+    enabled: { type: Boolean, default: true }
+  }],
+
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
 }, {
-  strict: true,
+  strict: false,
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
 });
 

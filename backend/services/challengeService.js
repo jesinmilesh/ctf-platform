@@ -121,13 +121,16 @@ class ChallengeService {
     });
   }
 
-  getChallengeDetails(challengeId, user) {
-    if (!challengeId) return null;
-    const cleanId = String(challengeId).trim();
+  /**
+   * Authoritative Challenge Identifier Resolver
+   * Resolves challenge by id, challengeId, publicRouteId, _id, slug, mission_id, or title
+   */
+  resolveChallenge(identifier) {
+    if (!identifier) return null;
+    const cleanId = String(identifier).trim();
     const cleanIdLower = cleanId.toLowerCase();
 
-    // 1. Search in-memory cache by publicRouteId, challengeId, id, _id, mission_id, slug, or title
-    const c = db.getChallenges().find(item => {
+    return db.getChallenges().find(item => {
       if (!item) return false;
       const itemId = item.id ? String(item.id).trim() : '';
       const itemChallengeId = item.challengeId ? String(item.challengeId).trim() : '';
@@ -150,8 +153,124 @@ class ChallengeService {
         itemMissionId.toLowerCase() === cleanIdLower ||
         itemSlug.toLowerCase() === cleanIdLower ||
         itemTitle.toLowerCase() === cleanIdLower;
-    });
+    }) || null;
+  }
 
+  getChallengeAltIds(c) {
+    if (!c) return [];
+    return [
+      c.id ? String(c.id).trim() : null,
+      c.challengeId ? String(c.challengeId).trim() : null,
+      c.publicRouteId ? String(c.publicRouteId).trim() : null,
+      c._id ? String(c._id).trim() : null,
+      c.mission_id ? String(c.mission_id).trim() : null,
+      c.slug ? String(c.slug).trim() : null,
+      c.legacy_id ? String(c.legacy_id).trim() : null
+    ].filter(Boolean);
+  }
+
+  /**
+   * Dedicated Admin Challenge Dossier
+   * Authoritative endpoint for Admin Challenge Editor.
+   * Returns full configuration including plaintext flags and hints (Sections 14, 15, 51).
+   */
+  getAdminChallengeDetails(challengeId) {
+    if (!challengeId) return null;
+    const c = this.resolveChallenge(challengeId);
+    if (!c) return null;
+
+    const altIds = this.getChallengeAltIds(c);
+
+    // Retrieve authoritative flags
+    const storedFlags = db.getFlags().filter(f =>
+      altIds.includes(String(f.challenge_id).trim()) || altIds.includes(String(f.challengeId || '').trim())
+    );
+
+    let authoritativeFlag = '';
+    if (storedFlags.length > 0 && storedFlags[0].flag_value) {
+      authoritativeFlag = storedFlags[0].flag_value;
+    } else if (c.flag) {
+      authoritativeFlag = c.flag;
+    } else if (Array.isArray(c.flags) && c.flags.length > 0) {
+      authoritativeFlag = c.flags[0].value || c.flags[0].flag_value || '';
+    }
+
+    const formattedFlags = storedFlags.length > 0 ? storedFlags.map(f => ({
+      id: f.id,
+      type: f.flag_type || 'STATIC',
+      value: f.flag_value,
+      case_sensitive: f.case_sensitive !== false,
+      enabled: true
+    })) : (authoritativeFlag ? [{
+      id: `f-${c.id}-0`,
+      type: 'STATIC',
+      value: authoritativeFlag,
+      case_sensitive: true,
+      enabled: true
+    }] : []);
+
+    // Retrieve authoritative hints
+    const storedHints = db.getHints().filter(h =>
+      altIds.includes(String(h.challenge_id).trim()) || altIds.includes(String(h.challengeId || '').trim())
+    );
+
+    const formattedHints = storedHints.length > 0 ? storedHints.map((h, idx) => ({
+      id: h.id,
+      text: h.content,
+      content: h.content,
+      cost: h.cost !== undefined ? h.cost : 50,
+      order: h.order_index || (idx + 1),
+      order_index: h.order_index || (idx + 1),
+      enabled: h.enabled !== false
+    })) : (Array.isArray(c.hints) && c.hints.length > 0 ? c.hints.map((h, idx) => ({
+      id: h.id || `h-${idx}`,
+      text: h.content || h.text || '',
+      content: h.content || h.text || '',
+      cost: h.cost !== undefined ? h.cost : 50,
+      order: h.order || h.order_index || (idx + 1),
+      order_index: h.order || h.order_index || (idx + 1),
+      enabled: h.enabled !== false
+    })) : (c.hint ? [{
+      id: `h-${c.id}-0`,
+      text: c.hint,
+      content: c.hint,
+      cost: c.hint_cost !== undefined ? c.hint_cost : 50,
+      order: 1,
+      order_index: 1,
+      enabled: true
+    }] : []));
+
+    const primaryHint = formattedHints[0]?.text || c.hint || '';
+    const primaryCost = formattedHints[0]?.cost !== undefined ? formattedHints[0].cost : (c.hint_cost !== undefined ? c.hint_cost : 50);
+
+    const categories = db.getCategories();
+    let category = categories.find(cat => cat.id === c.category_id);
+    if (!category && (c.category_name || c.category)) {
+      category = this._resolveCategory(c.category_name || c.category, c.category_id);
+    }
+
+    const publicId = c.challengeId || c.id;
+
+    return {
+      ...c,
+      id: publicId,
+      canonicalId: c.id,
+      challengeId: publicId,
+      publicRouteId: c.publicRouteId,
+      _id: c._id ? String(c._id) : undefined,
+      category: category ? category.name : (c.category_name || c.category || 'Misc'),
+      category_name: category ? category.name : (c.category_name || c.category || 'Misc'),
+      flag: authoritativeFlag,
+      flags: formattedFlags,
+      hint: primaryHint,
+      hint_cost: primaryCost,
+      hints: formattedHints
+    };
+  }
+
+  getChallengeDetails(challengeId, user) {
+    if (!challengeId) return null;
+    const c = this.resolveChallenge(challengeId);
     if (!c) return null;
 
     // Check if mission is draft/unpublished and operative is not admin
@@ -295,10 +414,11 @@ class ChallengeService {
 
   unlockHint(challengeId, hintId, user) {
     if (!user) throw new Error('Authentication required to unlock mission intelligence hints');
-    const challenge = db.getChallenges().find(c => c.id === challengeId || c.slug === challengeId);
+    const challenge = this.resolveChallenge(challengeId);
     if (!challenge) throw new Error('Challenge not found');
 
-    const hint = db.getHints().find(h => h.id === hintId && h.challenge_id === challenge.id && h.enabled);
+    const altIds = this.getChallengeAltIds(challenge);
+    const hint = db.getHints().find(h => h.id === hintId && (altIds.includes(String(h.challenge_id).trim()) || altIds.includes(String(h.challengeId || '').trim())) && h.enabled);
     if (!hint) throw new Error('Tactical hint not found or disabled');
 
     const teamId = user.team_id || (user.team && user.team.id);
@@ -474,32 +594,59 @@ class ChallengeService {
 
     db.getChallenges().push(newChallenge);
 
-    // Save Flag
+    // Save Flag (authoritative synchronization)
     if (data.flag) {
+      const cleanFlag = String(data.flag).trim();
       const flagRec = {
         id: `f-${Date.now()}`,
         challenge_id: newChallenge.id,
+        challengeId: newChallenge.id,
         flag_type: data.flag_type || 'STATIC',
-        flag_value: data.flag.trim(),
+        flag_value: cleanFlag,
         case_sensitive: data.case_sensitive !== false
       };
       db.getFlags().push(flagRec);
+      newChallenge.flag = cleanFlag;
+      newChallenge.flags = [{
+        id: flagRec.id,
+        type: flagRec.flag_type,
+        flag_type: flagRec.flag_type,
+        value: cleanFlag,
+        flag_value: cleanFlag,
+        case_sensitive: flagRec.case_sensitive,
+        enabled: true
+      }];
       if (db.isMongo && db.persistDoc) {
         db.persistDoc('flags', flagRec).catch(() => {});
       }
     }
 
-    // Save Hint
+    // Save Hint (authoritative synchronization)
     if (data.hint) {
+      const hintText = String(data.hint).trim();
+      const hintCost = parseInt(data.hint_cost || 50, 10);
       const hintRec = {
         id: `h-${Date.now()}`,
         challenge_id: newChallenge.id,
-        content: data.hint,
-        cost: parseInt(data.hint_cost || 50, 10),
+        challengeId: newChallenge.id,
+        content: hintText,
+        text: hintText,
+        cost: isNaN(hintCost) ? 50 : hintCost,
         order_index: 1,
         enabled: true
       };
       db.getHints().push(hintRec);
+      newChallenge.hint = hintText;
+      newChallenge.hint_cost = isNaN(hintCost) ? 50 : hintCost;
+      newChallenge.hints = [{
+        id: hintRec.id,
+        content: hintText,
+        text: hintText,
+        cost: isNaN(hintCost) ? 50 : hintCost,
+        order: 1,
+        order_index: 1,
+        enabled: true
+      }];
       if (db.isMongo && db.persistDoc) {
         db.persistDoc('challengeHints', hintRec).catch(() => {});
       }
@@ -529,21 +676,7 @@ class ChallengeService {
   }
 
   updateChallenge(id, data) {
-    const cleanId = String(id).trim();
-    const cleanIdLower = cleanId.toLowerCase();
-    const c = db.getChallenges().find(item =>
-      item.publicRouteId === cleanId ||
-      item.challengeId === cleanId ||
-      item.id === cleanId ||
-      item.slug === cleanId ||
-      item.mission_id === cleanId ||
-      (item._id && String(item._id) === cleanId) ||
-      (item.publicRouteId && item.publicRouteId.toLowerCase() === cleanIdLower) ||
-      (item.challengeId && item.challengeId.toLowerCase() === cleanIdLower) ||
-      (item.id && item.id.toLowerCase() === cleanIdLower) ||
-      (item.slug && item.slug.toLowerCase() === cleanIdLower) ||
-      (item.mission_id && item.mission_id.toLowerCase() === cleanIdLower)
-    );
+    const c = this.resolveChallenge(id);
     if (!c) throw new Error('Challenge not found');
 
     // Requirements 11 & 12: Challenge identity and publicRouteId NEVER change
@@ -609,27 +742,134 @@ class ChallengeService {
       c.status = targetStatus;
     }
 
-    if (data.flag) {
-      const fl = db.getFlags().find(f => f.challenge_id === c.id || (c._id && f.challenge_id === String(c._id)));
-      if (fl) {
-        fl.flag_value = data.flag.trim();
-        fl.challenge_id = c.id;
-        if (db.isMongo && db.persistDoc) db.persistDoc('flags', fl).catch(() => {});
-      } else {
-        const newFl = {
-          id: `f-${Date.now()}`,
-          challenge_id: c.id,
-          flag_type: 'STATIC',
-          flag_value: data.flag.trim(),
-          case_sensitive: true
-        };
-        db.getFlags().push(newFl);
-        if (db.isMongo && db.persistDoc) db.persistDoc('flags', newFl).catch(() => {});
+    const altIds = this.getChallengeAltIds(c);
+
+    // ── Authoritative Flag Update (Sections 5, 6, 10, 11, 66) ──────────────────
+    if (data.flag !== undefined && data.flag !== null) {
+      const cleanFlag = String(data.flag).trim();
+      if (cleanFlag) {
+        c.flag = cleanFlag;
+        c.flags = [{
+          id: `f-${c.id}-0`,
+          type: data.flag_type || 'STATIC',
+          flag_type: data.flag_type || 'STATIC',
+          value: cleanFlag,
+          flag_value: cleanFlag,
+          case_sensitive: data.case_sensitive !== false,
+          enabled: true
+        }];
+
+        let fl = db.getFlags().find(f =>
+          altIds.includes(String(f.challenge_id).trim()) || altIds.includes(String(f.challengeId || '').trim())
+        );
+        if (fl) {
+          fl.flag_value = cleanFlag;
+          fl.challenge_id = c.id;
+          fl.challengeId = c.challengeId || c.id;
+          fl.case_sensitive = data.case_sensitive !== false;
+          if (db.isMongo && db.persistDoc) db.persistDoc('flags', fl).catch(() => {});
+        } else {
+          const newFl = {
+            id: `f-${Date.now()}`,
+            challenge_id: c.id,
+            challengeId: c.challengeId || c.id,
+            flag_type: data.flag_type || 'STATIC',
+            flag_value: cleanFlag,
+            case_sensitive: data.case_sensitive !== false
+          };
+          db.getFlags().push(newFl);
+          if (db.isMongo && db.persistDoc) db.persistDoc('flags', newFl).catch(() => {});
+        }
+      }
+    }
+
+    if (Array.isArray(data.flags) && data.flags.length > 0) {
+      c.flags = data.flags;
+      const firstVal = data.flags[0].value || data.flags[0].flag_value;
+      if (firstVal) c.flag = String(firstVal).trim();
+    }
+
+    // ── Authoritative Hint Update (Sections 17, 18, 19, 67, 68, 69) ─────────────
+    if (data.hint !== undefined && data.hint !== null) {
+      const hintText = String(data.hint).trim();
+      const hintCost = data.hint_cost !== undefined ? parseInt(data.hint_cost, 10) : (c.hint_cost !== undefined ? c.hint_cost : 50);
+
+      let existingHint = db.getHints().find(h =>
+        altIds.includes(String(h.challenge_id).trim()) || altIds.includes(String(h.challengeId || '').trim())
+      );
+
+      if (hintText) {
+        c.hint = hintText;
+        c.hint_cost = isNaN(hintCost) ? 50 : hintCost;
+        if (existingHint) {
+          existingHint.content = hintText;
+          existingHint.cost = c.hint_cost;
+          existingHint.challenge_id = c.id;
+          existingHint.challengeId = c.challengeId || c.id;
+          existingHint.enabled = true;
+          if (db.isMongo && db.persistDoc) db.persistDoc('challengeHints', existingHint).catch(() => {});
+        } else {
+          const newHintRec = {
+            id: `h-${Date.now()}`,
+            challenge_id: c.id,
+            challengeId: c.challengeId || c.id,
+            content: hintText,
+            cost: c.hint_cost,
+            order_index: 1,
+            enabled: true
+          };
+          db.getHints().push(newHintRec);
+          if (db.isMongo && db.persistDoc) db.persistDoc('challengeHints', newHintRec).catch(() => {});
+        }
+        c.hints = [{
+          id: existingHint?.id || `h-${Date.now()}`,
+          content: hintText,
+          text: hintText,
+          cost: c.hint_cost,
+          order: 1,
+          order_index: 1,
+          enabled: true
+        }];
+      } else if (data.hint === '') {
+        // Explicit hint deletion requested by admin
+        if (existingHint) {
+          const idx = db.getHints().findIndex(h => h.id === existingHint.id);
+          if (idx !== -1) db.getHints().splice(idx, 1);
+          if (db.isMongo && db.mongoDb) {
+            db.mongoDb.collection('challenge_hints').deleteOne({ id: existingHint.id }).catch(() => {});
+          }
+        }
+        c.hint = '';
+        c.hints = [];
+      }
+    }
+
+    if (Array.isArray(data.hints)) {
+      c.hints = data.hints;
+      if (data.hints.length > 0) {
+        c.hint = data.hints[0].content || data.hints[0].text || '';
+        c.hint_cost = data.hints[0].cost !== undefined ? data.hints[0].cost : 50;
       }
     }
 
     if (db.isMongo && db.persistDoc) {
       db.persistDoc('challenges', c).catch(() => {});
+      if (db.mongoDb) {
+        db.mongoDb.collection('challenges').updateOne(
+          { id: c.id },
+          { $set: {
+            flag: c.flag,
+            flags: c.flags,
+            hint: c.hint,
+            hint_cost: c.hint_cost,
+            hints: c.hints,
+            title: c.title,
+            description: c.description,
+            current_points: c.current_points,
+            status: c.status
+          } }
+        ).catch(() => {});
+      }
     }
 
     const isPublishedAction = data.status && (data.status.toUpperCase() === 'PUBLISHED' || data.status.toUpperCase() === 'LIVE');
@@ -704,9 +944,13 @@ class ChallengeService {
       errors.push('Floor points cannot exceed base points');
     }
 
-    // Check flag presence
-    const flags = db.getFlags().filter(f => f.challenge_id === c.id || (c._id && f.challenge_id === String(c._id)));
-    if (flags.length === 0) {
+    // Check flag presence (Section 62)
+    const altIds = this.getChallengeAltIds(c);
+    const flags = db.getFlags().filter(f =>
+      altIds.includes(String(f.challenge_id).trim()) || altIds.includes(String(f.challengeId || '').trim())
+    );
+    const hasDocFlag = (c.flag && c.flag.trim()) || (Array.isArray(c.flags) && c.flags.length > 0 && (c.flags[0].value || c.flags[0].flag_value));
+    if (flags.length === 0 && !hasDocFlag) {
       errors.push('At least one valid flag configuration is required before publishing');
     }
 

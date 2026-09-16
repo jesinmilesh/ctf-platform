@@ -162,6 +162,7 @@ router.get('/challenges', (req, res) => adminController.getChallenges(req, res))
 router.get('/challenges/validate', (req, res) => adminController.validateChallenge?.(req, res) || res.json({ valid: true }));
 router.get('/challenges/:id/validate', (req, res) => adminController.validateChallenge?.(req, res) || res.json({ valid: true }));
 router.get('/challenges/:id/files', (req, res) => adminController.getChallengeFiles(req, res));
+router.get('/challenges/:id', (req, res) => adminController.getChallenge(req, res));
 router.post('/challenges', (req, res) => adminController.createChallenge(req, res));
 router.put('/challenges/:id', (req, res) => adminController.updateChallenge(req, res));
 router.delete('/challenges/:id', (req, res) => adminController.deleteChallenge(req, res));
