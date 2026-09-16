@@ -30,7 +30,7 @@ const ChallengeCard = {
           <span class="mission-category" style="color:${esc(categoryColor)}; font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:0.1em;">
             [ ${esc(categoryName.toUpperCase())} ]
           </span>
-          <span class="mission-status" style="font-family:var(--font-mono); font-size:11px; color:${isSolved ? 'var(--accent)' : 'var(--text-secondary)'}; font-weight:600;">
+          <span class="mission-status ${isSolved ? 'status-solved' : ''}" style="display:inline-flex; align-items:center; font-family:var(--font-mono); font-size:11px; color:${isSolved ? 'var(--accent)' : 'var(--text-secondary)'}; font-weight:700; ${isSolved ? 'background:var(--accent-muted); border:1px solid var(--accent); padding:2px 8px; border-radius:var(--radius-sm); letter-spacing:0.04em;' : ''}">
             ${isSolved ? '✓ CAPTURED' : (isPreview ? '👁 PREVIEW' : '● ACTIVE')}
           </span>
         </div>
