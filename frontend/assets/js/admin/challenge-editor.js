@@ -295,7 +295,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       const missionIdEl = document.getElementById('editMissionId');
       if (missionIdEl) {
         missionIdEl.value = c.challengeId || c.mission_id || c.id || '';
+        missionIdEl.disabled = true;
         missionIdEl.readOnly = true;
+        missionIdEl.style.cursor = 'not-allowed';
         missionIdEl.style.opacity = '0.7';
       }
       document.getElementById('editCategory').value = c.category || c.category_name || 'PWN';
