@@ -188,13 +188,16 @@ app.use((req, res, next) => {
 // Ensure database initialization (especially in serverless environments)
 let dbInitPromise = null;
 app.use(async (req, res, next) => {
-  if (!dbInitPromise) {
-    dbInitPromise = db.init().catch(err => {
-      console.error('[DATABASE] Initialization error:', err.message);
-      dbInitPromise = null;
-    });
+  if (!db.connected) {
+    if (!dbInitPromise) {
+      dbInitPromise = db.init().finally(() => {
+        if (!db.connected) {
+          dbInitPromise = null;
+        }
+      });
+    }
+    await dbInitPromise;
   }
-  await dbInitPromise;
   next();
 });
 
