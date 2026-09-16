@@ -250,12 +250,7 @@ exports.getChallengeFiles = async (req, res) => {
     await db.syncFromMongo().catch(() => {});
   }
 
-  const challenge = db.getChallenges().find(c =>
-    c.id === challengeId ||
-    c.slug === challengeId ||
-    c.mission_id === challengeId ||
-    (c._id && String(c._id) === challengeId)
-  );
+  const challenge = challengeService.resolveChallenge(challengeId);
   if (!challenge) {
     return res.status(404).json({ success: false, error: 'Challenge not found' });
   }
@@ -290,12 +285,7 @@ exports.downloadChallengeFile = async (req, res) => {
     await db.syncFromMongo().catch(() => {});
   }
 
-  const challenge = db.getChallenges().find(c =>
-    c.id === cleanId ||
-    c.slug === cleanId ||
-    c.mission_id === cleanId ||
-    (c._id && String(c._id) === cleanId)
-  );
+  const challenge = challengeService.resolveChallenge(cleanId);
   if (!challenge) {
     return res.status(404).json({ error: 'CHALLENGE_NOT_FOUND', message: 'Mission dossier not found' });
   }

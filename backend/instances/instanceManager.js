@@ -37,6 +37,8 @@ class InstanceManager {
     const challenges = db.getChallenges ? db.getChallenges() : [];
     const challenge = challenges.find(c =>
       c.id === cleanId ||
+      c.challengeId === cleanId ||
+      c.publicRouteId === cleanId ||
       c.slug === cleanId ||
       c.mission_id === cleanId ||
       (c._id && String(c._id) === cleanId) ||
@@ -413,6 +415,8 @@ class InstanceManager {
     const allChallenges = db.getChallenges ? db.getChallenges() : [];
     const challenge = allChallenges.find(c =>
       c.id === cleanId ||
+      c.challengeId === cleanId ||
+      c.publicRouteId === cleanId ||
       c.slug === cleanId ||
       c.mission_id === cleanId ||
       (c._id && String(c._id) === cleanId) ||
@@ -500,6 +504,8 @@ class InstanceManager {
     const allChallenges = db.getChallenges ? db.getChallenges() : [];
     const matchedChallenge = allChallenges.find(c =>
       c.id === cleanTargetId ||
+      c.challengeId === cleanTargetId ||
+      c.publicRouteId === cleanTargetId ||
       c.slug === cleanTargetId ||
       c.mission_id === cleanTargetId ||
       (c._id && String(c._id) === cleanTargetId)
