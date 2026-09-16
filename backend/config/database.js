@@ -57,7 +57,7 @@ const COLLECTION_MAP = {
 
 class DatabaseEngine {
   constructor() {
-    const FALLBACK_MONGO_URI = 'mongodb+srv://jesinmilesh_db_user:BzrMyDFa51EmIh7Z@cluster0.pi4ys06.mongodb.net/?appName=Cluster0';
+    const FALLBACK_MONGO_URI = 'mongodb+srv://jesinmilesh_db_user:BzrMyDFa51EmIh7Z@cluster0.pi4ys06.mongodb.net/xploitx_ctf?retryWrites=true&w=majority&appName=Cluster0';
     const FALLBACK_DB_NAME = 'xploitx_ctf';
 
     const rawUrl = (process.env.DATABASE_URL || process.env.MONGODB_URI || '').trim() || FALLBACK_MONGO_URI;
@@ -284,7 +284,8 @@ class DatabaseEngine {
           serverSelectionTimeoutMS: 5000,
           connectTimeoutMS: 8000,
           socketTimeoutMS: 30000,
-          maxIdleTimeMS: 60000
+          maxIdleTimeMS: 60000,
+          tls: true
         };
 
         this.mongoClient = new MongoClient(this.mongoUrl, mongoOptions);
