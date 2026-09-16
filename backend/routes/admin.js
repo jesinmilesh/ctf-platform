@@ -159,8 +159,8 @@ router.get('/dashboard', (req, res) => adminController.getOverview(req, res));
 
 // ── Challenges ────────────────────────────────────────────────────────────────
 router.get('/challenges', (req, res) => adminController.getChallenges(req, res));
-router.get('/challenges/validate', (req, res) => adminController.validateChallenge?.(req, res) || res.json({ valid: true }));
-router.get('/challenges/:id/validate', (req, res) => adminController.validateChallenge?.(req, res) || res.json({ valid: true }));
+router.get('/challenges/validate', (req, res) => adminController.validateChallenge(req, res));
+router.get('/challenges/:id/validate', (req, res) => adminController.validateChallenge(req, res));
 router.get('/challenges/:id/files', (req, res) => adminController.getChallengeFiles(req, res));
 router.get('/challenges/:id', (req, res) => adminController.getChallenge(req, res));
 router.post('/challenges', (req, res) => adminController.createChallenge(req, res));
@@ -168,7 +168,7 @@ router.put('/challenges/:id', (req, res) => adminController.updateChallenge(req,
 router.delete('/challenges/:id', (req, res) => adminController.deleteChallenge(req, res));
 router.post('/challenges/:id/files', challengeUploadMiddleware, (req, res) => adminController.uploadChallengeFiles(req, res));
 router.delete('/challenges/:id/files/:fileId', (req, res) => adminController.deleteChallengeFile(req, res));
-router.post('/challenges/test-flag', (req, res) => adminController.testFlag?.(req, res) || res.json({ valid: false }));
+router.post('/challenges/test-flag', (req, res) => adminController.testFlag(req, res));
 
 // ── Categories ────────────────────────────────────────────────────────────────
 router.get('/categories', (req, res) => adminController.getCategories(req, res));

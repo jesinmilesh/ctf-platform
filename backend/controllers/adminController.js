@@ -111,13 +111,48 @@ class AdminController {
   }
 
   validateChallenge(req, res) {
-    const id = req.params.id;
-    const challenge = db.getChallenges().find(c => c.id === id);
+    const id = req.params.id || req.query.id;
+    if (!id) {
+      return res.json({ valid: true });
+    }
+    const challenge = challengeService.resolveChallenge(id);
     if (!challenge) {
-      return res.status(404).json({ success: false, error: 'Challenge not found' });
+      return res.status(404).json({ success: false, valid: false, errors: ['Challenge not found.'] });
     }
     const result = challengeService.validateChallengeForPublish(challenge);
     res.json(result);
+  }
+
+  testFlag(req, res) {
+    const { flag, challengeId } = req.body || {};
+    if (!flag || typeof flag !== 'string') {
+      return res.json({ valid: false, message: 'Flag string is required.' });
+    }
+    const cleanFlag = flag.trim();
+    const settings = db.getSettings();
+    const prefix = settings.flagPrefix || 'XploitXβ{';
+    const suffix = settings.flagSuffix || '}';
+
+    if (!cleanFlag.startsWith(prefix) || !cleanFlag.endsWith(suffix)) {
+      return res.json({
+        valid: false,
+        message: `Malformed syntax: flag must start with ${prefix} and end with ${suffix}`
+      });
+    }
+
+    if (challengeId) {
+      const challenge = challengeService.resolveChallenge(challengeId);
+      if (challenge) {
+        const result = flagVerificationService.verifySubmission(challenge, cleanFlag);
+        if (result.correct) {
+          return res.json({ valid: true, message: '✓ Flag verified: Matches stored challenge flag configuration.' });
+        } else {
+          return res.json({ valid: false, message: 'Flag syntax is valid, but does not match currently saved challenge flag.' });
+        }
+      }
+    }
+
+    return res.json({ valid: true, message: '✓ Flag syntax and integrity verified successfully.' });
   }
 
   async getChallengeFiles(req, res) {

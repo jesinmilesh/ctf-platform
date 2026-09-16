@@ -629,7 +629,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function getFormPayload() {
-    const hasInstance = document.getElementById('editHasInstance').checked;
+    const hasInstance = document.getElementById('editHasInstance')?.checked || false;
     const dockerImage = document.getElementById('editDockerImage') ? document.getElementById('editDockerImage').value.trim() : '';
     const containerPort = parseInt(document.getElementById('editContainerPort')?.value || 80, 10);
     const healthPath = document.getElementById('editHealthCheckPath')?.value.trim() || '/';
@@ -637,6 +637,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const cpuLimit = parseFloat(document.getElementById('editCpuLimit')?.value || 0.5);
     const memoryLimit = document.getElementById('editMemoryLimit')?.value.trim() || '256m';
     const pidLimit = parseInt(document.getElementById('editPidLimit')?.value || 128, 10);
+
+    const flagVal = document.getElementById('editFlag') ? document.getElementById('editFlag').value.trim() : '';
 
     syncHintsFromDOM();
     const hintsPayload = hintsState
@@ -655,11 +657,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const firstHintCost = hintsPayload[0]?.cost !== undefined ? hintsPayload[0].cost : 50;
 
     return {
-      title: document.getElementById('editTitle').value.trim(),
-      mission_id: document.getElementById('editMissionId').value.trim(),
-      category: document.getElementById('editCategory').value,
-      difficulty: document.getElementById('editDifficulty').value,
-      description: document.getElementById('editDescription').value.trim(),
+      title: document.getElementById('editTitle')?.value.trim() || '',
+      mission_id: document.getElementById('editMissionId')?.value.trim() || '',
+      category: document.getElementById('editCategory')?.value || 'PWN',
+      difficulty: document.getElementById('editDifficulty')?.value || 'MEDIUM',
+      description: document.getElementById('editDescription')?.value.trim() || '',
       flag: flagVal,
       flags: flagVal ? [{
         type: 'STATIC',
@@ -667,9 +669,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         case_sensitive: true,
         enabled: true
       }] : [],
-      points: parseInt(document.getElementById('editPoints').value, 10),
-      minimum_points: parseInt(document.getElementById('editMinPoints').value, 10),
-      decay_threshold: parseInt(document.getElementById('editDecay').value, 10),
+      points: parseInt(document.getElementById('editPoints')?.value || 500, 10),
+      minimum_points: parseInt(document.getElementById('editMinPoints')?.value || 100, 10),
+      decay_threshold: parseInt(document.getElementById('editDecay')?.value || 30, 10),
       hint: firstHintText,
       hint_cost: firstHintCost,
       hints: hintsPayload,

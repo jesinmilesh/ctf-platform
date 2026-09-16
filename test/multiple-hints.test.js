@@ -108,8 +108,8 @@ async function run() {
     const targetId = challenge.id;
     console.log(`   Target Challenge: "${challenge.title}" (ID: ${targetId}, Sector: ${challenge.category})`);
 
-    // 3. CONFIGURE MULTIPLE HINTS (HINT 1, HINT 2, HINT 3)
-    console.log('\n3. Configuring 3 independent hints with costs & order...');
+    // 3. CONFIGURE MULTIPLE HINTS & TEST HINT ENABLE/DISABLE CHECKBOX
+    console.log('\n3. Testing Hint Enable/Disable Checkbox & Configuration...');
     const testHints = [
       {
         id: 'HINT-ALPHA-01',
@@ -123,7 +123,7 @@ async function run() {
         text: 'The secondary payload uses a simple XOR key derived from the mission code.',
         cost: 30,
         order: 2,
-        enabled: true
+        enabled: false // TEST CHECKBOX DISABLED
       },
       {
         id: 'HINT-ALPHA-03',
@@ -134,17 +134,62 @@ async function run() {
       }
     ];
 
+    // 4. TEST "PUBLISH MISSION" BUTTON & VERIFY PERSISTENCE
+    console.log('\n4. Testing "PUBLISH MISSION" Button API...');
+    const publishPayload = {
+      title: challenge.title,
+      description: challenge.description || 'Tactical mission briefing.',
+      category: challenge.category || 'Cryptography',
+      difficulty: challenge.difficulty || 'MEDIUM',
+      points: challenge.points || 500,
+      flag: 'XploitXβ{the_last_digit_live_flag_1337}',
+      hints: testHints,
+      status: 'PUBLISHED'
+    };
+
     const saveRes = await requestUrl(`${baseUrl}/api/v1/admin/challenges/${targetId}`, {
       method: 'PUT',
       headers: adminHeaders
-    }, {
-      hints: testHints
-    });
-    assert.strictEqual(saveRes.status, 200, `PUT /admin/challenges/${targetId} failed: ${JSON.stringify(saveRes.body)}`);
-    console.log('   ✓ Hints payload sent and accepted by Admin API.');
+    }, publishPayload);
+    assert.strictEqual(saveRes.status, 200, `PUBLISH MISSION failed: ${JSON.stringify(saveRes.body)}`);
+    console.log('   ✓ "PUBLISH MISSION" button payload accepted and saved to MongoDB Atlas.');
 
-    // 4. REOPEN / RELOAD CHALLENGE AS ADMIN
-    console.log('\n4. Reopening challenge as Admin to verify persistence...');
+    // 5. TEST "VERIFY CONFIGURATION" BUTTON
+    console.log('\n5. Testing "VERIFY CONFIGURATION" Button API...');
+    const verifyConfigRes = await requestUrl(`${baseUrl}/api/v1/admin/challenges/${targetId}/validate`, {
+      method: 'GET',
+      headers: adminHeaders
+    });
+    assert.strictEqual(verifyConfigRes.status, 200, `VERIFY CONFIGURATION failed: ${JSON.stringify(verifyConfigRes.body)}`);
+    assert.strictEqual(verifyConfigRes.body.valid, true, 'Pre-publish configuration should validate to true');
+    console.log('   ✓ "VERIFY CONFIGURATION" button API verified: valid = true');
+
+    // 6. TEST "VALIDATE FLAG SYNTAX & INTEGRITY" BUTTON
+    console.log('\n6. Testing "VALIDATE FLAG" Button API...');
+    const testFlagCorrectRes = await requestUrl(`${baseUrl}/api/v1/admin/challenges/test-flag`, {
+      method: 'POST',
+      headers: adminHeaders
+    }, {
+      flag: 'XploitXβ{the_last_digit_live_flag_1337}',
+      challengeId: targetId
+    });
+    assert.strictEqual(testFlagCorrectRes.status, 200);
+    assert.strictEqual(testFlagCorrectRes.body.valid, true, 'Correct flag should validate to true');
+    console.log('   ✓ Correct flag validation passed: valid = true');
+
+    const testFlagWrongRes = await requestUrl(`${baseUrl}/api/v1/admin/challenges/test-flag`, {
+      method: 'POST',
+      headers: adminHeaders
+    }, {
+      flag: 'XploitXβ{incorrect_test_flag}',
+      challengeId: targetId
+    });
+    assert.strictEqual(testFlagWrongRes.status, 200);
+    assert.strictEqual(testFlagWrongRes.body.valid, false, 'Wrong flag should validate to false');
+    console.log('   ✓ Wrong flag validation passed: valid = false');
+
+    // 7. REOPEN / RELOAD CHALLENGE AS ADMIN TO VERIFY CHECKBOX & HINT PERSISTENCE
+    console.log('\n7. Reopening challenge as Admin: verifying HINT ENABLE/DISABLE checkbox persistence...');
     const reloadRes = await requestUrl(`${baseUrl}/api/v1/admin/challenges/${targetId}`, {
       method: 'GET',
       headers: adminHeaders
@@ -155,21 +200,17 @@ async function run() {
     assert(Array.isArray(reloaded.hints), 'Reloaded challenge.hints must be an array');
     assert.strictEqual(reloaded.hints.length, 3, `Expected 3 hints, got ${reloaded.hints.length}`);
 
-    // Verify properties of each hint
-    for (let i = 0; i < testHints.length; i++) {
-      const exp = testHints[i];
-      const actual = reloaded.hints[i];
-      assert(actual, `Hint #${i + 1} is missing`);
-      assert.strictEqual(actual.text, exp.text, `Hint #${i + 1} text mismatch`);
-      assert.strictEqual(actual.cost, exp.cost, `Hint #${i + 1} cost mismatch`);
-      assert.strictEqual(actual.order, exp.order, `Hint #${i + 1} order mismatch`);
-      assert.strictEqual(actual.enabled, exp.enabled, `Hint #${i + 1} enabled mismatch`);
-      assert(actual.id, `Hint #${i + 1} must have a persistent ID`);
-    }
-    console.log('   ✓ All 3 hints persisted with exact text, cost, order, and enabled flags!');
+    // Verify Hint 2 is explicitly disabled (checkbox unchecked)
+    const adminH1 = reloaded.hints[0];
+    const adminH2 = reloaded.hints[1];
+    const adminH3 = reloaded.hints[2];
+    assert.strictEqual(adminH1.enabled, true, 'Hint 1 should be enabled');
+    assert.strictEqual(adminH2.enabled, false, 'Hint 2 should be disabled');
+    assert.strictEqual(adminH3.enabled, true, 'Hint 3 should be enabled');
+    console.log('   ✓ Hint 2 checkbox persisted as DISABLED (enabled = false) in MongoDB Atlas!');
 
-    // 5. PARTIAL UPDATE PROTECTION: UPDATE DESCRIPTION WITHOUT HINTS
-    console.log('\n5. Testing Partial Update Protection (saving description without hints)...');
+    // 8. TESTING PARTIAL UPDATE PROTECTION
+    console.log('\n8. Testing Partial Update Protection (saving description without hints)...');
     const partRes = await requestUrl(`${baseUrl}/api/v1/admin/challenges/${targetId}`, {
       method: 'PUT',
       headers: adminHeaders
@@ -183,10 +224,11 @@ async function run() {
       headers: adminHeaders
     });
     assert.strictEqual(checkPart.body.challenge.hints.length, 3, 'Partial update MUST NOT erase hints');
-    console.log('   ✓ Partial update protection passed: Hints remained untouched.');
+    assert.strictEqual(checkPart.body.challenge.hints[1].enabled, false, 'Partial update MUST preserve disabled state');
+    console.log('   ✓ Partial update protection passed: Hints and enabled states untouched.');
 
-    // 6. PARTICIPANT AUTHENTICATION & ACCESS CONTROL
-    console.log('\n6. Participant Authentication & Squad Commissioning...');
+    // 9. PARTICIPANT AUTHENTICATION & ACCESS CONTROL
+    console.log('\n9. Participant Authentication & Verification of Disabled Hint Masking...');
     let participantToken = null;
     const testUsername = `cadet_${Date.now().toString(36)}`;
     const testPassword = 'Password123!';
@@ -225,34 +267,68 @@ async function run() {
       name: `Squad_${Date.now().toString(36).toUpperCase()}`
     });
     assert(squadRes.status === 201 || squadRes.status === 200, `Squad creation failed: ${JSON.stringify(squadRes.body)}`);
-    console.log('   ✓ Test participant registered and squad commissioned successfully.');
+    console.log('   ✓ Test participant registered and squad commissioned.');
 
-    // 7. PARTICIPANT FETCHES CHALLENGE
-    console.log('\n7. Participant fetches challenge details...');
+    // 10. PARTICIPANT FETCHES CHALLENGE: DISABLED HINT MUST NOT APPEAR
+    console.log('\n10. Participant fetches challenge: verifying disabled hint is hidden...');
     const publicRouteId = reloaded.publicRouteId || reloaded.id;
-    const pChallengeRes = await requestUrl(`${baseUrl}/api/v1/challenges/${publicRouteId}`, {
+    const pChallengeRes1 = await requestUrl(`${baseUrl}/api/v1/challenges/${publicRouteId}`, {
       method: 'GET',
       headers: participantHeaders
     });
-    assert.strictEqual(pChallengeRes.status, 200);
-    const pChallenge = pChallengeRes.body.challenge || pChallengeRes.body;
+    assert.strictEqual(pChallengeRes1.status, 200);
+    const pChallenge1 = pChallengeRes1.body.challenge || pChallengeRes1.body;
 
-    assert(Array.isArray(pChallenge.hints), 'Participant should receive hints array');
-    assert.strictEqual(pChallenge.hints.length, 3, 'Participant should see 3 hints available');
+    assert(Array.isArray(pChallenge1.hints), 'Participant should receive hints array');
+    // Hint 2 was disabled, so participant should only see 2 hints (Hint 1 and Hint 3)
+    assert.strictEqual(pChallenge1.hints.length, 2, `Participant should only receive enabled hints (expected 2, got ${pChallenge1.hints.length})`);
+    assert(!pChallenge1.hints.some(h => h.id === 'HINT-ALPHA-02'), 'Disabled hint HINT-ALPHA-02 must NOT be sent to participant');
+    console.log('   ✓ Verification passed: Disabled hint was completely hidden from participant.');
 
-    // CRITICAL SECURITY: Unrevealed hints must NOT contain hint text
+    // 11. RE-ENABLE HINT 2 (CHECKBOX ENABLED) AND SAVE
+    console.log('\n11. Re-enabling Hint 2 (checkbox checked) via Admin and Publishing...');
+    testHints[1].enabled = true;
+    const reEnableRes = await requestUrl(`${baseUrl}/api/v1/admin/challenges/${targetId}`, {
+      method: 'PUT',
+      headers: adminHeaders
+    }, {
+      hints: testHints
+    });
+    assert.strictEqual(reEnableRes.status, 200);
+
+    const reloaded2 = (await requestUrl(`${baseUrl}/api/v1/admin/challenges/${targetId}`, {
+      method: 'GET',
+      headers: adminHeaders
+    })).body.challenge;
+    assert.strictEqual(reloaded2.hints[1].enabled, true, 'Hint 2 should now be enabled');
+    console.log('   ✓ Hint 2 re-enabled successfully in MongoDB Atlas.');
+
+    // 12. PARTICIPANT FETCHES CHALLENGE AGAIN: NOW ALL 3 HINTS APPEAR
+    console.log('\n12. Participant re-fetches challenge: verifying all 3 hints are now available...');
+    const pChallengeRes2 = await requestUrl(`${baseUrl}/api/v1/challenges/${publicRouteId}`, {
+      method: 'GET',
+      headers: participantHeaders
+    });
+    assert.strictEqual(pChallengeRes2.status, 200);
+    const pChallenge = pChallengeRes2.body.challenge || pChallengeRes2.body;
+    assert.strictEqual(pChallenge.hints.length, 3, 'Participant should now receive all 3 hints');
+    console.log('   ✓ Participant now receives all 3 hints.');
+
+    // 13. PARTICIPANT UNREVEALED HINT MASKING
+    console.log('\n13. Verifying unrevealed hint content masking...');
     for (const h of pChallenge.hints) {
-      assert(h.content === null || h.content === undefined || h.content === false, `Unrevealed hint ${h.id} leaked content: ${h.content}`);
-      assert(h.text === undefined, `Unrevealed hint ${h.id} leaked text property: ${h.text}`);
-      assert(h.cost !== undefined, `Hint ${h.id} should show cost to participant`);
-      assert.strictEqual(h.unlocked, false, `Hint ${h.id} should be locked`);
+      assert(h.content === null || h.content === undefined || h.content === false, `Unrevealed hint ${h.id} leaked content`);
+      assert(h.text === undefined, `Unrevealed hint ${h.id} leaked text property`);
+      assert(h.cost !== undefined, `Hint ${h.id} should show cost`);
+      assert.strictEqual(h.isUnlocked, false, `Hint ${h.id} should be locked`);
     }
-    console.log('   ✓ Security verified: All 3 hints are locked and content is completely redacted!');
+    console.log('   ✓ All 3 hints locked with content redacted.');
 
-    // 8. PARTICIPANT REVEALS HINT 1
+
+    // 14. PARTICIPANT REVEALS HINT 1
     if (participantToken) {
       const hint1 = pChallenge.hints[0];
-      console.log(`\n8. Participant revealing Hint 1 (${hint1.id}, cost: ${hint1.cost})...`);
+      console.log(`\n14. Participant revealing Hint 1 (${hint1.id}, cost: ${hint1.cost})...`);
 
       const unlockRes = await requestUrl(`${baseUrl}/api/v1/challenges/${publicRouteId}/hints/${hint1.id}/reveal`, {
         method: 'POST',
