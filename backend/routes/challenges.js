@@ -8,6 +8,9 @@ const router = express.Router();
 const challengeController = require('../controllers/challengeController');
 const { submissionLimiter } = require('../middleware/rateLimit');
 const { validateIdParam } = require('../middleware/validation');
+const { requireAuth, requireSquadMembership } = require('../middleware/auth');
+
+router.use(requireAuth, requireSquadMembership);
 
 router.get('/', challengeController.getAll);
 router.get('/public/:publicRouteId', validateIdParam('publicRouteId'), challengeController.getByPublicRouteId);

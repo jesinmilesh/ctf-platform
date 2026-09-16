@@ -13,6 +13,9 @@ let currentChallenge = null;
 document.addEventListener('DOMContentLoaded', async () => {
   Navbar.render('navbar-container', 'challenges');
 
+  const user = await window.authManager.requireSquadMembership();
+  if (!user) return;
+
   // Extract route token from pathname: /challenge/<publicRouteId>
   let rawId = null;
   const pathMatch = window.location.pathname.match(/\/challenge\/([^\/?#]+)/i);
@@ -30,6 +33,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function showMissionError(status, customMessage) {
     let title, message, icon;
+
+    if (status === 403 && (customMessage?.includes('SQUAD_REQUIRED') || customMessage?.includes('squad') || customMessage?.includes('Squad'))) {
+      window.location.href = '/team.html?onboarding=1';
+      return;
+    }
 
     if (status === 400) {
       title = 'INVALID MISSION IDENTIFIER';

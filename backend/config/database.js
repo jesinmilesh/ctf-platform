@@ -65,7 +65,9 @@ class DatabaseEngine {
     this.isPostgres = this.dbType === 'postgres' || rawUrl.startsWith('postgres://') || rawUrl.startsWith('postgresql://');
     
     this.mongoUrl = isMongoUri ? rawUrl : (process.env.MONGODB_URI || process.env.DATABASE_URL);
-    this.mongoDbName = process.env.MONGODB_DB_NAME || 'xploitx_production';
+    const urlDbMatch = rawUrl ? rawUrl.match(/mongodb(?:\+srv)?:\/\/[^\/]+\/([^?]+)/) : null;
+    const urlDb = urlDbMatch ? urlDbMatch[1] : null;
+    this.mongoDbName = process.env.MONGODB_DB_NAME || urlDb || 'xploitx_ctf';
     this.mongoClient = null;
     this.mongoDb = null;
     this.mongoose = mongoose;

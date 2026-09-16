@@ -22,13 +22,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Check if we arrived here as part of dashboard onboarding redirect
   const isOnboarding = new URLSearchParams(location.search).has('onboarding');
 
+  const gateBanner = document.getElementById('squadGateBanner');
+
   async function loadTeamData() {
     try {
       const meRes = await window.api.getMe();
       const currentUser = meRes.user || user;
+      const hasTeam = !!(currentUser.team_id || currentUser.hasSquad);
 
-      if (!currentUser.team_id) {
+      if (!hasTeam) {
         // No squad — show onboarding
+        if (gateBanner) gateBanner.style.display = 'block';
         noSquadView.style.display = 'block';
         hasSquadView.style.display = 'none';
         setupCreateAndJoinForms();
@@ -36,6 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       // User has squad — show squad dashboard
+      if (gateBanner) gateBanner.style.display = 'none';
       noSquadView.style.display = 'none';
       hasSquadView.style.display = 'block';
 
@@ -46,6 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } catch (teamErr) {
         // Stale team_id (team deleted / DB reset) — fall back gracefully
         console.warn('[SQUAD] Team not found (stale ID?), showing onboarding:', teamErr.message);
+        if (gateBanner) gateBanner.style.display = 'block';
         noSquadView.style.display = 'block';
         hasSquadView.style.display = 'none';
         setupCreateAndJoinForms();
@@ -192,4 +198,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   loadTeamData();
+  window.onTeamMembershipChanged = () => loadTeamData();
 });

@@ -37,6 +37,15 @@ exports.adminLogin = async (req, res, next) => {
       metadata: { role: result.user.role }
     }).catch(() => {});
 
+    // Set cookie for browser navigation protection
+    res.cookie('xploitx_token', result.token, {
+      path: '/',
+      httpOnly: false,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 7 * 24 * 3600 * 1000
+    });
+
     return res.json({
       success: true,
       token: result.token,
@@ -172,7 +181,7 @@ exports.getMe = async (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ error: 'NOT_AUTHENTICATED', message: 'No active session' });
     }
-    const profile = authService.getMe(req.user.id);
+    const profile = await authService.getMe(req.user.id);
     if (!profile) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'User record not found' });
     }
@@ -186,7 +195,7 @@ exports.logout = async (req, res) => {
   const ip = req.headers ? (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '127.0.0.1') : '127.0.0.1';
   const token = req.headers?.authorization?.startsWith('Bearer ')
     ? req.headers.authorization.split(' ')[1]
-    : null;
+    : (req.cookies?.['xploitx_token'] || null);
 
   if (token) {
     authService.revokeToken(token);
@@ -196,6 +205,8 @@ exports.logout = async (req, res) => {
       sessions.splice(idx, 1);
     }
   }
+
+  res.clearCookie('xploitx_token', { path: '/' });
 
   if (req.user) {
     const isAdmin = req.user.role === 'ADMIN';

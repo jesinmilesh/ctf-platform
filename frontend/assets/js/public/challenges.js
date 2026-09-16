@@ -121,6 +121,9 @@ function matchesCategory(challenge, targetCategory) {
 document.addEventListener('DOMContentLoaded', async () => {
   Navbar.render('navbar-container', 'challenges');
 
+  const user = await window.authManager.requireSquadMembership();
+  if (!user) return;
+
   const timelineContainer = document.getElementById('eventTrackTimeline');
   const grid = document.getElementById('challengeGrid');
   const searchInput = document.getElementById('challengeSearch');
@@ -322,6 +325,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
   } catch (err) {
+    if (err.code === 'SQUAD_REQUIRED' || (err.message && err.message.includes('SQUAD_REQUIRED'))) {
+      window.location.href = '/team.html?onboarding=1';
+      return;
+    }
     if (grid) {
       const is503 = err.status === 503 || (err.message && err.message.includes('temporarily unavailable'));
       grid.innerHTML = `

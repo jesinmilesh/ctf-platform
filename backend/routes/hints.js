@@ -7,6 +7,9 @@ const express = require('express');
 const router = express.Router();
 const challengeService = require('../services/challengeService');
 const db = require('../config/database');
+const { requireAuth, requireSquadMembership } = require('../middleware/auth');
+
+router.use(requireAuth, requireSquadMembership);
 
 router.get('/', (req, res) => {
   const isAdmin = req.user && req.user.role === 'ADMIN';

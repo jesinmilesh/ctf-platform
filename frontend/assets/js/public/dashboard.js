@@ -10,9 +10,8 @@
 document.addEventListener('DOMContentLoaded', async () => {
   Navbar.render('navbar-container', 'dashboard');
 
-  await window.authManager.requireAuth('/login.html?redirect=/dashboard.html');
-  const user = window.authManager.getUser();
-  if (!user) return; // requireAuth redirected
+  const user = await window.authManager.requireSquadMembership();
+  if (!user) return; // requireSquadMembership redirected
 
   try {
     const [meRes, challengesRes, lbRes] = await Promise.all([
@@ -23,11 +22,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const activeUser = meRes.user || user;
 
-    // ── Squad Onboarding Guard ──────────────────────────────────────────────
-    // If user has no squad, redirect to team onboarding page.
-    // This is enforced here (frontend) and the team.html page handles the forms.
-    // Authoritative check: team_id from /auth/me, not localStorage.
-    if (!activeUser.team_id) {
+    // ── Squad Onboarding Guard (Defense-in-depth) ───────────────────────────
+    if (!window.authManager.isAdmin() && !activeUser.team_id && !activeUser.hasSquad) {
       window.location.href = '/team.html?onboarding=1';
       return;
     }

@@ -13,12 +13,14 @@ const crypto = require('crypto');
 const db = require('../config/database');
 const authService = require('../services/authService');
 
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
   let token = null;
 
   const authHeader = req.headers['authorization'];
   if (authHeader && authHeader.startsWith('Bearer ')) {
     token = authHeader.split(' ')[1];
+  } else if (req.cookies && req.cookies['xploitx_token']) {
+    token = req.cookies['xploitx_token'];
   }
 
   if (!token || authService.isTokenRevoked(token)) {
@@ -81,7 +83,29 @@ function authMiddleware(req, res, next) {
       return next();
     }
 
-    const user = db.getUsers().find(u => u.id === validUserId);
+    let user = db.getUsers().find(u => u.id === validUserId || (u._id && String(u._id) === validUserId));
+
+    // Fallback: Query MongoDB Atlas directly if not found in memory
+    if (!user && db.isMongo && db.mongoDb) {
+      try {
+        const doc = await db.mongoDb.collection('users').findOne({
+          $or: [
+            { id: validUserId },
+            ...(validUserId.length === 24 ? [{ _id: new (require('mongodb').ObjectId)(validUserId) }] : [])
+          ]
+        });
+        if (doc) {
+          user = { ...doc };
+          if (doc._id) user._id = doc._id.toString();
+          if (!user.id && doc._id) user.id = doc._id.toString();
+          const existing = db.getUsers().find(u => u.id === user.id);
+          if (!existing) {
+            Array.prototype.push.call(db.getUsers(), user);
+          }
+        }
+      } catch (_) {}
+    }
+
     if (user && !user.is_banned) {
       req.user = {
         id: user.id,
@@ -111,4 +135,93 @@ function requireAuth(req, res, next) {
   next();
 }
 
-module.exports = { authMiddleware, requireAuth };
+/**
+ * Squad Required Access Gate Middleware (Section 7, 8, 9, 10, 11, 12, 26, 30, 31)
+ * Enforces active, verified squad membership for participants.
+ * Admins are exempted.
+ */
+async function requireSquadMembership(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      error: 'AUTHENTICATION_REQUIRED',
+      message: 'Access denied: Valid operative credentials required.'
+    });
+  }
+
+  // Administrators have level 5 command clearance — never blocked by participant squad gate
+  if (req.user.role === 'ADMIN') {
+    return next();
+  }
+
+  const userId = req.user.id;
+  const compId = db.getCompetitions()[0]?.id;
+  let teamId = req.user.team_id || null;
+
+  // Verify in-memory user
+  const user = db.getUsers().find(u => u.id === userId);
+  if (user && user.team_id) {
+    teamId = user.team_id;
+  }
+
+  // Authoritative MongoDB Atlas verification
+  if (db.isMongo && db.mongoDb) {
+    try {
+      const freshUser = await db.mongoDb.collection('users').findOne({ id: userId });
+      if (freshUser) {
+        teamId = freshUser.team_id;
+        if (user) user.team_id = freshUser.team_id;
+      }
+
+      if (teamId) {
+        // Confirm squad membership record in team_members collection
+        const memberQuery = { user_id: userId, team_id: teamId };
+        if (compId) memberQuery.competition_id = compId;
+        let memberRecord = await db.mongoDb.collection('team_members').findOne(memberQuery);
+        if (!memberRecord) {
+          memberRecord = await db.mongoDb.collection('team_members').findOne({ user_id: userId, team_id: teamId });
+        }
+        if (!memberRecord) {
+          teamId = null;
+        }
+      }
+    } catch (e) {
+      console.warn('[AUTH] Atlas squad verification warning:', e.message);
+    }
+  } else {
+    // In-memory verification
+    if (teamId) {
+      const memberRecord = db.getTeamMembers().find(m => m.user_id === userId && m.team_id === teamId);
+      if (!memberRecord) {
+        teamId = null;
+      }
+    }
+  }
+
+  // Confirm team exists and is not disqualified
+  if (teamId) {
+    let team = db.getTeams().find(t => t.id === teamId);
+    if (!team && db.isMongo && db.mongoDb) {
+      try {
+        team = await db.mongoDb.collection('teams').findOne({ id: teamId });
+      } catch (_) {}
+    }
+    if (!team || team.is_disqualified) {
+      teamId = null;
+    }
+  }
+
+  if (!teamId) {
+    return res.status(403).json({
+      success: false,
+      code: 'SQUAD_REQUIRED',
+      error: 'SQUAD_REQUIRED',
+      message: 'Join or create a squad to access this resource.'
+    });
+  }
+
+  req.user.team_id = teamId;
+  next();
+}
+
+module.exports = { authMiddleware, requireAuth, requireSquadMembership };

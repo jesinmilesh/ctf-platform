@@ -6,6 +6,9 @@
 document.addEventListener('DOMContentLoaded', async () => {
   Navbar.render('navbar-container', 'activity');
 
+  const user = await window.authManager.requireSquadMembership();
+  if (!user) return;
+
   const streamSlot = document.getElementById('activityStreamSlot');
 
   async function loadActivity() {
@@ -51,6 +54,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       }).join('');
 
     } catch (err) {
+      if (err.code === 'SQUAD_REQUIRED' || (err.message && err.message.includes('SQUAD_REQUIRED'))) {
+        window.location.href = '/team.html?onboarding=1';
+        return;
+      }
       console.error('Failed to load activity stream', err);
     }
   }

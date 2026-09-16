@@ -157,7 +157,23 @@ class TacticalSocket {
       }
     }
 
-    // 2. Dispatch to registered listeners
+    // 2. Tactical Squad Lifecycle & Access Gate Sync
+    const isTeamEvent = eventType.startsWith('team.') ||
+                        eventType.startsWith('TEAM_') ||
+                        eventType === 'TEAM_MEMBERSHIP_CHANGED' ||
+                        eventType === 'team.membership_changed';
+    if (isTeamEvent) {
+      if (window.authManager) {
+        window.authManager.init(true).then(() => {
+          window.authManager.updateNavUI();
+          if (typeof window.onTeamMembershipChanged === 'function') {
+            window.onTeamMembershipChanged(eventData);
+          }
+        });
+      }
+    }
+
+    // 3. Dispatch to registered listeners
     this.dispatch(eventType, eventData);
 
     // Also dispatch legacy type if different

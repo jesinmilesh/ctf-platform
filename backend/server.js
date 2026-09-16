@@ -20,7 +20,7 @@ const { WebSocketServer } = require('ws');
 const db = require('./config/database');
 
 // Middleware
-const { authMiddleware } = require('./middleware/auth');
+const { authMiddleware, requireAuth, requireSquadMembership } = require('./middleware/auth');
 const { errorHandler } = require('./middleware/errorHandler');
 
 // Real-Time EventBus & WebSocket Server
@@ -32,6 +32,7 @@ const cleanupWorker = require('./instances/cleanupWorker');
 // Services & Controllers
 const submissionService = require('./services/submissionService');
 const adminController = require('./controllers/adminController');
+const teamController = require('./controllers/teamController');
 
 // Routes
 const authRoutes = require('./routes/auth');
@@ -225,6 +226,7 @@ function broadcastEvent(type, payload) {
 // Wire broadcasting into services
 submissionService.setBroadcaster(broadcastEvent);
 adminController.setBroadcaster(broadcastEvent);
+teamController.setBroadcaster(broadcastEvent);
 agentWss.setBroadcaster(broadcastEvent);
 
 // --------------------------------------------------------------------------
@@ -252,10 +254,13 @@ apiRouter.use('/competitions', competitionRoutes);
 apiRouter.get('/categories', (req, res) => res.json({ categories: db.getCategories() }));
 apiRouter.use('/challenges', challengeRoutes);
 apiRouter.use('/submissions', submissionRoutes);
+apiRouter.use('/feed', submissionRoutes);
+apiRouter.use('/activity', submissionRoutes);
 apiRouter.use('/scoreboard', scoreboardRoutes);
 apiRouter.use('/leaderboard', scoreboardRoutes);
 apiRouter.use('/hints', hintRoutes);
 apiRouter.use('/announcements', announcementRoutes);
+apiRouter.use('/intel', announcementRoutes);
 apiRouter.use('/files', fileRoutes);
 apiRouter.use('/instances', instanceRoutes);
 apiRouter.use('/notifications', notificationsRoutes);
@@ -264,14 +269,32 @@ apiRouter.use('/sync', syncRoutes);
 apiRouter.use('/admin', adminRoutes);
 apiRouter.use('/agents', agentRoutes);
 
+// Participant Dashboard protected API route
+apiRouter.get('/dashboard', requireAuth, requireSquadMembership, (req, res) => {
+  res.json({
+    success: true,
+    user: {
+      id: req.user.id,
+      username: req.user.username,
+      callsign: req.user.callsign,
+      team_id: req.user.team_id
+    }
+  });
+});
+
 // 1. Canonical API Contract: /api/v1/*
 app.use('/api/v1', apiRouter);
 
 // 2. Compatibility mount: /api/*
 app.use('/api', apiRouter);
 
-// 3. Fallback mount for direct serverless paths (e.g. /auth/login)
-app.use(apiRouter);
+// 3. Fallback mount for direct serverless paths (e.g. /auth/login) - bypass /admin to preserve HTML portal
+app.use((req, res, next) => {
+  if (req.path.startsWith('/admin')) {
+    return next();
+  }
+  apiRouter(req, res, next);
+});
 
 // Structured 404 handler for unmatched API routes
 app.use(['/api/v1/*', '/api/*'], (req, res) => {
@@ -289,7 +312,121 @@ app.use(['/api/v1/*', '/api/*'], (req, res) => {
 // Static Asset & Application Serving
 // --------------------------------------------------------------------------
 app.use('/assets', express.static(ASSETS_DIR));
+
+// Server-side guard for direct Admin page navigation (Section 20, 21)
+app.use('/admin', (req, res, next) => {
+  const p = req.path.toLowerCase();
+  // Allow public access to login page, login assets, or auth routes
+  if (p === '/login.html' || p === '/login' || p === '/auth/login' || p === '/auth/logout' || p.startsWith('/assets')) {
+    return next();
+  }
+
+  // If user is authenticated, strictly enforce role === 'ADMIN'
+  if (req.user) {
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>403 FORBIDDEN // ACCESS DENIED</title>
+  <style>
+    body { background:#0a0e17; color:#ff3366; font-family:monospace; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; margin:0; }
+    h1 { font-size:24px; margin-bottom:8px; }
+    p { color:#8892b0; margin-bottom:20px; }
+    a { color:#00ff88; text-decoration:none; border:1px solid #00ff88; padding:8px 16px; border-radius:4px; }
+  </style>
+</head>
+<body>
+  <h1>403 FORBIDDEN // ACCESS DENIED</h1>
+  <p>ADMIN CLEARANCE REQUIRED. PARTICIPANT ACCESS RESTRICTED.</p>
+  <a href="/">← Return to Battlefield</a>
+</body>
+</html>`);
+    }
+    return next();
+  }
+
+  // If unauthenticated and requesting an HTML dashboard page, redirect to admin login
+  if (p.endsWith('.html') || p === '/' || p === '') {
+    return res.redirect('/admin/login.html');
+  }
+
+  next();
+});
+
 app.use('/admin', express.static(ADMIN_DIR));
+
+// --------------------------------------------------------------------------
+// Squad Membership Access Gate for Participant HTML pages (Direct URL navigation)
+// --------------------------------------------------------------------------
+const PROTECTED_PARTICIPANT_PAGES = new Set([
+  '/dashboard.html', '/dashboard',
+  '/challenges.html', '/challenges',
+  '/scoreboard.html', '/scoreboard',
+  '/activity.html', '/activity',
+  '/feed.html', '/feed',
+  '/announcements.html', '/announcements',
+  '/intel.html', '/intel',
+  '/challenge.html', '/challenge'
+]);
+
+app.use(async (req, res, next) => {
+  const p = req.path.toLowerCase();
+  const isProtected = PROTECTED_PARTICIPANT_PAGES.has(p) || p.startsWith('/challenge/') || p.startsWith('/challenges/');
+  if (!isProtected) {
+    return next();
+  }
+
+  // Administrators are exempt from squad gate
+  if (req.user && req.user.role === 'ADMIN') {
+    return next();
+  }
+
+  // If user is authenticated, check squad membership
+  if (req.user) {
+    let hasSquad = false;
+    const userId = req.user.id;
+    let teamId = req.user.team_id || null;
+
+    if (db.isMongo && db.mongoDb) {
+      try {
+        const freshUser = await db.mongoDb.collection('users').findOne({ id: userId });
+        if (freshUser && freshUser.team_id) {
+          teamId = freshUser.team_id;
+        }
+        if (teamId) {
+          const memberRecord = await db.mongoDb.collection('team_members').findOne({ user_id: userId, team_id: teamId });
+          if (memberRecord) {
+            const teamDoc = await db.mongoDb.collection('teams').findOne({ id: teamId });
+            if (teamDoc && !teamDoc.is_disqualified) {
+              hasSquad = true;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[GATE] Error checking squad in static route gate:', e.message);
+      }
+    } else {
+      const userInMem = db.getUsers().find(u => u.id === userId);
+      if (userInMem && userInMem.team_id) {
+        const memberInMem = db.getTeamMembers().find(m => m.user_id === userId && m.team_id === userInMem.team_id);
+        if (memberInMem) {
+          const teamInMem = db.getTeams().find(t => t.id === userInMem.team_id);
+          if (teamInMem && !teamInMem.is_disqualified) {
+            hasSquad = true;
+          }
+        }
+      }
+    }
+
+    if (!hasSquad) {
+      return res.redirect('/team.html?onboarding=1');
+    }
+  }
+
+  next();
+});
+
 app.use('/', express.static(PUBLIC_DIR, { extensions: ['html'] }));
 
 // Fallback for Admin SPA or Direct Entry

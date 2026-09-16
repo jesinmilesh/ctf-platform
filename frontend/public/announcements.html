@@ -48,6 +48,9 @@
     document.addEventListener('DOMContentLoaded', async () => {
       Navbar.render('navbar-container', 'announcements');
 
+      const user = await window.authManager.requireSquadMembership();
+      if (!user) return;
+
       const container = document.getElementById('announcementsList');
 
       async function loadAnnouncements() {
@@ -88,6 +91,10 @@
             `;
           }
         } catch (err) {
+          if (err.code === 'SQUAD_REQUIRED' || (err.message && err.message.includes('SQUAD_REQUIRED'))) {
+            window.location.href = '/team.html?onboarding=1';
+            return;
+          }
           container.innerHTML = `<div style="color:var(--danger); font-family:var(--font-mono);">Failed to fetch broadcasts.</div>`;
         }
       }

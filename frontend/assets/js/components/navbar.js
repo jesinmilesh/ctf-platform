@@ -21,13 +21,13 @@ const Navbar = {
 
           <!-- Desktop Navigation Links -->
           <div class="nav-links" id="desktopNavLinks">
-            <a href="/dashboard.html" class="nav-link ${activePage === 'dashboard' ? 'active' : ''}">COMMAND</a>
-            <a href="/challenges.html" class="nav-link ${activePage === 'challenges' ? 'active' : ''}">MISSIONS</a>
-            <a href="/scoreboard.html" class="nav-link ${activePage === 'scoreboard' ? 'active' : ''}">SCOREBOARD</a>
-            <a href="/team.html" class="nav-link ${activePage === 'team' ? 'active' : ''}">SQUAD</a>
-            <a href="/activity.html" class="nav-link ${activePage === 'activity' ? 'active' : ''}">FEED</a>
-            <a href="/announcements.html" class="nav-link ${activePage === 'announcements' ? 'active' : ''}">INTEL</a>
-            <a href="/rules.html" class="nav-link ${activePage === 'rules' ? 'active' : ''}">RULES</a>
+            <a href="/dashboard.html" data-orig-href="/dashboard.html" class="nav-link ${activePage === 'dashboard' ? 'active' : ''}">COMMAND</a>
+            <a href="/challenges.html" data-orig-href="/challenges.html" class="nav-link ${activePage === 'challenges' ? 'active' : ''}">MISSIONS</a>
+            <a href="/scoreboard.html" data-orig-href="/scoreboard.html" class="nav-link ${activePage === 'scoreboard' ? 'active' : ''}">SCOREBOARD</a>
+            <a href="/team.html" data-orig-href="/team.html" class="nav-link ${activePage === 'team' ? 'active' : ''}">SQUAD</a>
+            <a href="/activity.html" data-orig-href="/activity.html" class="nav-link ${activePage === 'activity' ? 'active' : ''}">FEED</a>
+            <a href="/announcements.html" data-orig-href="/announcements.html" class="nav-link ${activePage === 'announcements' ? 'active' : ''}">INTEL</a>
+            <a href="/rules.html" data-orig-href="/rules.html" class="nav-link ${activePage === 'rules' ? 'active' : ''}">RULES</a>
           </div>
 
           <!-- Right Action Slot (Operative status / Auth buttons) -->
@@ -50,13 +50,13 @@ const Navbar = {
         <!-- Mobile Drawer -->
         <div id="mobileNavDrawer" style="display:none; background:var(--bg-secondary); border-bottom:1px solid var(--border); padding:16px 20px;">
           <div style="display:flex; flex-direction:column; gap:8px;">
-            <a href="/dashboard.html" class="nav-link">COMMAND CENTER</a>
-            <a href="/challenges.html" class="nav-link">MISSIONS</a>
-            <a href="/scoreboard.html" class="nav-link">SCOREBOARD</a>
-            <a href="/team.html" class="nav-link">SQUAD</a>
-            <a href="/activity.html" class="nav-link">FEED</a>
-            <a href="/announcements.html" class="nav-link">INTEL</a>
-            <a href="/rules.html" class="nav-link">RULES</a>
+            <a href="/dashboard.html" data-orig-href="/dashboard.html" class="nav-link">COMMAND CENTER</a>
+            <a href="/challenges.html" data-orig-href="/challenges.html" class="nav-link">MISSIONS</a>
+            <a href="/scoreboard.html" data-orig-href="/scoreboard.html" class="nav-link">SCOREBOARD</a>
+            <a href="/team.html" data-orig-href="/team.html" class="nav-link">SQUAD</a>
+            <a href="/activity.html" data-orig-href="/activity.html" class="nav-link">FEED</a>
+            <a href="/announcements.html" data-orig-href="/announcements.html" class="nav-link">INTEL</a>
+            <a href="/rules.html" data-orig-href="/rules.html" class="nav-link">RULES</a>
           </div>
         </div>
       </nav>
@@ -78,6 +78,65 @@ const Navbar = {
         window.authManager.updateNavUI();
       });
     }
+  },
+
+  updateNavLockState(isLocked) {
+    const desktopLinks = document.getElementById('desktopNavLinks');
+    const mobileLinks = document.getElementById('mobileNavDrawer');
+    const protectedRoutes = ['/dashboard.html', '/challenges.html', '/scoreboard.html', '/activity.html', '/announcements.html'];
+
+    const updateContainer = (container) => {
+      if (!container) return;
+      const links = container.querySelectorAll('a.nav-link');
+      links.forEach(link => {
+        const origHref = link.getAttribute('data-orig-href') || link.getAttribute('href') || '';
+        const isTeam = origHref.includes('/team.html');
+        const isRules = origHref.includes('/rules.html');
+        const isProtected = protectedRoutes.some(r => origHref.includes(r));
+
+        if (isRules) return; // RULES remains accessible
+
+        if (isTeam) {
+          if (isLocked) {
+            link.setAttribute('href', '/team.html?onboarding=1');
+            link.title = 'Deploy or join a squad';
+          } else {
+            link.setAttribute('href', '/team.html');
+            link.title = 'Squad Command';
+          }
+          return;
+        }
+
+        if (isProtected) {
+          if (isLocked) {
+            link.classList.add('nav-link-locked');
+            link.setAttribute('href', '/team.html?onboarding=1');
+            link.title = 'SQUAD REQUIRED: Create or join a squad to access this resource.';
+            if (!link.querySelector('.nav-lock-badge')) {
+              const badge = document.createElement('span');
+              badge.className = 'nav-lock-badge';
+              badge.textContent = ' 🔒';
+              link.appendChild(badge);
+            }
+            link.onclick = (e) => {
+              if (window.Toast) {
+                window.Toast.show('SQUAD REQUIRED: Commission or link with a squad to access this sector.', 'warning');
+              }
+            };
+          } else {
+            link.classList.remove('nav-link-locked');
+            link.setAttribute('href', origHref);
+            link.removeAttribute('title');
+            link.onclick = null;
+            const badge = link.querySelector('.nav-lock-badge');
+            if (badge) badge.remove();
+          }
+        }
+      });
+    };
+
+    updateContainer(desktopLinks);
+    updateContainer(mobileLinks);
   }
 };
 

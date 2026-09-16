@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Save token FIRST — before any optional UI calls that might throw
       localStorage.setItem('xploitx_token', res.token);
+      sessionStorage.setItem('xploitx_token', res.token);
 
       // Show success (optional — if Toast is unavailable, login still works)
       try {

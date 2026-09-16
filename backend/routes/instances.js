@@ -9,6 +9,9 @@ const router = express.Router();
 const instanceController = require('../controllers/instanceController');
 
 const { validateIdParam } = require('../middleware/validation');
+const { requireAuth, requireSquadMembership } = require('../middleware/auth');
+
+router.use(requireAuth, requireSquadMembership);
 
 router.get('/', instanceController.getAll);
 router.get('/status', instanceController.getStatus);

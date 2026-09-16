@@ -38,9 +38,12 @@ class AuthService {
 
   /**
    * Constant-time safe verification of password against stored cryptographic hash
+   * Strictly matches the existing hash format stored in MongoDB without adding extra hashing layers.
    */
   async verifyPassword(password, storedHash) {
     if (!storedHash || !password) return false;
+
+    // 1. Existing MongoDB Atlas stored hash format: salt:key (Native Node.js crypto scryptSync)
     if (storedHash.includes(':')) {
       try {
         const [salt, key] = storedHash.split(':');
@@ -52,6 +55,27 @@ class AuthService {
         return false;
       }
     }
+
+    // 2. Standard bcrypt format ($2a$, $2b$, $2y$) if encountered
+    if (storedHash.startsWith('$2a$') || storedHash.startsWith('$2b$') || storedHash.startsWith('$2y$')) {
+      try {
+        const bcrypt = require('bcryptjs');
+        return await bcrypt.compare(password, storedHash);
+      } catch (e) {
+        return false;
+      }
+    }
+
+    // 3. SHA-256 hex format if encountered
+    if (/^[a-f0-9]{64}$/i.test(storedHash)) {
+      try {
+        const derived = crypto.createHash('sha256').update(password).digest('hex');
+        return crypto.timingSafeEqual(Buffer.from(storedHash, 'hex'), Buffer.from(derived, 'hex'));
+      } catch (e) {
+        return false;
+      }
+    }
+
     return false;
   }
 
@@ -80,10 +104,11 @@ class AuthService {
   /**
    * Strict Administrator Authentication:
    * 1. Exact username lookup (no lowercasing, no trimming)
-   * 2. Exact password comparison via native crypto scrypt (no alteration)
-   * 3. Account active status check
-   * 4. Strict role check (ADMIN required)
-   * 5. Participant credentials return 403 CLEARANCE_DENIED (no session created)
+   * 2. Authoritative query against MongoDB Atlas first, then memory cache
+   * 3. Exact password comparison via existing matching verifier (no alteration, no rehash)
+   * 4. Account active status check
+   * 5. Strict role check (ADMIN required server-side)
+   * 6. Participant credentials return 403 CLEARANCE_DENIED (no admin session created)
    */
   async adminLogin(usernameOrEmail, password) {
     const rawUsername = String(usernameOrEmail || '');
@@ -95,15 +120,10 @@ class AuthService {
       throw err;
     }
 
-    // Exact username match (case-sensitive)
-    let user = db.getUsers().find(u =>
-      (u && u.username && u.username === rawUsername) ||
-      (u && u.email && u.email === rawUsername) ||
-      (u && u.callsign && u.callsign === rawUsername)
-    );
+    let user = null;
 
-    // Fallback: Query MongoDB Atlas directly with exact matching
-    if (!user && db.isMongo && db.mongoDb) {
+    // Direct MongoDB Atlas query with exact matching (authoritative source of truth)
+    if (db.isMongo && db.mongoDb) {
       try {
         const doc = await db.mongoDb.collection('users').findOne({
           $or: [
@@ -116,14 +136,26 @@ class AuthService {
           user = { ...doc };
           if (doc._id) user._id = doc._id.toString();
           if (!user.id && doc._id) user.id = doc._id.toString();
+          // Update in-memory array
           const existing = db.getUsers().find(u => u.id === user.id);
           if (!existing) {
             Array.prototype.push.call(db.getUsers(), user);
+          } else {
+            Object.assign(existing, user);
           }
         }
       } catch (e) {
         console.warn('[AUTH] Direct Atlas admin query warning:', e.message);
       }
+    }
+
+    // Check memory store if Atlas was not connected or document not found there
+    if (!user) {
+      user = db.getUsers().find(u =>
+        (u && u.username && u.username === rawUsername) ||
+        (u && u.email && u.email === rawUsername) ||
+        (u && u.callsign && u.callsign === rawUsername)
+      );
     }
 
     if (!user) {
@@ -132,8 +164,16 @@ class AuthService {
       throw err;
     }
 
-    // Strict scrypt password verification using exact user-entered password
-    const isValid = await this.verifyPassword(rawPassword, user.password_hash);
+    // Retrieve stored password hash from the authentic record (supports password_hash, passwordHash, password)
+    const storedHash = user.password_hash || user.passwordHash || user.password;
+    if (!storedHash) {
+      const err = new Error('INVALID ADMIN CREDENTIALS');
+      err.code = 'INVALID_CREDENTIALS';
+      throw err;
+    }
+
+    // Verify password against stored hash without any modifications or re-hashing
+    const isValid = await this.verifyPassword(rawPassword, storedHash);
     if (!isValid) {
       const err = new Error('INVALID ADMIN CREDENTIALS');
       err.code = 'INVALID_CREDENTIALS';
@@ -147,7 +187,7 @@ class AuthService {
       throw err;
     }
 
-    // Strict Role Verification: Must explicitly be ADMIN
+    // Strict Role Verification: Must explicitly be ADMIN server-side
     const isAdmin = user.role === 'ADMIN';
     if (!isAdmin) {
       const err = new Error('ADMIN ACCESS REQUIRED');
@@ -245,18 +285,11 @@ class AuthService {
     };
     db.getSessions().push(sessionObj);
 
+    const meUser = await this.getMe(user.id);
+
     return {
       token,
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        callsign: user.callsign,
-        affiliation: user.affiliation,
-        team_id: user.team_id,
-        team: userTeam ? { id: userTeam.id, name: userTeam.name, score: userTeam.total_score } : null
-      }
+      user: meUser
     };
   }
 
@@ -325,19 +358,54 @@ class AuthService {
     };
   }
 
-  getMe(userId) {
-    const user = db.getUsers().find(u => u.id === userId);
+  async getMe(userId) {
+    let user = db.getUsers().find(u => u.id === userId);
+
+    // Authoritative direct Atlas check
+    if (db.isMongo && db.mongoDb) {
+      try {
+        const freshUser = await db.mongoDb.collection('users').findOne({ id: userId });
+        if (freshUser) {
+          if (user) Object.assign(user, freshUser);
+          else user = { ...freshUser };
+        }
+      } catch (_) {}
+    }
+
     if (!user) return null;
 
-    const team = db.getTeams().find(t => t.id === user.team_id);
+    let teamId = user.team_id;
+    let team = teamId ? db.getTeams().find(t => t.id === teamId) : null;
+    let memberRecord = null;
+
+    if (db.isMongo && db.mongoDb) {
+      try {
+        if (teamId && !team) {
+          team = await db.mongoDb.collection('teams').findOne({ id: teamId });
+          if (team) {
+            const exists = db.getTeams().find(t => t.id === team.id);
+            if (!exists) db.getTeams().push({ ...team });
+          }
+        }
+        if (teamId) {
+          memberRecord = await db.mongoDb.collection('team_members').findOne({ user_id: user.id, team_id: teamId });
+        }
+      } catch (_) {}
+    }
+
+    if (!memberRecord && teamId) {
+      memberRecord = db.getTeamMembers().find(m => m.user_id === user.id && m.team_id === teamId);
+    }
+
     const userSolves = db.getSolves().filter(s => s.user_id === user.id);
 
     // Derive member role from team_members collection
     let teamRole = null;
     if (team) {
-      const memberRecord = db.getTeamMembers().find(m => m.user_id === user.id && m.team_id === team.id);
       teamRole = memberRecord?.role || (team.captain_id === user.id ? 'CAPTAIN' : 'MEMBER');
     }
+
+    const hasSquad = !!(team && teamId && !team.is_disqualified);
 
     return {
       id: user.id,
@@ -346,21 +414,23 @@ class AuthService {
       role: user.role,
       callsign: user.callsign,
       affiliation: user.affiliation,
-      team_id: user.team_id,
-      team: team ? {
+      team_id: hasSquad ? team.id : null,
+      team: hasSquad ? {
         id: team.id,            // XPX-TEAM-000001 (the public display ID)
         teamId: team.id,        // alias for clarity in frontend
         name: team.name,
         slug: team.slug,
-        score: team.total_score,
-        solvesCount: team.solves_count,
-        firstBloods: team.first_bloods,
-        memberCount: team.member_count,
+        score: team.total_score || 0,
+        solvesCount: team.solves_count || 0,
+        firstBloods: team.first_bloods || 0,
+        memberCount: team.member_count || 1,
         role: teamRole,
         accessCode: teamRole === 'CAPTAIN' ? team.access_code : undefined
       } : null,
+      hasSquad,
+      has_squad: hasSquad,
       solvesCount: userSolves.length,
-      totalPoints: userSolves.reduce((acc, s) => acc + s.points_awarded, 0)
+      totalPoints: userSolves.reduce((acc, s) => acc + (s.points_awarded || 0), 0)
     };
   }
 }

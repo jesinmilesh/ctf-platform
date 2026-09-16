@@ -28,7 +28,13 @@ const Events = {
   INSTANCE_STOPPING: 'instance.stopping',
   INSTANCE_STOPPED: 'instance.stopped',
   INSTANCE_EXPIRED: 'instance.expired',
-  INSTANCE_FAILED: 'instance.failed'
+  INSTANCE_FAILED: 'instance.failed',
+
+  // Team & Squad Lifecycle
+  TEAM_CREATED: 'team.created',
+  TEAM_MEMBER_JOINED: 'team.member_joined',
+  TEAM_MEMBER_REMOVED: 'team.member_removed',
+  TEAM_MEMBERSHIP_CHANGED: 'team.membership_changed'
 };
 
 module.exports = Events;

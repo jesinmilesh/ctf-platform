@@ -15,7 +15,10 @@ const db = require('../config/database');
 const auditService = require('../services/auditService');
 const crypto = require('crypto');
 
-// ─── ID Generation ───────────────────────────────────────────────────────────
+let broadcaster = null;
+exports.setBroadcaster = (fn) => {
+  broadcaster = fn;
+};
 
 /**
  * Generate the next XPX-TEAM-XXXXXX ID using MongoDB counter collection.
@@ -289,6 +292,22 @@ exports.createTeam = async (req, res) => {
     metadata: { teamId, name: cleanName, competitionId: competition_id }
   }).catch(() => {});
 
+  if (broadcaster) {
+    broadcaster('TEAM_CREATED', {
+      teamId,
+      name: cleanName,
+      captainId: userId,
+      userId,
+      timestamp: new Date().toISOString()
+    });
+    broadcaster('TEAM_MEMBERSHIP_CHANGED', {
+      userId,
+      teamId,
+      action: 'CREATED',
+      timestamp: new Date().toISOString()
+    });
+  }
+
   return res.status(201).json({
     success: true,
     team: {
@@ -456,6 +475,21 @@ exports.joinTeam = async (req, res) => {
     network: { ip, userAgent: req.headers?.['user-agent'] },
     metadata: { teamId: team.id, name: team.name, competitionId: competition_id }
   }).catch(() => {});
+
+  if (broadcaster) {
+    broadcaster('TEAM_MEMBER_JOINED', {
+      teamId: team.id,
+      userId,
+      username: req.user.username,
+      timestamp: new Date().toISOString()
+    });
+    broadcaster('TEAM_MEMBERSHIP_CHANGED', {
+      userId,
+      teamId: team.id,
+      action: 'JOINED',
+      timestamp: new Date().toISOString()
+    });
+  }
 
   return res.json({
     success: true,
